@@ -326,3 +326,105 @@ export function SessionAlert({ onClose }: { onClose: () => void }) {
     </div>
   );
 }
+
+// ── Confirm Dialog ────────────────────────────────────────────────────
+export function ConfirmDialog({ title, message, confirmLabel = 'Confirm', cancelLabel = 'Cancel', variant = 'danger', onConfirm, onCancel, requireReason = false }: {
+  title: string; message: string; confirmLabel?: string; cancelLabel?: string;
+  variant?: 'danger' | 'primary'; onConfirm: (reason?: string) => void; onCancel: () => void; requireReason?: boolean;
+}) {
+  const [reason, setReason] = useState('');
+  return (
+    <Modal title={title} onClose={onCancel} size="sm" footer={
+      <>
+        <Button variant="outline" onClick={onCancel}>{cancelLabel}</Button>
+        <Button
+          variant={variant === 'danger' ? 'danger' : 'primary'}
+          onClick={() => onConfirm(reason || undefined)}
+          disabled={requireReason && !reason.trim()}
+        >
+          {confirmLabel}
+        </Button>
+      </>
+    }>
+      <p className="text-sm text-gray-600 mb-4">{message}</p>
+      {requireReason && (
+        <div className="space-y-1.5">
+          <label className="text-xs font-bold text-gray-500 uppercase tracking-wide font-heading">Reason (required)</label>
+          <textarea
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm focus:border-orange-400 focus:ring-2 focus:ring-orange-100 outline-none transition-all resize-none"
+            rows={2}
+            placeholder="Enter reason..."
+          />
+        </div>
+      )}
+    </Modal>
+  );
+}
+
+// ── Form Field ────────────────────────────────────────────────────────
+export function FormField({ label, required, error, children, className = '' }: {
+  label: string; required?: boolean; error?: string; children: React.ReactNode; className?: string;
+}) {
+  return (
+    <div className={`space-y-1.5 ${className}`}>
+      <label className="text-xs font-bold text-gray-500 uppercase tracking-wide font-heading">
+        {label}{required && <span className="text-red-400 ml-0.5">*</span>}
+      </label>
+      {children}
+      {error && <p className="text-xs text-red-500 font-medium">{error}</p>}
+    </div>
+  );
+}
+
+// ── Text Input ────────────────────────────────────────────────────────
+export function TextInput({ value, onChange, placeholder, type = 'text', disabled }: {
+  value: string; onChange: (v: string) => void; placeholder?: string; type?: string; disabled?: boolean;
+}) {
+  return (
+    <input
+      type={type}
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      placeholder={placeholder}
+      disabled={disabled}
+      className="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-900 placeholder:text-gray-400 focus:border-orange-400 focus:ring-2 focus:ring-orange-100 outline-none transition-all disabled:bg-gray-50 disabled:text-gray-400"
+    />
+  );
+}
+
+// ── TextArea ──────────────────────────────────────────────────────────
+export function TextArea({ value, onChange, placeholder, rows = 3, disabled }: {
+  value: string; onChange: (v: string) => void; placeholder?: string; rows?: number; disabled?: boolean;
+}) {
+  return (
+    <textarea
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      placeholder={placeholder}
+      rows={rows}
+      disabled={disabled}
+      className="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-900 placeholder:text-gray-400 focus:border-orange-400 focus:ring-2 focus:ring-orange-100 outline-none transition-all resize-none disabled:bg-gray-50 disabled:text-gray-400"
+    />
+  );
+}
+
+// ── Select ────────────────────────────────────────────────────────────
+export function Select({ value, onChange, options, placeholder, disabled }: {
+  value: string; onChange: (v: string) => void; options: { value: string; label: string }[];
+  placeholder?: string; disabled?: boolean;
+}) {
+  return (
+    <select
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      disabled={disabled}
+      className="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-900 bg-white focus:border-orange-400 focus:ring-2 focus:ring-orange-100 outline-none transition-all disabled:bg-gray-50 disabled:text-gray-400 appearance-none"
+      style={{ backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%239ca3af' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E\")", backgroundRepeat: 'no-repeat', backgroundPosition: 'right 12px center' }}
+    >
+      {placeholder && <option value="">{placeholder}</option>}
+      {options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+    </select>
+  );
+}

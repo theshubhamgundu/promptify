@@ -18,6 +18,12 @@ import TeamManager from './pages/admin/TeamManager';
 import RoundManager from './pages/admin/RoundManager';
 import AdminLeaderboard from './pages/admin/AdminLeaderboard';
 import ActivityLogViewer from './pages/admin/ActivityLogViewer';
+import ParticipantManager from './pages/admin/ParticipantManager';
+import VerificationManager from './pages/admin/VerificationManager';
+import SessionManager from './pages/admin/SessionManager';
+import TeamDetail from './pages/admin/TeamDetail';
+import SubmissionsReview from './pages/admin/SubmissionsReview';
+import Announcements from './pages/admin/Announcements';
 import AdminLayout from './components/AdminLayout';
 import FullscreenEnforcer from './components/FullscreenEnforcer';
 import { SyncEngine } from './lib/sync-engine';
@@ -126,9 +132,18 @@ export default function App() {
       if (page === 'admin')           return <AdminDashboard navigate={navigate} />;
       if (page === 'admin-events')    return <EventManager navigate={navigate} />;
       if (page === 'admin-teams')     return <TeamManager navigate={navigate} />;
+      if (page.startsWith('admin-team-')) {
+        const teamId = page.replace('admin-team-', '');
+        return <TeamDetail teamId={teamId} navigate={navigate} />;
+      }
       if (page === 'admin-rounds')    return <RoundManager navigate={navigate} />;
       if (page === 'admin-leaderboard') return <AdminLeaderboard navigate={navigate} />;
       if (page === 'admin-logs')      return <ActivityLogViewer navigate={navigate} />;
+      if (page === 'admin-participants') return <ParticipantManager navigate={navigate} />;
+      if (page === 'admin-verification') return <VerificationManager navigate={navigate} />;
+      if (page === 'admin-sessions')     return <SessionManager navigate={navigate} />;
+      if (page === 'admin-submissions')  return <SubmissionsReview navigate={navigate} />;
+      if (page === 'admin-announcements') return <Announcements navigate={navigate} />;
       
       return (
         <div className="flex items-center justify-center h-full text-gray-400 text-sm">

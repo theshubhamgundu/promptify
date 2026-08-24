@@ -123,7 +123,7 @@ export default function Verification({ onApprove }: { onApprove: () => void }) {
             <BrainIcon />
           </div>
           <div>
-            <div className="text-xs text-gray-400 uppercase tracking-widest">PROMPT CHAMPIONSHIP</div>
+            <div className="text-xs text-gray-400 uppercase tracking-widest">HAPPENO TECHNOLOGIES</div>
             <div className="text-base font-bold text-gray-900 font-heading">Coordinator Verification</div>
           </div>
         </div>

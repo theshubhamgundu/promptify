@@ -6,6 +6,7 @@ import {
   ZapIcon, ArrowRightIcon, ClockIcon, CheckCircleIcon, AlertTriangleIcon
 } from '../../components/icons';
 import type { Page } from '../../components/Layout';
+import { useAdminStore } from '../../stores/adminStore';
 
 interface QuickAction {
   label: string;
@@ -25,42 +26,65 @@ const quickActions: QuickAction[] = [
 ];
 
 export default function AdminDashboard({ navigate }: { navigate: (p: Page) => void }) {
-  const [stats, setStats] = useState({ events: 0, teams: 0, rounds: 0, submissions: 0 });
+  const { activeEvent } = useAdminStore();
+  const [stats, setStats] = useState({ teams: 0, participants: 0, rounds: 0, submissions: 0 });
   const [recentLogs, setRecentLogs] = useState<any[]>([]);
-  const [eventStatus, setEventStatus] = useState<string>('—');
 
   useEffect(() => {
     async function load() {
-      const [events, teams, rounds, submissions] = await Promise.all([
-        supabase.from('events').select('id, status', { count: 'exact' }),
-        supabase.from('teams').select('id', { count: 'exact', head: true }),
-        supabase.from('rounds').select('id', { count: 'exact', head: true }),
-        supabase.from('submissions').select('id', { count: 'exact', head: true }),
-      ]);
-      setStats({
-        events: events.count || 0,
-        teams: teams.count || 0,
-        rounds: rounds.count || 0,
-        submissions: submissions.count || 0,
-      });
-      if (events.data && events.data.length > 0) {
-        setEventStatus(events.data[0].status);
-      }
+      if (!activeEvent) return;
 
-      // Load recent activity
-      const { data: logs } = await supabase
-        .from('activity_logs')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(5);
-      if (logs) setRecentLogs(logs);
+      // Teams
+      const { data: teamsData, count: teamsCount } = await supabase
+        .from('teams')
+        .select('id', { count: 'exact' })
+        .eq('event_id', activeEvent.id);
+        
+      const teamIds = (teamsData || []).map(t => t.id);
+
+      // Participants
+      const { count: partsCount } = await supabase
+        .from('participants')
+        .select('id', { count: 'exact', head: true })
+        .in('team_id', teamIds.length ? teamIds : ['00000000-0000-0000-0000-000000000000']);
+
+      // Rounds
+      const { count: roundsCount } = await supabase
+        .from('rounds')
+        .select('id', { count: 'exact', head: true })
+        .eq('event_id', activeEvent.id);
+
+      // Submissions (across all teams in this event)
+      const { count: subsCount } = await supabase
+        .from('submissions')
+        .select('id', { count: 'exact', head: true })
+        .in('team_id', teamIds.length ? teamIds : ['00000000-0000-0000-0000-000000000000']);
+
+      setStats({
+        teams: teamsCount || 0,
+        participants: partsCount || 0,
+        rounds: roundsCount || 0,
+        submissions: subsCount || 0,
+      });
+
+      // Load recent activity for this event (if logs contain event_id or we filter by team_id)
+      // Since activity_logs might not have event_id directly for everything, we fetch all for now
+      // A robust implementation would filter by event_id if added to activity_logs
+      let query = supabase.from('activity_logs').select('*').order('created_at', { ascending: false }).limit(5);
+      
+      const { data: logs } = await query;
+      if (logs) {
+        // Attempt to filter client-side for teams in this event, if applicable
+        const filteredLogs = logs.filter(l => !l.details?.team_id || teamIds.includes(l.details.team_id));
+        setRecentLogs(filteredLogs);
+      }
     }
     load();
-  }, []);
+  }, [activeEvent]);
 
   const statCards = [
-    { label: 'Total Events', value: stats.events, Icon: ZapIcon,    color: 'text-violet-600',  bgColor: 'bg-violet-50', borderColor: 'border-violet-100',  iconColor: 'text-violet-500' },
     { label: 'Active Teams', value: stats.teams,  Icon: UsersIcon,  color: 'text-blue-600',    bgColor: 'bg-blue-50',   borderColor: 'border-blue-100',    iconColor: 'text-blue-500' },
+    { label: 'Participants', value: stats.participants, Icon: BrainIcon, color: 'text-violet-600',  bgColor: 'bg-violet-50', borderColor: 'border-violet-100',  iconColor: 'text-violet-500' },
     { label: 'Rounds',       value: stats.rounds, Icon: TargetIcon, color: 'text-orange-600',  bgColor: 'bg-orange-50',  borderColor: 'border-orange-100',  iconColor: 'text-orange-500' },
     { label: 'Submissions',  value: stats.submissions, Icon: CheckCircleIcon, color: 'text-green-600', bgColor: 'bg-green-50', borderColor: 'border-green-100', iconColor: 'text-green-500' },
   ];
@@ -74,6 +98,10 @@ export default function AdminDashboard({ navigate }: { navigate: (p: Page) => vo
     IDLE_DETECTED: 'text-yellow-600',
     RAPID_SUBMISSION: 'text-red-600',
   };
+
+  if (!activeEvent) {
+    return <div className="p-8 text-center text-gray-500">Please select an active event from the sidebar.</div>;
+  }
 
   return (
     <div className="p-8 space-y-6 animate-slide-up">
@@ -94,29 +122,31 @@ export default function AdminDashboard({ navigate }: { navigate: (p: Page) => vo
 
         <div className="relative z-10 p-8 flex items-center justify-between">
           <div>
-            <div className="inline-flex items-center gap-1.5 bg-orange-100 border border-orange-200 rounded-full px-3 py-1 text-[10px] font-black text-orange-600 uppercase tracking-widest mb-4 font-heading">
-              <span className="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse" />
-              {eventStatus === 'LIVE' ? 'Event Live' : 'Coordinator Mode'}
+            <div className={`inline-flex items-center gap-1.5 border rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-widest mb-4 font-heading
+              ${activeEvent.status === 'LIVE' ? 'bg-green-100 border-green-200 text-green-600' : 'bg-orange-100 border-orange-200 text-orange-600'}
+            `}>
+              <span className={`w-1.5 h-1.5 rounded-full ${activeEvent.status === 'LIVE' ? 'bg-green-500 animate-pulse' : 'bg-orange-500'}`} />
+              {activeEvent.status === 'LIVE' ? 'Event Live' : 'Coordinator Mode'}
             </div>
             <h1 className="text-3xl font-black text-gray-900 font-heading leading-tight mb-2">
-              PROMPT CHAMPIONSHIP<br />
+              HAPPENO TECHNOLOGIES<br />
               <span className="bg-gradient-to-r from-orange-500 to-red-600 bg-clip-text text-transparent">COMMAND CENTER</span>
             </h1>
             <p className="text-gray-500 text-sm max-w-md">
-              Full oversight and control over every aspect of the championship. Monitor teams, manage rounds, and ensure competition integrity in real-time.
+              Full oversight and control over <strong className="text-gray-700">{activeEvent.name}</strong>. Monitor teams, manage rounds, and ensure competition integrity in real-time.
             </p>
           </div>
 
           {/* Status indicator */}
-          <div className="hidden lg:flex flex-col items-center gap-3 bg-white/60 backdrop-blur border border-gray-100 rounded-2xl p-6 shadow-sm">
+          <div className="hidden lg:flex flex-col items-center gap-3 bg-white/60 backdrop-blur border border-gray-100 rounded-2xl p-6 shadow-sm min-w-[160px]">
             <div className="text-[10px] text-gray-400 font-black uppercase tracking-widest font-heading">Event Status</div>
             <div className={`text-2xl font-black font-heading ${
-              eventStatus === 'LIVE' ? 'text-green-600' : eventStatus === 'PAUSED' ? 'text-amber-500' : 'text-gray-600'
+              activeEvent.status === 'LIVE' ? 'text-green-600' : activeEvent.status === 'PAUSED' ? 'text-amber-500' : 'text-gray-600'
             }`}>
-              {eventStatus}
+              {activeEvent.status}
             </div>
             <div className={`w-3 h-3 rounded-full ${
-              eventStatus === 'LIVE' ? 'bg-green-500 animate-pulse' : 'bg-gray-300'
+              activeEvent.status === 'LIVE' ? 'bg-green-500 animate-pulse' : 'bg-gray-300'
             }`} />
           </div>
         </div>
@@ -200,19 +230,19 @@ export default function AdminDashboard({ navigate }: { navigate: (p: Page) => vo
                 {recentLogs.map((log, i) => (
                   <div key={log.id || i} className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors">
                     <div className={`w-2 h-2 rounded-full flex-shrink-0 ${
-                      ['TAB_SWITCH', 'COPY_PASTE_DETECTED', 'UNAUTHORIZED_EXTENSION', 'RAPID_SUBMISSION'].includes(log.action) 
+                      ['TAB_SWITCH', 'COPY_PASTE_DETECTED', 'UNAUTHORIZED_EXTENSION', 'RAPID_SUBMISSION', 'SCORE_OVERRIDE'].includes(log.action) 
                         ? 'bg-red-500' : 'bg-green-500'
                     }`} />
                     <div className="flex-1 min-w-0">
-                      <div className={`text-xs font-bold font-heading ${actionLogColors[log.action] || 'text-gray-600'}`}>
+                      <div className={`text-xs font-bold font-heading truncate ${actionLogColors[log.action] || 'text-gray-600'}`}>
                         {log.action}
                       </div>
                       <div className="text-[10px] text-gray-500 truncate">
-                        {log.team_id ? `Team ${log.team_id.slice(0, 8)}…` : 'System'}
+                        {log.details?.team_name ? log.details.team_name : (log.details?.team_id ? `Team ${log.details.team_id.slice(0, 8)}…` : 'System')}
                       </div>
                     </div>
                     <div className="text-[10px] text-gray-400 font-mono flex-shrink-0">
-                      {new Date(log.created_at).toLocaleTimeString()}
+                      {new Date(log.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
                     </div>
                   </div>
                 ))}

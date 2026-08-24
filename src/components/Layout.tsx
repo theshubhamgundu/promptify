@@ -85,7 +85,7 @@ export default function Layout({ page, navigate, children, offline, onSessionAle
     team:              { title: 'Team', subtitle: `${teamName} — ${membersCount} Members` },
   };
 
-  const info = dynamicTitles[page] ?? pageTitles[page] ?? { title: 'PROMPT CHAMPIONSHIP', subtitle: 'Think. Prompt. Solve. Win.' };
+  const info = dynamicTitles[page] ?? pageTitles[page] ?? { title: 'HAPPENO TECHNOLOGIES', subtitle: 'Think. Prompt. Solve. Win.' };
 
   /* scroll-aware header */
   useEffect(() => {
@@ -106,6 +106,43 @@ export default function Layout({ page, navigate, children, offline, onSessionAle
     if (item.match) return item.match.some(m => page === m || page.startsWith(m + '-'));
     return page === item.id;
   };
+
+  const [activeAnnouncement, setActiveAnnouncement] = useState<any>(null);
+
+  useEffect(() => {
+    // Check for any currently active global announcements
+    const checkActiveAnnouncements = async () => {
+      const { data } = await supabase
+        .from('announcements')
+        .select('*')
+        .eq('is_active', true)
+        .in('scope', ['GLOBAL', 'TEAM'])
+        .order('created_at', { ascending: false })
+        .limit(1);
+
+      if (data && data.length > 0) {
+        // Simple filter: if scope is TEAM, make sure it matches current team (assuming scope_target_id)
+        const ann = data[0];
+        if (ann.scope === 'TEAM' && ann.scope_target_id !== currentTeam?.id) return;
+        setActiveAnnouncement(ann);
+      }
+    };
+    checkActiveAnnouncements();
+
+    // Subscribe to announcements
+    const channel = supabase.channel('public:announcements')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'announcements' }, (payload: any) => {
+        if (payload.new && payload.new.is_active) {
+          if (payload.new.scope === 'GLOBAL' || (payload.new.scope === 'TEAM' && payload.new.scope_target_id === currentTeam?.id)) {
+            setActiveAnnouncement(payload.new);
+          }
+        } else if (payload.new && !payload.new.is_active && activeAnnouncement?.id === payload.new.id) {
+          setActiveAnnouncement(null);
+        }
+      }).subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [currentTeam, activeAnnouncement]);
 
   const urgent = parseInt(timer.hours) === 0 && parseInt(timer.minutes) < 10;
 
@@ -357,6 +394,32 @@ export default function Layout({ page, navigate, children, offline, onSessionAle
       {/* Click-away for team dropdown */}
       {teamOpen && (
         <div className="fixed inset-0 z-40" onClick={() => setTeamOpen(false)} />
+      )}
+
+      {/* Global Announcement Overlay */}
+      {activeAnnouncement && (
+        <div className="fixed inset-0 z-[100] flex items-start justify-center p-6 sm:p-12 pointer-events-none">
+          <div className="bg-white rounded-2xl shadow-2xl border-2 overflow-hidden w-full max-w-lg pointer-events-auto animate-slide-down relative flex flex-col" style={{ borderColor: activeAnnouncement.severity === 'URGENT' ? '#ef4444' : activeAnnouncement.severity === 'WARNING' ? '#f59e0b' : '#3b82f6' }}>
+            <div className={`px-5 py-3 border-b text-white font-bold font-heading flex items-center justify-between ${
+              activeAnnouncement.severity === 'URGENT' ? 'bg-red-500 border-red-600' : activeAnnouncement.severity === 'WARNING' ? 'bg-amber-500 border-amber-600' : 'bg-blue-500 border-blue-600'
+            }`}>
+              <div className="flex items-center gap-2">
+                <BellIcon className="w-5 h-5 animate-pulse" />
+                <span>{activeAnnouncement.severity === 'URGENT' ? 'URGENT ALERT' : activeAnnouncement.severity === 'WARNING' ? 'WARNING' : 'ANNOUNCEMENT'}</span>
+              </div>
+              <button onClick={() => setActiveAnnouncement(null)} className="text-white/80 hover:text-white">&times;</button>
+            </div>
+            <div className="p-6">
+              <h2 className="text-xl font-black text-gray-900 font-heading mb-2">{activeAnnouncement.title}</h2>
+              <p className="text-gray-700 whitespace-pre-wrap">{activeAnnouncement.message}</p>
+              <div className="mt-6 flex justify-end">
+                <button onClick={() => setActiveAnnouncement(null)} className="px-6 py-2 bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold rounded-xl transition-colors">
+                  Acknowledge
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

@@ -13,7 +13,7 @@ export function useSessionHeartbeat(intervalMs: number = 60000) {
       try {
         await supabase
           .from('team_sessions')
-          .update({ last_active: new Date().toISOString() })
+          .update({ last_heartbeat: new Date().toISOString() })
           .eq('team_id', currentTeam.id);
       } catch (error) {
         console.error('Failed to send heartbeat', error);

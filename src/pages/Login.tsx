@@ -114,7 +114,7 @@ export default function Login({ onLogin }: { onLogin: (isAdmin: boolean) => void
             <BrainIcon />
           </div>
           <div>
-            <div className="text-sm font-bold text-gray-900 font-heading">PROMPT CHAMPIONSHIP</div>
+            <div className="text-sm font-bold text-gray-900 font-heading">HAPPENO TECHNOLOGIES</div>
           </div>
         </div>
 
