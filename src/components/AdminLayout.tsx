@@ -171,13 +171,24 @@ export default function AdminLayout({ page, navigate, children }: AdminLayoutPro
         </nav>
 
         {/* Footer */}
-        <div className="p-4 border-t border-gray-200 relative z-10">
+        <div className="p-4 border-t border-gray-200 relative z-10 space-y-2">
           <button 
             onClick={() => navigate('dashboard')} 
             className="w-full flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl text-xs font-medium text-gray-500 hover:text-orange-600 hover:bg-orange-50 transition-all border border-transparent hover:border-orange-100"
           >
             <span className="text-sm">←</span>
             <span>Exit to Participant View</span>
+          </button>
+          
+          <button 
+            onClick={() => {
+              localStorage.removeItem('authState');
+              window.location.reload();
+            }}
+            className="w-full flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl text-xs font-medium text-red-500 hover:text-red-700 hover:bg-red-50 transition-all border border-red-200"
+          >
+            <span className="text-sm">🚪</span>
+            <span>Logout</span>
           </button>
         </div>
       </aside>

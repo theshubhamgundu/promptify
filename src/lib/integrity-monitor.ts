@@ -50,6 +50,11 @@ export class IntegrityMonitor {
    * Sets up passive listeners for tab switches, copy/paste, idle detection.
    */
   static init(teamId?: string, onViolation?: (reason: string) => void) {
+    // TEMPORARILY DISABLED - Database timeouts causing app to fail
+    console.log('[IntegrityMonitor] Temporarily disabled due to database timeout issues');
+    this.initialized = true;
+    return;
+    
     if (this.initialized) {
       if (onViolation) this.violationCallback = onViolation;
       return;
@@ -126,6 +131,10 @@ export class IntegrityMonitor {
   }
 
   private static setupAntiInspect() {
+    // TEMPORARILY DISABLED FOR DEBUGGING
+    console.log('[IntegrityMonitor] Anti-inspect temporarily disabled for debugging');
+    return;
+    
     // Disable right click
     document.addEventListener('contextmenu', (e) => {
       e.preventDefault();

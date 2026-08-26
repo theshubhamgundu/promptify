@@ -1,0 +1,31 @@
+═══════════════════════════════════════════════════════════════
+QUIZ ANSWER KEYS - Extract from HTML files
+═══════════════════════════════════════════════════════════════
+
+2ND YEAR ANSWERS (30 questions):
+────────────────────────────────
+Q1=A, Q2=B, Q3=B, Q4=B, Q5=B, Q6=A, Q7=B, Q8=B, Q9=B, Q10=B
+Q11=C, Q12=B, Q13=B, Q14=A, Q15=B, Q16=B, Q17=B, Q18=B, Q19=A, Q20=B
+Q21=B, Q22=B, Q23=B, Q24=A, Q25=B, Q26=B, Q27=A, Q28=B, Q29=B, Q30=B
+
+3RD YEAR ANSWERS (36 questions):
+────────────────────────────────
+Q1=C, Q2=D, Q3=B,C,D (multi-select), Q4=B, Q5=C, Q6=? (need to read more)
+... (continue extracting from HTML)
+
+4TH YEAR ANSWERS (29 questions - already in 4thyrs.htm):
+────────────────────────────────
+Answers are embedded in the HTML after each question as:
+<b>Answer: B</b> or <b>Correct: A, C</b>
+
+═══════════════════════════════════════════════════════════════
+TO ADD ALL QUESTIONS:
+═══════════════════════════════════════════════════════════════
+
+1. I'll create a COMPLETE quiz-questions-all.ts file
+2. With proper TypeScript structure
+3. Including ALL questions from all 3 files
+4. With correct answers mapped
+
+This will take a moment to generate properly...
+═══════════════════════════════════════════════════════════════

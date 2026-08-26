@@ -1,0 +1,52 @@
+══════════════════════════════════════════════════════════════════
+QUIZ QUESTION EXTRACTION STATUS
+══════════════════════════════════════════════════════════════════
+
+COMPLETED:
+✅ 2nd Year Questions: ALL 30 questions added to src/data/quiz-questions.ts
+✅ 4th Year Questions: ALL 29 questions added to src/data/quiz-questions.ts
+✅ Answer keys extracted from HTML for 2nd and 3rd year
+
+IN PROGRESS:
+⚠️  3rd Year Questions: Need to add all 36 questions to src/data/quiz-questions.ts
+
+ANSWER KEY (Extracted from HTML):
+══════════════════════════════════════════════════════════════════
+
+2ND YEAR ANSWERS (30 questions) - ✅ ALL ADDED TO CODE:
+────────────────────────────────────────────────────────────────
+Q1=A, Q2=B, Q3=B, Q4=B, Q5=B, Q6=A, Q7=B, Q8=B, Q9=B, Q10=B
+Q11=C, Q12=B, Q13=B, Q14=A, Q15=B, Q16=B, Q17=B, Q18=B, Q19=A, Q20=B
+Q21=B, Q22=B, Q23=B, Q24=A, Q25=B, Q26=B, Q27=A, Q28=B, Q29=B, Q30=B
+
+3RD YEAR ANSWERS (36 questions) - ⚠️ NEED TO ADD TO CODE:
+────────────────────────────────────────────────────────────────
+Q1=C, Q2=D, Q3=B,C,D (multi-select), Q4=B, Q5=C
+Q6=A,C,D (multi-select), Q7=D, Q8=B, Q9=C, Q10=D
+Q11=A,B,D (multi-select), Q12=B, Q13=D, Q14=A,C,D (multi-select), Q15=C
+Q16=B, Q17=B,C,D (multi-select), Q18=D, Q19=D, Q20=C
+Q21=A,C,D (multi-select), Q22=C, Q23=C, Q24=D, Q25=C
+Q26=D, Q27=D, Q28=C, Q29=A,B,D (multi-select), Q30=D
+Q31=D, Q32=A,B,C (multi-select), Q33=D, Q34=B, Q35=D
+Q36=D
+
+4TH YEAR ANSWERS (29 questions) - ✅ ALL ADDED TO CODE:
+────────────────────────────────────────────────────────────────
+All answers embedded in 4thyrs.htm and already extracted to code.
+
+══════════════════════════════════════════════════════════════════
+NEXT STEPS:
+══════════════════════════════════════════════════════════════════
+
+The 3rd year questions are visible in:
+  Prompt_Engineering_Question_Bank.htm (lines 898-2390)
+
+I extracted the question text from the HTML but need to add all 36
+to the TypeScript file with the correct answers listed above.
+
+CURRENT STATUS:
+- src/data/quiz-questions.ts has SECOND_YEAR_QUESTIONS (30) ✅
+- src/data/quiz-questions.ts has FOURTH_YEAR_QUESTIONS (29) ✅
+- src/data/quiz-questions.ts needs THIRD_YEAR_QUESTIONS (36) ⚠️
+
+══════════════════════════════════════════════════════════════════

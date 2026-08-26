@@ -20,6 +20,7 @@ export default function RoundsOverview({ navigate }: { navigate: (p: Page) => vo
   const [selected, setSelected] = useState(0);
   const [rounds, setRounds] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   
   const currentEvent = useEventStore(s => s.currentEvent);
   const currentTeam = useTeamStore(s => s.currentTeam);
@@ -28,25 +29,76 @@ export default function RoundsOverview({ navigate }: { navigate: (p: Page) => vo
 
   useEffect(() => {
     async function loadRounds() {
-      if (!currentEvent) return;
-      
-      const { data, error } = await supabase
-        .from('rounds')
-        .select('*')
-        .eq('event_id', currentEvent.id)
-        .order('order_index');
-        
-      if (!error && data) {
-        setRounds(data);
+      if (!currentEvent) {
+        setError('No active event found. Please contact the administrator.');
+        setLoading(false);
+        return;
       }
-      setLoading(false);
+      
+      try {
+        const { data, error: fetchError } = await supabase
+          .from('rounds')
+          .select('*')
+          .eq('event_id', currentEvent.id)
+          .order('order_index');
+          
+        if (fetchError) {
+          console.error('Error loading rounds:', fetchError);
+          setError(`Failed to load rounds: ${fetchError.message}`);
+        } else if (data) {
+          setRounds(data);
+          if (data.length === 0) {
+            setError('No rounds have been created for this event yet.');
+          }
+        }
+      } catch (err: any) {
+        console.error('Unexpected error loading rounds:', err);
+        setError('An unexpected error occurred while loading rounds.');
+      } finally {
+        setLoading(false);
+      }
     }
     
     loadRounds();
   }, [currentEvent]);
 
-  if (loading) return <div className="p-6">Loading rounds...</div>;
-  if (!rounds || rounds.length === 0) return <div className="p-6">No rounds found for this event.</div>;
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading rounds...</p>
+        </div>
+      </div>
+    );
+  }
+  
+  if (error) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="text-center max-w-md">
+          <AlertTriangleIcon className="w-12 h-12 text-amber-500 mx-auto mb-4" />
+          <h2 className="text-xl font-bold text-gray-900 mb-2">No Rounds Available</h2>
+          <p className="text-gray-600 mb-4">{error}</p>
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-left">
+            <p className="text-sm text-blue-900 mb-2"><strong>Event:</strong> {currentEvent?.name || 'None'}</p>
+            <p className="text-sm text-blue-900"><strong>Team:</strong> {currentTeam?.name || 'None'}</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+  
+  if (rounds.length === 0) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="text-center">
+          <AlertTriangleIcon className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+          <p className="text-gray-600">No rounds found for this event.</p>
+        </div>
+      </div>
+    );
+  }
 
   const round = rounds[selected];
   // In a real app, 'locked' status would depend on round_sessions and event status
@@ -176,10 +228,17 @@ export default function RoundsOverview({ navigate }: { navigate: (p: Page) => vo
           {/* Enter Round CTA */}
           {!locked && (
             <Button
-              onClick={() => navigate(`round-${round.id}` as Page)}
+              onClick={() => {
+                // Navigate to quiz or regular round based on type
+                if (round.type === 'QUIZ') {
+                  navigate(`quiz-${round.id}` as Page);
+                } else {
+                  navigate(`round-${round.id}` as Page);
+                }
+              }}
               className="w-full py-3"
             >
-              Enter Round {round.order_index} →
+              {round.type === 'QUIZ' ? 'Start Quiz' : `Enter Round ${round.order_index}`} →
             </Button>
           )}
 

@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useTimer } from '../hooks/useTimer';
+import { supabase } from '../lib/supabase';
 import {
   HomeIcon, TargetIcon, TrendingUpIcon, TrophyIcon, UsersIcon,
   FileTextIcon, MessageSquareIcon, BellIcon, HelpCircleIcon,
@@ -227,6 +228,20 @@ export default function Layout({ page, navigate, children, offline, onSessionAle
           >
             <span>⚙️</span>
             <span>Coordinator Panel</span>
+          </button>
+        </div>
+
+        {/* Logout button */}
+        <div className="mx-4 mb-3 flex-shrink-0">
+          <button
+            onClick={() => {
+              localStorage.removeItem('authState');
+              window.location.reload();
+            }}
+            className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold text-red-500 hover:bg-red-50 hover:text-red-700 transition-colors border border-red-200"
+          >
+            <span>🚪</span>
+            <span>Logout</span>
           </button>
         </div>
 

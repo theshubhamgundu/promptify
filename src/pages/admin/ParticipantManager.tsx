@@ -25,34 +25,73 @@ export default function ParticipantManager({ navigate }: { navigate: (p: Page) =
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
+  const [error, setError] = useState<string | null>(null);
+  const [debugInfo, setDebugInfo] = useState<string[]>([]);
   
   const [deleteTarget, setDeleteTarget] = useState<Participant | null>(null);
 
-  const loadData = async () => {
-    if (!activeEvent) return;
-    setLoading(true);
+  const addDebug = (msg: string) => {
+    console.log('[DEBUG]', msg);
+    setDebugInfo(prev => [...prev, `${new Date().toLocaleTimeString()}: ${msg}`]);
+  };
 
-    // Get teams for event
-    const { data: teams } = await supabase.from('teams').select('id, name, access_code').eq('event_id', activeEvent.id);
-    if (!teams || teams.length === 0) {
-      setParticipants([]);
+  const loadData = async () => {
+    addDebug('loadData called');
+    if (!activeEvent) {
+      addDebug('No activeEvent, stopping');
       setLoading(false);
       return;
     }
+    addDebug(`Loading data for event: ${activeEvent.name} (${activeEvent.id})`);
+    setLoading(true);
+    setError(null);
 
-    const teamMap = new Map(teams.map(t => [t.id, t]));
-    const teamIds = teams.map(t => t.id);
+    try {
+      addDebug('Fetching teams...');
+      // Get teams for event
+      const { data: teams, error: teamsError } = await supabase.from('teams').select('id, name, access_code').eq('event_id', activeEvent.id);
+      if (teamsError) {
+        addDebug(`Teams error: ${teamsError.message}`);
+        throw teamsError;
+      }
+      addDebug(`Found ${teams?.length || 0} teams`);
+      
+      if (!teams || teams.length === 0) {
+        setParticipants([]);
+        setLoading(false);
+        addDebug('No teams found, stopping');
+        return;
+      }
 
-    // Get participants
-    const { data: parts } = await supabase.from('participants').select('*').in('team_id', teamIds).order('created_at', { ascending: false });
-    
-    if (parts) {
-      setParticipants(parts.map(p => ({
-        ...p,
-        team: teamMap.get(p.team_id)!
-      })));
+      const teamMap = new Map(teams.map(t => [t.id, t]));
+      const teamIds = teams.map(t => t.id);
+      addDebug(`Team IDs: ${teamIds.join(', ')}`);
+
+      addDebug('Fetching participants...');
+      // Get participants
+      const { data: parts, error: partsError } = await supabase.from('participants').select('*').in('team_id', teamIds).order('created_at', { ascending: false });
+      if (partsError) {
+        addDebug(`Participants error: ${partsError.message}`);
+        throw partsError;
+      }
+      addDebug(`Found ${parts?.length || 0} participants`);
+      
+      if (parts) {
+        setParticipants(parts.map(p => ({
+          ...p,
+          team: teamMap.get(p.team_id)!
+        })));
+      }
+      addDebug('Data loaded successfully');
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : 'Failed to load participants';
+      addDebug(`ERROR: ${errorMsg}`);
+      console.error('Error loading participants:', err);
+      setError(errorMsg);
+    } finally {
+      setLoading(false);
+      addDebug('Loading complete');
     }
-    setLoading(false);
   };
 
   useEffect(() => {
@@ -92,8 +131,31 @@ export default function ParticipantManager({ navigate }: { navigate: (p: Page) =
     return <div className="p-8 text-center text-gray-500">Please select an active event from the sidebar.</div>;
   }
 
+  if (error) {
+    return (
+      <div className="p-8">
+        <div className="bg-red-50 border border-red-200 rounded-2xl p-6 text-center">
+          <div className="text-red-600 font-bold mb-2">Error Loading Participants</div>
+          <div className="text-red-500 text-sm">{error}</div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="p-8 space-y-6 animate-slide-up">
+      {/* DEBUG PANEL - REMOVE AFTER FIXING */}
+      {debugInfo.length > 0 && (
+        <div className="bg-blue-50 border-2 border-blue-300 rounded-lg p-4 max-h-48 overflow-y-auto">
+          <div className="text-xs font-bold text-blue-900 mb-2">🔍 DEBUG LOG (Remove after fixing)</div>
+          <div className="space-y-1 text-[10px] font-mono text-blue-800">
+            {debugInfo.map((info, i) => (
+              <div key={i}>{info}</div>
+            ))}
+          </div>
+        </div>
+      )}
+      
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-2xl font-black text-gray-900 font-heading">Participant Manager</h1>
