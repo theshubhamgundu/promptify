@@ -31,7 +31,6 @@ export default function ParticipantManager({ navigate }: { navigate: (p: Page) =
   const [deleteTarget, setDeleteTarget] = useState<Participant | null>(null);
 
   const addDebug = (msg: string) => {
-    console.log('[DEBUG]', msg);
     setDebugInfo(prev => [...prev, `${new Date().toLocaleTimeString()}: ${msg}`]);
   };
 

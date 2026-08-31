@@ -18,6 +18,8 @@ interface Round {
   status: 'upcoming' | 'live' | 'locked' | 'completed';
   maxScore: number;
   duration: string;
+  type?: string;
+  orderIndex: number;
   Icon: React.ComponentType<{ className?: string }>;
 }
 
@@ -58,13 +60,15 @@ export default function Dashboard({ navigate }: { navigate: (p: Page) => void })
 
   const mappedRounds: Round[] = useMemo(() => {
     return dbRounds.map((r, idx) => ({
-      id: r.order_index,
+      id: r.id, // Use actual UUID for navigation
       key: `round${r.order_index}`,
       name: r.name,
       sub: r.type,
+      type: r.type, // Added to use in onClick
+      orderIndex: r.order_index,
       desc: r.description || '',
-      status: r.is_active ? 'upcoming' : 'locked', // We will update this later when we integrate round sessions
-      maxScore: 100, // Hardcoded max score per round for now
+      status: r.is_active ? 'upcoming' : 'locked',
+      maxScore: r.challenges?.reduce((sum: number, c: any) => sum + (c.base_points || 0), 0) || 100, // Sum of challenge base_points; falls back to 100
       duration: `${r.duration_minutes} min`,
       Icon: getIconForType(r.type),
     }));
@@ -200,7 +204,17 @@ export default function Dashboard({ navigate }: { navigate: (p: Page) => void })
                   hovered={hoveredRound === i}
                   onHover={() => setHoveredRound(i)}
                   onLeave={() => setHoveredRound(null)}
-                  onClick={() => { if (round.status !== 'locked') navigate(`generic-round`); }}
+                  onClick={() => { 
+                    if (round.status !== 'locked') {
+                      if (round.type === 'QUIZ') {
+                        navigate(`quiz-${round.id}` as any);
+                      } else if (round.type === 'PROMPT') {
+                        navigate(`prompt-heist-${round.id}` as any);
+                      } else {
+                        navigate(`round-${round.id}` as any);
+                      }
+                    }
+                  }}
                   animDelay={i * 60}
                 />
               ))}
@@ -339,7 +353,7 @@ function RoundCard({ round, hovered, onClick, onHover, onLeave, animDelay }: {
         <div className={`w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-black font-heading transition-all ${
           locked ? 'bg-gray-800 text-white' : hovered ? 'bg-orange-500 text-white scale-110' : 'bg-orange-500 text-white'
         }`}>
-          {round.id}
+          {round.orderIndex}
         </div>
         {locked
           ? <LockIcon className="w-3.5 h-3.5 text-gray-300" />

@@ -59,8 +59,10 @@ const navSections: NavSection[] = [
   {
     title: 'Security',
     items: [
+      { id: 'admin-monitor', label: 'Live Monitor', Icon: ShieldIcon },
       { id: 'admin-sessions', label: 'Active Sessions', Icon: ClockIcon },
       { id: 'admin-logs', label: 'Audit Logs', Icon: ShieldIcon },
+      { id: 'admin-snapshots', label: 'Snapshots', Icon: ShieldIcon },
     ],
   },
 ];

@@ -47,6 +47,7 @@ export interface Database {
           event_id: string | null
           name: string
           access_code: string
+          is_frozen: boolean
           created_at: string
         }
         Insert: {
@@ -54,6 +55,7 @@ export interface Database {
           event_id?: string | null
           name: string
           access_code: string
+          is_frozen?: boolean
           created_at?: string
         }
         Update: {
@@ -61,6 +63,7 @@ export interface Database {
           event_id?: string | null
           name?: string
           access_code?: string
+          is_frozen?: boolean
           created_at?: string
         }
       }

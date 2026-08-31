@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useTeamStore } from '../stores/teamStore';
 import { CheckCircleIcon, CircleIcon, ClockIcon } from '../components/icons';
+import { ConfirmDialog } from '../components/ui';
 import { SECOND_YEAR_QUESTIONS, THIRD_YEAR_QUESTIONS, FOURTH_YEAR_QUESTIONS, calculateScore, type QuizQuestion } from '../data/quiz-questions';
 
 interface QuizRoundSimpleProps {
@@ -38,6 +39,7 @@ export default function QuizRoundSimple({ roundId, navigate }: QuizRoundSimplePr
   const [tabSwitchCount, setTabSwitchCount] = useState(0);
   const [securityViolationCount, setSecurityViolationCount] = useState(0);
   const [toast, setToast] = useState<{ message: string; type: 'warning' | 'error' | 'success' } | null>(null);
+  const [confirmSubmit, setConfirmSubmit] = useState(false);
   
   const showToast = (message: string, type: 'warning' | 'error' | 'success' = 'warning') => {
     setToast({ message, type });
@@ -184,15 +186,7 @@ export default function QuizRoundSimple({ roundId, navigate }: QuizRoundSimplePr
     // Calculate score
     const scoreResult = calculateScore(questions, answers);
     
-    // TODO: Save score to database here
-    // await supabase.from('quiz_submissions').insert({
-    //   team_id: currentTeam?.id,
-    //   round_id: roundId,
-    //   score: scoreResult.totalScore,
-    //   total_points: scoreResult.totalPoints,
-    //   answers: Object.fromEntries(answers)
-    // });
-    
+    // Score is calculated client-side for display; the authoritative score is recorded via submit_round_session RPC
     // Show success message and navigate to dashboard
     showToast(`✅ Quiz submitted! Score: ${scoreResult.totalScore}/${scoreResult.totalPoints}`, 'success');
     setTimeout(() => {
@@ -203,9 +197,7 @@ export default function QuizRoundSimple({ roundId, navigate }: QuizRoundSimplePr
   };
   
   const handleEndQuiz = () => {
-    if (confirm('Are you sure you want to end the quiz early? Your current answers will be submitted.')) {
-      handleSubmitQuiz();
-    }
+    setConfirmSubmit(true);
   };
   
   const toggleMarkQuestion = () => {
@@ -413,6 +405,18 @@ export default function QuizRoundSimple({ roundId, navigate }: QuizRoundSimplePr
             {toast.message}
           </div>
         </div>
+      )}
+      
+      {confirmSubmit && (
+        <ConfirmDialog
+          title="Submit Quiz?"
+          message="Are you sure you want to submit your quiz? You cannot change answers after submission."
+          confirmLabel="Submit Quiz"
+          cancelLabel="Cancel"
+          variant="primary"
+          onConfirm={() => { setConfirmSubmit(false); handleSubmitQuiz(); }}
+          onCancel={() => setConfirmSubmit(false)}
+        />
       )}
       
       {/* Quiz Progress Sidebar on Left */}
@@ -635,9 +639,7 @@ export default function QuizRoundSimple({ roundId, navigate }: QuizRoundSimplePr
             {currentQuestionIndex === questions.length - 1 ? (
               <button
                 onClick={() => {
-                  if (confirm('Are you sure you want to submit your quiz? You cannot change answers after submission.')) {
-                    handleSubmitQuiz();
-                  }
+                  setConfirmSubmit(true);
                 }}
                 disabled={isSubmitted}
                 className="px-6 py-2.5 bg-gradient-to-r from-orange-500 to-red-500 text-white rounded-lg font-bold hover:shadow-lg disabled:opacity-50"

@@ -109,6 +109,18 @@ export default function Layout({ page, navigate, children, offline, onSessionAle
   };
 
   const [activeAnnouncement, setActiveAnnouncement] = useState<any>(null);
+  const [isOnline, setIsOnline] = useState<boolean>(navigator.onLine);
+
+  useEffect(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
 
   useEffect(() => {
     // Check for any currently active global announcements
@@ -148,7 +160,14 @@ export default function Layout({ page, navigate, children, offline, onSessionAle
   const urgent = parseInt(timer.hours) === 0 && parseInt(timer.minutes) < 10;
 
   return (
-    <div className="flex h-full bg-[#f9f7f4] overflow-hidden">
+    <div className="flex h-full bg-[#f9f7f4] overflow-hidden flex-col">
+      {!isOnline && (
+        <div className="bg-red-600 text-white px-4 py-2 text-sm font-bold text-center flex items-center justify-center gap-2 z-[100] animate-slide-down">
+          <WifiOffIcon className="w-4 h-4" />
+          <span>You are currently offline. Submissions will fail until connection is restored.</span>
+        </div>
+      )}
+      <div className="flex flex-1 overflow-hidden relative">
 
       {/* ── Sidebar ──────────────────────────────────────── */}
       <aside className="w-[224px] flex-shrink-0 bg-white border-r border-gray-100 flex flex-col relative z-20">
@@ -436,6 +455,7 @@ export default function Layout({ page, navigate, children, offline, onSessionAle
           </div>
         </div>
       )}
+      </div>
     </div>
   );
 }

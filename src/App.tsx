@@ -24,13 +24,19 @@ import SessionManager from './pages/admin/SessionManager';
 import TeamDetail from './pages/admin/TeamDetail';
 import SubmissionsReview from './pages/admin/SubmissionsReview';
 import Announcements from './pages/admin/Announcements';
+import LiveMonitor from './pages/admin/LiveMonitor';
+import SnapshotManager from './pages/admin/SnapshotManager';
 import QuizManager from './pages/admin/QuizManager';
 import QuizRoundSimple from './pages/QuizRoundSimple';
 import QuizResults from './pages/QuizResults';
+import QuizRound from './pages/QuizRound';
+import PromptHeist from './pages/PromptHeist';
+import PromptHeistRound from './pages/PromptHeistRound';
 import AdminLayout from './components/AdminLayout';
 import FullscreenEnforcer from './components/FullscreenEnforcer';
 import { SyncEngine } from './lib/sync-engine';
 import { IntegrityMonitor } from './lib/integrity-monitor';
+import { supabase } from './lib/supabase';
 import { useConnectionStatus } from './hooks/useConnectionStatus';
 import { useSessionHeartbeat } from './hooks/useSessionHeartbeat';
 import { useTeamStore } from './stores/teamStore';
@@ -73,10 +79,31 @@ export default function App() {
   // Initialize sync engine + integrity monitor once
   useEffect(() => {
     SyncEngine.init();
-    IntegrityMonitor.init(currentTeam?.id, (reason) => {
+    IntegrityMonitor.init(currentTeam?.id, undefined, (reason) => {
       setViolation(reason);
     });
-  }, [currentTeam]);
+
+    if (currentTeam?.id) {
+      // Listen for team updates (like being frozen)
+      const teamSub = supabase.channel('team-updates')
+        .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'teams', filter: `id=eq.${currentTeam.id}` }, (payload) => {
+          if (payload.new.is_frozen) {
+            setViolation('TEAM_FROZEN');
+          }
+          useTeamStore.getState().setCurrentTeam(payload.new as any);
+        })
+        .subscribe();
+
+      // Check initial state
+      if (currentTeam.is_frozen) {
+        setViolation('TEAM_FROZEN');
+      }
+
+      return () => {
+        teamSub.unsubscribe();
+      };
+    }
+  }, [currentTeam?.id]);
 
   const navigate = (p: Page) => {
     prevPage.current = page;
@@ -89,17 +116,27 @@ export default function App() {
 
   if (violation) {
     return (
-      <div className="fixed inset-0 z-[99999] bg-red-900 flex items-center justify-center p-6 text-center">
-        <div className="max-w-md w-full p-8 bg-white rounded-3xl shadow-2xl">
-          <div className="w-16 h-16 bg-red-100 text-red-600 rounded-full flex items-center justify-center mx-auto mb-6">
-            <span className="text-3xl">🚫</span>
+      <div className="fixed inset-0 z-[99999] bg-red-950 flex items-center justify-center p-6 text-center">
+        <div className="max-w-md w-full p-8 bg-black/80 border border-red-500 rounded-3xl shadow-[0_0_50px_rgba(220,38,38,0.3)] backdrop-blur-md">
+          <div className="w-20 h-20 bg-red-900/50 text-red-500 rounded-full flex items-center justify-center mx-auto mb-6 border border-red-500/50">
+            <span className="text-4xl animate-pulse">🔒</span>
           </div>
-          <h1 className="text-2xl font-bold font-heading text-gray-900 mb-3">Access Suspended</h1>
-          <p className="text-sm text-gray-600 mb-6 leading-relaxed">
-            {violation}
+          <h1 className="text-3xl font-black font-heading text-red-500 mb-4 tracking-widest uppercase">
+            {violation === 'TEAM_FROZEN' ? 'TEAM FROZEN' : 'Access Suspended'}
+          </h1>
+          <p className="text-sm text-red-200/80 mb-6 leading-relaxed">
+            {violation === 'TEAM_FROZEN' 
+              ? 'Your team has been frozen by the automated integrity system due to excessive security violations. An admin must review your activity.' 
+              : violation}
             <br /><br />
-            To ensure fair competition, you must disable all browser extensions before participating. Please disable them and refresh the page.
+            {violation !== 'TEAM_FROZEN' && 'To ensure fair competition, you must disable all browser extensions before participating. Please disable them and refresh the page.'}
           </p>
+          <button 
+            onClick={() => window.location.reload()}
+            className="w-full px-6 py-3 bg-red-600 hover:bg-red-700 text-white font-bold rounded-lg uppercase tracking-wider"
+          >
+            Refresh Status
+          </button>
         </div>
       </div>
     );
@@ -133,11 +170,15 @@ export default function App() {
       if (page === 'rounds')          return <RoundsOverview navigate={navigate} />;
       if (page.startsWith('quiz-'))   {
         const roundId = page.replace('quiz-', '');
-        return <QuizRoundSimple roundId={roundId} navigate={navigate} />;
+        return <QuizRound roundId={roundId} navigate={navigate} />;
       }
       if (page.startsWith('quiz-results-')) {
         const roundId = page.replace('quiz-results-', '');
         return <QuizResults roundId={roundId} navigate={navigate} />;
+      }
+      if (page.startsWith('prompt-heist-'))  {
+        const roundId = page.replace('prompt-heist-', '');
+        return <PromptHeist roundId={roundId} navigate={navigate} />;
       }
       if (page.startsWith('round-'))  {
         const roundId = page.replace('round-', '');
@@ -162,6 +203,8 @@ export default function App() {
       if (page === 'admin-participants') return <ParticipantManager navigate={navigate} />;
       if (page === 'admin-verification') return <VerificationManager navigate={navigate} />;
       if (page === 'admin-sessions')     return <SessionManager navigate={navigate} />;
+      if (page === 'admin-monitor')       return <LiveMonitor navigate={navigate} />;
+      if (page === 'admin-snapshots')     return <SnapshotManager navigate={navigate} />;
       if (page === 'admin-submissions')  return <SubmissionsReview navigate={navigate} />;
       if (page === 'admin-announcements') return <Announcements navigate={navigate} />;
       if (page === 'admin-quiz')         return <QuizManager />;
@@ -177,7 +220,7 @@ export default function App() {
   };
 
   const isAdminPage = page.startsWith('admin');
-  const isQuizPage = page.startsWith('quiz-') || page.startsWith('quiz-results-');
+  const isRoundPage = page.startsWith('quiz-') || page.startsWith('quiz-results-') || page.startsWith('prompt-heist-') || page.startsWith('round-');
 
   return (
     <>
@@ -185,7 +228,7 @@ export default function App() {
         <AdminLayout page={page} navigate={navigate}>
           {renderPage()}
         </AdminLayout>
-      ) : isQuizPage ? (
+      ) : isRoundPage ? (
         <FullscreenEnforcer>
           {renderPage()}
         </FullscreenEnforcer>

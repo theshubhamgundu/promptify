@@ -232,13 +232,15 @@ export default function RoundsOverview({ navigate }: { navigate: (p: Page) => vo
                 // Navigate to quiz or regular round based on type
                 if (round.type === 'QUIZ') {
                   navigate(`quiz-${round.id}` as Page);
+                } else if (round.type === 'PROMPT') {
+                  navigate(`prompt-heist-${round.id}` as Page);
                 } else {
                   navigate(`round-${round.id}` as Page);
                 }
               }}
               className="w-full py-3"
             >
-              {round.type === 'QUIZ' ? 'Start Quiz' : `Enter Round ${round.order_index}`} →
+              {round.type === 'QUIZ' ? 'Start Quiz' : round.type === 'PROMPT' ? 'Start Prompt Heist' : `Enter Round ${round.order_index}`} →
             </Button>
           )}
 

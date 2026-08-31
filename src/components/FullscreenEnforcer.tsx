@@ -31,7 +31,7 @@ export default function FullscreenEnforcer({ children }: FullscreenEnforcerProps
       }
     } catch (err) {
       console.error('Error attempting to enable fullscreen:', err);
-      alert('Could not enable fullscreen. Please ensure your browser allows fullscreen mode.');
+      // Don't use alert() here — it breaks fullscreen and causes session issues
     }
   };
 

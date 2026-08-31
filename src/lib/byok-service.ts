@@ -207,6 +207,23 @@ export async function sendAIRequest(
       }),
     });
 
+    // Check for rate limit before parsing
+    if (response.status === 429) {
+      const retryAfter = response.headers.get('Retry-After');
+      const waitSeconds = retryAfter ? parseInt(retryAfter) : 10;
+      return {
+        success: false,
+        error: `Rate limit reached. Please wait ${waitSeconds} seconds before your next attempt.`,
+      };
+    }
+
+    if (!response.ok) {
+      return {
+        success: false,
+        error: `Request failed with status ${response.status}. Please try again.`,
+      };
+    }
+
     const result = await response.json();
     return result;
   } catch (error) {
