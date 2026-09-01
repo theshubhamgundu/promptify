@@ -3,7 +3,7 @@ import { Card, Badge, AnimatedNumber } from '../../components/ui';
 import { supabase } from '../../lib/supabase';
 import {
   BrainIcon, UsersIcon, TargetIcon, ShieldIcon, TrophyIcon,
-  ZapIcon, ArrowRightIcon, ClockIcon, CheckCircleIcon, AlertTriangleIcon
+  ZapIcon, ArrowRightIcon, ClockIcon, CheckCircleIcon, AlertTriangleIcon, EyeIcon
 } from '../../components/icons';
 import type { Page } from '../../components/Layout';
 import { useAdminStore } from '../../stores/adminStore';
@@ -21,6 +21,7 @@ const quickActions: QuickAction[] = [
   { label: 'Manage Events',     desc: 'Control the championship lifecycle',    page: 'admin-events',       Icon: ZapIcon,    gradient: 'from-violet-50 to-white', iconBg: 'bg-violet-100 text-violet-600' },
   { label: 'Manage Teams',      desc: 'View teams, codes, participants',       page: 'admin-teams',        Icon: UsersIcon,  gradient: 'from-blue-50 to-white',   iconBg: 'bg-blue-100 text-blue-600' },
   { label: 'Manage Rounds',     desc: 'Configure challenges and timing',       page: 'admin-rounds',       Icon: TargetIcon, gradient: 'from-orange-50 to-white', iconBg: 'bg-orange-100 text-orange-600' },
+  { label: 'Vision Monitor',    desc: 'Live Round 3 tracking',                 page: 'admin-vision-monitor', Icon: EyeIcon,  gradient: 'from-fuchsia-50 to-white', iconBg: 'bg-fuchsia-100 text-fuchsia-600' },
   { label: 'Master Leaderboard', desc: 'Scores, overrides, rankings',          page: 'admin-leaderboard',  Icon: TrophyIcon, gradient: 'from-amber-50 to-white', iconBg: 'bg-amber-100 text-amber-600' },
   { label: 'Activity Logs',     desc: 'Real-time integrity monitoring',        page: 'admin-logs',         Icon: ShieldIcon, gradient: 'from-red-50 to-white',    iconBg: 'bg-red-100 text-red-600' },
 ];

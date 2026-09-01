@@ -128,8 +128,8 @@ export async function validateBYOKKey(
   provider: AIProvider,
   apiKey: string,
   teamId: string,
-  roundSessionId: string,
-  challengeId: string
+  roundSessionId?: string,
+  challengeId?: string
 ): Promise<ValidationResult> {
   try {
     const { data: { session } } = await supabase.auth.getSession();

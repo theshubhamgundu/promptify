@@ -27,6 +27,7 @@ export const TrendingUpIcon = ic('M23 6l-9.5 9.5-5-5L1 18|M17 6h6v6');
 export const TrophyIcon = ic('M6 9H3.5a2.5 2.5 0 000 5H6|M18 9h2.5a2.5 2.5 0 010 5H18|M6 9V3h12v6|M6 14a6 6 0 0012 0V9H6v5z|M9 22h6|M12 18v4');
 export const UsersIcon = ic('M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2|M9 11a4 4 0 100-8 4 4 0 000 8z|M23 21v-2a4 4 0 00-3-3.87|M16 3.13a4 4 0 010 7.75');
 export const FileTextIcon = ic('M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z|M14 2v6h6|M16 13H8|M16 17H8|M10 9H8');
+export const DocumentTextIcon = FileTextIcon;
 export const MessageSquareIcon = ic('M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z');
 export const BellIcon = ic('M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9|M13.73 21a2 2 0 01-3.46 0');
 export const HelpCircleIcon = ic('M12 22a10 10 0 100-20 10 10 0 000 20z|M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3|M12 17h.01');
@@ -86,3 +87,8 @@ export const SearchIcon = ic('M11 19a8 8 0 100-16 8 8 0 000 16z|M21 21l-4.35-4.3
 export const KeyIcon = ic('M21 2l-2 2m-7.61 7.61a5.5 5.5 0 11-7.778 7.778 5.5 5.5 0 017.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4');
 export const CircleIcon = ic('M12 22a10 10 0 100-20 10 10 0 000 20z');
 export const ExclamationCircleIcon = ic('M12 22a10 10 0 100-20 10 10 0 000 20z|M12 8v4|M12 16h.01');
+export const VolumeIcon = ic('M11 5L6 9H2v6h4l5 4V5z|M19.07 4.93a10 10 0 010 14.14M15.54 8.46a5 5 0 010 7.07');
+export const VolumeXIcon = ic('M11 5L6 9H2v6h4l5 4V5z|M23 9l-6 6|M17 9l6 6');
+export const SparklesIcon = ic('M12 3l1.912 5.885L20 10.8l-4.756 3.456L17.09 20.1 12 16.395 6.91 20.1l1.846-5.844L4 10.8l6.088-1.915L12 3z');
+
+

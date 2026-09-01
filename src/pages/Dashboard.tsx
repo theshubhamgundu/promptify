@@ -3,11 +3,15 @@ import type { Page } from '../components/Layout';
 import {
   BrainIcon, PuzzleIcon, SwordsIcon, CrownIcon, TargetIcon,
   ArrowRightIcon, LockIcon, BellIcon, TrophyIcon, UsersIcon,
-  ZapIcon, CheckIcon, AlertTriangleIcon, ClockIcon,
+  ZapIcon, CheckIcon, AlertTriangleIcon, ClockIcon, EyeIcon,
 } from '../components/icons';
 import { Badge, Card, Button, SectionHeader, ProgressBar } from '../components/ui';
 import { useTeamStore } from '../stores/teamStore';
 import { useEventStore } from '../stores/eventStore';
+import { BYOKConnect, BYOKConnected } from '../components/BYOKConnect';
+import { byokSession, AIProvider, BYOKConfig } from '../lib/byok-service';
+import { sounds } from '../lib/sound';
+import { useEffect } from 'react';
 
 interface Round {
   id: string | number;
@@ -29,6 +33,7 @@ const getIconForType = (type: string) => {
     case 'PROMPT_CHALLENGE': return TargetIcon;
     case 'PUZZLE': return PuzzleIcon;
     case 'BATTLE_ROYALE': return SwordsIcon;
+    case 'VISION_CHALLENGE': return EyeIcon;
     default: return CrownIcon;
   }
 };
@@ -51,6 +56,19 @@ const steps = [
 
 export default function Dashboard({ navigate }: { navigate: (p: Page) => void }) {
   const [hoveredRound, setHoveredRound] = useState<number | null>(null);
+  
+  // BYOK State
+  const [showBYOKConnect, setShowBYOKConnect] = useState(false);
+  const [activeProvider, setActiveProvider] = useState<AIProvider | null>(null);
+  
+  useEffect(() => {
+    // Check if we already have any provider keys configured
+    const providers: AIProvider[] = ['openai', 'anthropic', 'gemini', 'mistral', 'groq', 'cohere'];
+    const found = providers.find(p => byokSession.hasKey(p));
+    if (found) {
+      setActiveProvider(found);
+    }
+  }, []);
   
   const currentTeam = useTeamStore(s => s.currentTeam);
   const members = useTeamStore(s => s.members);
@@ -206,13 +224,20 @@ export default function Dashboard({ navigate }: { navigate: (p: Page) => void })
                   onLeave={() => setHoveredRound(null)}
                   onClick={() => { 
                     if (round.status !== 'locked') {
-                      if (round.type === 'QUIZ') {
+                      sounds.start();
+                      if (round.type === 'QUIZ' || round.type === 'KNOWLEDGE_TEST') {
                         navigate(`quiz-${round.id}` as any);
-                      } else if (round.type === 'PROMPT') {
+                      } else if (round.type === 'PROMPT' || round.type === 'PROMPT_CHALLENGE') {
                         navigate(`prompt-heist-${round.id}` as any);
+                      } else if (round.type === 'VISION_CHALLENGE') {
+                        navigate(`vision-${round.id}` as any);
+                      } else if (round.type === 'AI_ADVERSARIAL' || round.type === 'ADVERSARIAL_CHALLENGE') {
+                        navigate(`round4-${round.id}` as any);
                       } else {
                         navigate(`round-${round.id}` as any);
                       }
+                    } else {
+                      sounds.error();
                     }
                   }}
                   animDelay={i * 60}
@@ -290,6 +315,36 @@ export default function Dashboard({ navigate }: { navigate: (p: Page) => void })
             </div>
           </Card>
 
+          {/* BYOK Configuration Card */}
+          <Card className="p-4 animate-slide-left stagger-2 bg-gradient-to-br from-indigo-50 to-purple-50 border-indigo-100">
+            <SectionHeader icon={<ZapIcon className="w-4 h-4 text-indigo-600" />} title="AI Tools Config" />
+            
+            {activeProvider ? (
+              <div className="mt-3">
+                <BYOKConnected 
+                  provider={activeProvider} 
+                  onDisconnect={() => {
+                    byokSession.clearKey(activeProvider);
+                    setActiveProvider(null);
+                  }} 
+                />
+              </div>
+            ) : (
+              <div className="mt-3">
+                <p className="text-xs text-gray-600 mb-3 leading-relaxed">
+                  Some rounds require your own API key to use LLMs. Configure it now to save time later.
+                </p>
+                <Button 
+                  onClick={() => setShowBYOKConnect(true)} 
+                  variant="outline" 
+                  className="w-full text-xs py-2 border-indigo-200 text-indigo-700 hover:bg-indigo-100"
+                >
+                  Connect API Key →
+                </Button>
+              </div>
+            )}
+          </Card>
+
 
 
           {/* Current Rank */}
@@ -322,6 +377,22 @@ export default function Dashboard({ navigate }: { navigate: (p: Page) => void })
           </Card>
         </div>
       </div>
+      
+      {showBYOKConnect && (
+        <BYOKConnect 
+          config={{ 
+            enabled: true, 
+            required_providers: ['OPENAI', 'ANTHROPIC', 'GOOGLE', 'GROQ', 'MISTRAL', 'COHERE'],
+            allowed_models: [], max_requests: 50, max_tokens_per_request: 1000, 
+            max_total_tokens: 50000, allowed_tools: false, allowed_web_access: false, timeout_seconds: 30
+          }}
+          onConnected={(provider) => {
+            setActiveProvider(provider);
+            setShowBYOKConnect(false);
+          }}
+          onCancel={() => setShowBYOKConnect(false)}
+        />
+      )}
     </div>
   );
 }

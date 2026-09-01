@@ -7,6 +7,21 @@ import { byokSession, BYOKConfig, AIProvider } from '../lib/byok-service';
 import { ClockIcon, ShieldIcon } from '../components/icons';
 import { ConfirmDialog } from '../components/ui';
 
+// Resolves BYOK config from either configuration.byok or configuration.ai
+function resolveBYOKConfig(configuration: any): BYOKConfig | null {
+  if (configuration?.byok?.enabled) return configuration.byok as BYOKConfig;
+  if (configuration?.ai?.byok_required) {
+    return {
+      enabled: true,
+      required_providers: (configuration.ai.allowed_providers || []).map((p: string) => p.toUpperCase()) as any,
+      allowed_models: configuration.ai.evaluation_model ? [configuration.ai.evaluation_model] : ['gpt-3.5-turbo'],
+      max_requests: 50, max_tokens_per_request: 1000, max_total_tokens: 50000,
+      allowed_tools: false, allowed_web_access: false, timeout_seconds: 30,
+    };
+  }
+  return null;
+}
+
 // Import challenge components (We'll build these next)
 import { VisualChallenge } from '../components/challenges/VisualChallenge';
 import { JailbreakChallenge } from '../components/challenges/JailbreakChallenge';
@@ -124,7 +139,7 @@ export default function BossRound({ roundId, navigate }: BossRoundProps) {
   // BYOK Check whenever challenge changes
   useEffect(() => {
     if (!currentChallenge) return;
-    const byokConfig = currentChallenge.configuration?.byok as BYOKConfig;
+    const byokConfig = resolveBYOKConfig(currentChallenge.configuration);
     if (byokConfig?.enabled) {
       const foundProvider = byokConfig.required_providers.find(p => byokSession.hasKey(p));
       if (foundProvider) {
@@ -208,7 +223,7 @@ export default function BossRound({ roundId, navigate }: BossRoundProps) {
   if (error) return <div className="flex items-center justify-center min-h-screen text-red-500 font-bold bg-gray-900">{error}</div>;
   if (!currentChallenge) return <div className="flex items-center justify-center min-h-screen bg-gray-900 text-gray-400">No challenges found.</div>;
 
-  const byokConfig = currentChallenge.configuration?.byok as BYOKConfig;
+  const byokConfig = resolveBYOKConfig(currentChallenge.configuration);
 
   return (
     <div className="min-h-screen bg-gray-900 text-white flex flex-col font-sans">

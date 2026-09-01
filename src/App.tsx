@@ -21,6 +21,7 @@ import ActivityLogViewer from './pages/admin/ActivityLogViewer';
 import ParticipantManager from './pages/admin/ParticipantManager';
 import VerificationManager from './pages/admin/VerificationManager';
 import SessionManager from './pages/admin/SessionManager';
+import VisionMonitor from './pages/admin/VisionMonitor';
 import TeamDetail from './pages/admin/TeamDetail';
 import SubmissionsReview from './pages/admin/SubmissionsReview';
 import Announcements from './pages/admin/Announcements';
@@ -31,7 +32,10 @@ import QuizRoundSimple from './pages/QuizRoundSimple';
 import QuizResults from './pages/QuizResults';
 import QuizRound from './pages/QuizRound';
 import PromptHeist from './pages/PromptHeist';
-import PromptHeistRound from './pages/PromptHeistRound';
+import VisionRound from './pages/VisionRound';
+import Round4Engine from './pages/Round4Engine';
+import Round4Monitor from './pages/admin/Round4Monitor';
+import TuringHumanConsole from './pages/admin/TuringHumanConsole';
 import AdminLayout from './components/AdminLayout';
 import FullscreenEnforcer from './components/FullscreenEnforcer';
 import { SyncEngine } from './lib/sync-engine';
@@ -184,6 +188,14 @@ export default function App() {
         const roundId = page.replace('round-', '');
         return <GenericRound roundId={roundId} navigate={navigate} />;
       }
+      if (page.startsWith('vision-'))  {
+        const roundId = page.replace('vision-', '');
+        return <VisionRound roundId={roundId} navigate={navigate} />;
+      }
+      if (page.startsWith('round4-'))  {
+        const roundId = page.replace('round4-', '');
+        return <Round4Engine roundId={roundId} navigate={navigate} />;
+      }
       if (page === 'final-results')   return <FinalResults navigate={navigate} />;
       if (page === 'leaderboard')     return <Leaderboard />;
       if (page === 'progress')        return <MyProgress />;
@@ -203,6 +215,9 @@ export default function App() {
       if (page === 'admin-participants') return <ParticipantManager navigate={navigate} />;
       if (page === 'admin-verification') return <VerificationManager navigate={navigate} />;
       if (page === 'admin-sessions')     return <SessionManager navigate={navigate} />;
+      if (page === 'admin-vision-monitor') return <VisionMonitor navigate={navigate} />;
+      if (page === 'admin-round4-monitor') return <Round4Monitor navigate={navigate} />;
+      if (page === 'admin-turing-console') return <TuringHumanConsole navigate={navigate} />;
       if (page === 'admin-monitor')       return <LiveMonitor navigate={navigate} />;
       if (page === 'admin-snapshots')     return <SnapshotManager navigate={navigate} />;
       if (page === 'admin-submissions')  return <SubmissionsReview navigate={navigate} />;
@@ -220,7 +235,7 @@ export default function App() {
   };
 
   const isAdminPage = page.startsWith('admin');
-  const isRoundPage = page.startsWith('quiz-') || page.startsWith('quiz-results-') || page.startsWith('prompt-heist-') || page.startsWith('round-');
+  const isRoundPage = page.startsWith('quiz-') || page.startsWith('quiz-results-') || page.startsWith('prompt-heist-') || page.startsWith('round-') || page.startsWith('vision-') || page.startsWith('round4-');
 
   return (
     <>

@@ -124,6 +124,18 @@ function buildConfiguration(form: ChallengeFormState): Record<string, any> {
       evaluation_model: form.evaluation_model,
       temperature: parseFloat(form.ai_temperature) || 0.7,
     },
+    // BYOK config at top level - used by participant-facing pages (PromptHeistRound, BossRound, etc.)
+    byok: form.byok_required ? {
+      enabled: true,
+      required_providers: form.allowed_providers.map(p => p.toUpperCase()),
+      allowed_models: form.evaluation_model ? [form.evaluation_model] : ['gpt-3.5-turbo'],
+      max_requests: 50,
+      max_tokens_per_request: 1000,
+      max_total_tokens: 50000,
+      allowed_tools: false,
+      allowed_web_access: false,
+      timeout_seconds: 30,
+    } : undefined,
     hints: [form.hint_1, form.hint_2, form.hint_3].filter(h => h.trim()),
     hint_penalty_per: parseFloat(form.hint_penalty_per) || 5,
     options: form.type === 'MULTIPLE_CHOICE' ? form.options : undefined,

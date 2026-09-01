@@ -30,7 +30,7 @@ export default function TeamDetail({ teamId, navigate }: TeamDetailProps) {
     const [teamRes, partsRes, sessRes, logRes, subRes, scoreEventRes, violationsRes] = await Promise.all([
       supabase.from('teams').select('*').eq('id', teamId).single(),
       supabase.from('participants').select('*').eq('team_id', teamId).order('created_at', { ascending: false }),
-      supabase.from('team_sessions').select('*').eq('team_id', teamId).single(),
+      supabase.from('team_sessions').select('*').eq('team_id', teamId).maybeSingle(),
       supabase.from('activity_logs').select('*').eq('team_id', teamId).order('created_at', { ascending: false }).limit(50),
       supabase.from('submissions').select('score').eq('team_id', teamId).eq('status', 'EVALUATED'),
       supabase.from('score_events').select('points, reason').eq('team_id', teamId),

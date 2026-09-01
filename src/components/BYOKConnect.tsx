@@ -8,9 +8,9 @@ import { AIProvider, validateBYOKKey, byokSession, BYOKConfig } from '../lib/byo
 
 interface BYOKConnectProps {
   config: BYOKConfig;
-  teamId: string;
-  roundSessionId: string;
-  challengeId: string;
+  teamId?: string;
+  roundSessionId?: string;
+  challengeId?: string;
   onConnected: (provider: AIProvider) => void;
   onCancel: () => void;
 }
@@ -52,23 +52,32 @@ export function BYOKConnect({
     setValidating(true);
     setError(null);
 
-    const result = await validateBYOKKey(
-      provider,
-      apiKey,
-      teamId,
-      roundSessionId,
-      challengeId
-    );
+    // Store the key in memory immediately
+    byokSession.setKey(provider, apiKey);
 
-    setValidating(false);
+    if (teamId) {
+      // Full server-side validation when in a challenge context
+      const result = await validateBYOKKey(
+        provider,
+        apiKey,
+        teamId,
+        roundSessionId,
+        challengeId
+      );
 
-    if (result.success) {
-      onConnected(provider);
+      setValidating(false);
+
+      if (result.success) {
+        onConnected(provider);
+      } else {
+        setError(result.error || 'Validation failed. Please check your API key.');
+        setApiKey('');
+        byokSession.clearKey(provider);
+      }
     } else {
-      setError(result.error || 'Validation failed. Please check your API key.');
-      // Clear the invalid key from memory
-      setApiKey('');
-      byokSession.clearKey(provider);
+      // Dashboard mode: just store in memory, skip server validation
+      setValidating(false);
+      onConnected(provider);
     }
   };
 

@@ -4,8 +4,30 @@ import { useEventStore } from '../stores/eventStore';
 import { useTeamStore } from '../stores/teamStore';
 import { BYOKConnect, BYOKConnected } from '../components/BYOKConnect';
 import { byokSession, sendAIRequest, AIProvider, BYOKConfig } from '../lib/byok-service';
-import { ClockIcon, CheckCircleIcon, ExclamationCircleIcon, ShieldIcon, PlayIcon, LightbulbIcon } from '../components/icons';
+import { ClockIcon, CheckCircleIcon, ExclamationCircleIcon, ShieldIcon } from '../components/icons';
 import { ConfirmDialog } from '../components/ui';
+import { sounds } from '../lib/sound';
+
+// Resolves BYOK config from either configuration.byok (legacy) or configuration.ai (admin form)
+function resolveBYOKConfig(configuration: any): BYOKConfig | null {
+  // Try top-level byok first (set by updated admin form)
+  if (configuration?.byok?.enabled) return configuration.byok as BYOKConfig;
+  // Fallback: derive from configuration.ai (older admin path)
+  if (configuration?.ai?.byok_required) {
+    return {
+      enabled: true,
+      required_providers: (configuration.ai.allowed_providers || []).map((p: string) => p.toUpperCase()) as any,
+      allowed_models: configuration.ai.evaluation_model ? [configuration.ai.evaluation_model] : ['gpt-3.5-turbo'],
+      max_requests: 50,
+      max_tokens_per_request: 1000,
+      max_total_tokens: 50000,
+      allowed_tools: false,
+      allowed_web_access: false,
+      timeout_seconds: 30,
+    };
+  }
+  return null;
+}
 
 interface Challenge {
   id: string;
@@ -33,6 +55,7 @@ export default function PromptHeistRound({ roundId, navigate }: PromptHeistRound
   
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
   const [round, setRound] = useState<any>(null);
   
   // BYOK State
@@ -80,7 +103,7 @@ export default function PromptHeistRound({ roundId, navigate }: PromptHeistRound
 
   const initializeRound = async () => {
     try {
-      setLoading(true); setError(null);
+      setLoading(true); setError(null); setActionError(null);
       
       const { data: roundData, error: roundError } = await supabase.from('rounds').select('*').eq('id', roundId).single();
       if (roundError) throw roundError;
@@ -103,7 +126,28 @@ export default function PromptHeistRound({ roundId, navigate }: PromptHeistRound
       const { data: challengesData, error: chalError } = await supabase.from('challenges')
         .select('*').eq('round_id', roundId).order('order_index');
       if (chalError) throw chalError;
-      setChallenges(challengesData);
+
+      if (challengesData && challengesData.length > 0) {
+        setChallenges(challengesData);
+      } else {
+        const promptChals = await supabase.from('prompt_challenges').select('*').eq('round_id', roundId).order('sub_round_number');
+        const mapped = (promptChals.data || []).map((c: any, i: number) => ({
+          id: c.id,
+          round_id: c.round_id,
+          title: c.title,
+          description: c.description,
+          type: c.challenge_type || 'PROMPT',
+          base_points: c.max_points || 100,
+          configuration: {
+            ...(c.scenario_data || {}),
+            scenario_data: c.scenario_data,
+            challenge_type: c.challenge_type,
+            expected_output: c.scenario_data?.expected_output || '',
+          },
+          order_index: c.sub_round_number ?? i + 1,
+        }));
+        setChallenges(mapped);
+      }
       
       let deadline = sessionData.deadline_at;
       if (!deadline) {
@@ -131,7 +175,7 @@ export default function PromptHeistRound({ roundId, navigate }: PromptHeistRound
     setLlmOutput('');
     setEvaluationResult(null);
     
-    const byokConfig = currentChallenge.configuration?.byok as BYOKConfig;
+    const byokConfig = resolveBYOKConfig(currentChallenge.configuration);
     if (byokConfig?.enabled) {
       // Do we already have a key in memory for one of the allowed providers?
       const foundProvider = byokConfig.required_providers.find(p => byokSession.hasKey(p));
@@ -151,7 +195,7 @@ export default function PromptHeistRound({ roundId, navigate }: PromptHeistRound
   const handleEvaluate = async () => {
     if (!currentChallenge || !promptText.trim()) return;
     
-    const byokConfig = currentChallenge.configuration?.byok as BYOKConfig;
+    const byokConfig = resolveBYOKConfig(currentChallenge.configuration);
     if (byokConfig?.enabled && !activeProvider) {
       setShowBYOKConnect(true);
       return;
@@ -160,6 +204,7 @@ export default function PromptHeistRound({ roundId, navigate }: PromptHeistRound
     setEvaluating(true);
     setLlmOutput('');
     setEvaluationResult(null);
+    setActionError(null);
     
     try {
       let aiResponseText = "";
@@ -208,6 +253,11 @@ export default function PromptHeistRound({ roundId, navigate }: PromptHeistRound
       };
       
       setEvaluationResult(evalResult);
+      if (isMatch) {
+        sounds.success();
+      } else {
+        sounds.error();
+      }
       
       // Step 3: Record Attempt securely in Backend
       await supabase.rpc('create_challenge_attempt', {
@@ -223,7 +273,8 @@ export default function PromptHeistRound({ roundId, navigate }: PromptHeistRound
       
     } catch (err: any) {
       console.error('Evaluation error:', err);
-      setError(err.message || 'Evaluation failed');
+      sounds.error();
+      setActionError(err.message || 'Evaluation failed');
     } finally {
       setEvaluating(false);
     }
@@ -257,34 +308,70 @@ export default function PromptHeistRound({ roundId, navigate }: PromptHeistRound
       }
     }
     console.error('Error submitting after retries:', lastError);
-    setError('Failed to submit round after multiple attempts. Please check your connection and try again.');
+    setActionError('Failed to submit round after multiple attempts. Please check your connection and try again.');
     isRoundActive.current = true;
   };
 
   const formatTime = (seconds: number) => `${Math.floor(seconds / 60)}:${(seconds % 60).toString().padStart(2, '0')}`;
 
-  if (loading) return <div className="flex items-center justify-center min-h-screen">Loading Prompt Heist...</div>;
-  if (error) return <div className="flex items-center justify-center min-h-screen text-red-600 font-bold">{error}</div>;
-  if (!currentChallenge) return <div className="flex items-center justify-center min-h-screen">No challenges found.</div>;
+  const confirmDialog = confirmSubmit ? (
+    <ConfirmDialog
+      title="Submit Final Answer?"
+      message="Are you sure you want to finish this round? Your progress will be submitted."
+      confirmLabel="Submit Final"
+      cancelLabel="Keep Going"
+      variant="primary"
+      onConfirm={executeSubmitRound}
+      onCancel={() => setConfirmSubmit(false)}
+    />
+  ) : null;
 
-  const byokConfig = currentChallenge.configuration?.byok as BYOKConfig;
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-gray-50">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading Round 2: Prompt Heist...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error || !currentChallenge) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex flex-col">
+        {confirmDialog}
+        <div className="bg-white border-b border-gray-200 px-8 py-4 flex items-center justify-between">
+          <h1 className="text-2xl font-bold text-gray-900">{round?.name || 'Prompt Heist'}</h1>
+          <div className="flex items-center gap-3">
+            {roundSession && (
+              <button onClick={handleSubmitRound} className="px-5 py-2.5 bg-green-600 hover:bg-green-700 text-white font-medium rounded-lg">
+                Submit Final
+              </button>
+            )}
+            {navigate && (
+              <button onClick={() => navigate('dashboard')} className="px-5 py-2.5 bg-white border border-gray-300 text-gray-700 font-medium rounded-lg hover:bg-gray-50">
+                Back to Dashboard
+              </button>
+            )}
+          </div>
+        </div>
+        <div className="flex-1 flex items-center justify-center p-8">
+          <p className="text-gray-600">{error || 'No challenge available'}</p>
+        </div>
+      </div>
+    );
+  }
+
+  const byokConfig = resolveBYOKConfig(currentChallenge.configuration);
+  const wordCount = promptText.split(/\s+/).filter(w => w.length > 0).length;
 
   return (
-    <div className="min-h-screen bg-gray-900 text-white flex flex-col">
-      {confirmSubmit && (
-        <ConfirmDialog
-          title="Finish Round?"
-          message="Are you sure you want to finish this round? Your progress will be submitted."
-          confirmLabel="Finish Round"
-          cancelLabel="Keep Going"
-          variant="primary"
-          onConfirm={executeSubmitRound}
-          onCancel={() => setConfirmSubmit(false)}
-        />
-      )}
-      {/* BYOK Modal */}
+    <div className="min-h-screen bg-gray-50 flex">
+      {confirmDialog}
+
       {showBYOKConnect && byokConfig && (
-        <BYOKConnect 
+        <BYOKConnect
           config={byokConfig}
           teamId={currentTeam!.id}
           roundSessionId={roundSession.id}
@@ -296,138 +383,175 @@ export default function PromptHeistRound({ roundId, navigate }: PromptHeistRound
           onCancel={() => setShowBYOKConnect(false)}
         />
       )}
-      
-      {/* Header */}
-      <div className="bg-gray-800 border-b border-gray-700 px-6 py-4 flex items-center justify-between shadow-md">
-        <div>
-          <h1 className="text-2xl font-black text-transparent bg-clip-text bg-gradient-to-r from-orange-400 to-red-500 uppercase tracking-wider">
-            {round?.name || 'Prompt Heist'}
-          </h1>
-          <p className="text-sm text-gray-400 mt-1">Challenge {currentChallengeIndex + 1} of {challenges.length}</p>
+
+      <div className="w-64 bg-white border-r border-gray-200 flex-shrink-0 flex flex-col">
+        <div className="p-4 border-b border-gray-200">
+          <h2 className="font-bold text-gray-900 text-lg">Prompt Heist</h2>
+          <p className="text-sm text-gray-600">Challenge {currentChallengeIndex + 1} of {challenges.length}</p>
         </div>
-        <div className="flex items-center gap-4">
-          <div className="px-4 py-2 bg-gray-700 rounded-lg flex items-center gap-2">
-            <ClockIcon className="w-5 h-5 text-orange-400" />
-            <span className="font-mono text-xl font-bold">{formatTime(timeLeft)}</span>
-          </div>
-          <button onClick={handleSubmitRound} className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white font-bold rounded-lg transition-colors shadow-lg shadow-red-900/50">
-            End Round
+
+        <div className="p-4 space-y-2 flex-1 overflow-y-auto">
+          {challenges.map((c, i) => {
+            const isActive = i === currentChallengeIndex;
+            return (
+              <button
+                key={c.id}
+                onClick={() => setCurrentChallengeIndex(i)}
+                className={`w-full text-left p-3 rounded-lg border-2 transition-colors ${
+                  isActive
+                    ? 'border-blue-500 bg-blue-50'
+                    : 'border-gray-200 bg-gray-50 hover:bg-gray-100'
+                }`}
+              >
+                <div className="font-medium text-sm text-gray-900">{c.title || `Challenge ${i + 1}`}</div>
+                <div className="text-xs text-gray-600 mt-1">{c.base_points} pts</div>
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="p-4 border-t border-gray-200">
+          <button
+            onClick={handleSubmitRound}
+            className="w-full px-4 py-3 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700"
+          >
+            Submit Final
           </button>
         </div>
       </div>
-      
-      {/* Main Content */}
-      <div className="flex-1 flex overflow-hidden">
-        {/* Left Sidebar (Challenges) */}
-        <div className="w-64 bg-gray-800 border-r border-gray-700 overflow-y-auto">
-          {challenges.map((c, i) => (
-            <button 
-              key={c.id} 
-              onClick={() => setCurrentChallengeIndex(i)}
-              className={`w-full text-left p-4 border-b border-gray-700 transition-colors ${currentChallengeIndex === i ? 'bg-gray-700 border-l-4 border-l-orange-500' : 'hover:bg-gray-700/50'}`}
-            >
-              <div className="font-bold">{c.title || `Challenge ${i + 1}`}</div>
-              <div className="text-xs text-gray-400 mt-1">{c.base_points} pts</div>
-            </button>
-          ))}
-        </div>
-        
-        {/* Workspace */}
-        <div className="flex-1 flex flex-col p-6 overflow-y-auto gap-6 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')]">
-          
-          <div className="bg-gray-800 rounded-xl p-6 border border-gray-700 shadow-xl">
-            <h2 className="text-xl font-bold mb-2 flex items-center gap-2">
-              <ShieldIcon className="text-orange-400 w-6 h-6" /> 
-              Mission Briefing
-            </h2>
-            <p className="text-gray-300 leading-relaxed mb-4">{currentChallenge.description}</p>
-            
-            {activeProvider && (
-              <BYOKConnected 
-                provider={activeProvider} 
-                onDisconnect={() => {
-                  byokSession.clearKey(activeProvider);
-                  setActiveProvider(null);
-                  setShowBYOKConnect(true);
-                }} 
-              />
-            )}
-            
-            {!activeProvider && byokConfig?.enabled && !showBYOKConnect && (
-              <button 
-                onClick={() => setShowBYOKConnect(true)}
-                className="mt-4 px-4 py-2 bg-orange-600/20 text-orange-400 border border-orange-500/50 rounded-lg font-medium hover:bg-orange-600/30 transition-colors flex items-center gap-2"
-              >
-                <ShieldIcon className="w-5 h-5" /> Connect API Key
-              </button>
-            )}
-          </div>
-          
-          <div className="flex-1 grid grid-cols-2 gap-6 min-h-[400px]">
-            {/* Prompt Editor */}
-            <div className="bg-gray-800 rounded-xl border border-gray-700 flex flex-col shadow-xl overflow-hidden">
-              <div className="bg-gray-900 px-4 py-3 border-b border-gray-700 font-bold flex justify-between items-center text-sm">
-                <span className="text-gray-300">SYSTEM PROMPT TERMINAL</span>
-                <span className="text-orange-400 animate-pulse">_</span>
+
+      <div className="flex-1 flex flex-col">
+        <div className="bg-white border-b border-gray-200 flex-shrink-0">
+          <div className="px-8 py-4 flex items-center justify-between">
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900">{currentChallenge.title}</h1>
+              <p className="text-sm text-gray-600 mt-1">{round?.name || 'Prompt Heist'}</p>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className={`flex items-center gap-2 px-4 py-2 rounded-lg ${timeLeft < 60 ? 'bg-red-50' : 'bg-blue-50'}`}>
+                <ClockIcon className={`w-5 h-5 ${timeLeft < 60 ? 'text-red-600' : 'text-blue-600'}`} />
+                <span className={`font-mono text-lg font-bold ${timeLeft < 60 ? 'text-red-900' : 'text-blue-900'}`}>
+                  {formatTime(timeLeft)}
+                </span>
               </div>
-              <textarea
-                value={promptText}
-                onChange={(e) => setPromptText(e.target.value)}
-                placeholder="Enter your system prompt to hack the LLM..."
-                className="flex-1 bg-transparent p-4 text-green-400 font-mono text-sm focus:outline-none resize-none placeholder-green-800/50"
-                spellCheck="false"
-              />
-              <div className="p-4 border-t border-gray-700 bg-gray-900">
+              <button
+                onClick={handleSubmitRound}
+                className="px-5 py-2.5 bg-green-600 hover:bg-green-700 text-white font-medium rounded-lg"
+              >
+                End Round
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-8">
+          <div className="max-w-6xl mx-auto grid grid-cols-2 gap-6">
+            <div className="space-y-6">
+              <div className="bg-white rounded-lg shadow-sm p-6">
+                <h3 className="font-bold text-lg text-gray-900 mb-3">Challenge</h3>
+                <p className="text-gray-700 whitespace-pre-wrap leading-relaxed">
+                  {currentChallenge.description}
+                </p>
+                {currentChallenge.configuration?.instructions && (
+                  <div className="mt-4 p-3 bg-blue-50 rounded border border-blue-200">
+                    <p className="text-sm text-blue-900 whitespace-pre-wrap">
+                      {currentChallenge.configuration.instructions}
+                    </p>
+                  </div>
+                )}
+
+                {activeProvider && (
+                  <div className="mt-4">
+                    <BYOKConnected
+                      provider={activeProvider}
+                      onDisconnect={() => {
+                        byokSession.clearKey(activeProvider);
+                        setActiveProvider(null);
+                        setShowBYOKConnect(true);
+                      }}
+                    />
+                  </div>
+                )}
+
+                {!activeProvider && byokConfig?.enabled && !showBYOKConnect && (
+                  <button
+                    onClick={() => setShowBYOKConnect(true)}
+                    className="mt-4 px-4 py-2 bg-blue-50 text-blue-700 border border-blue-200 rounded-lg font-medium hover:bg-blue-100 transition-colors flex items-center gap-2"
+                  >
+                    <ShieldIcon className="w-5 h-5" /> Connect API Key
+                  </button>
+                )}
+              </div>
+            </div>
+
+            <div className="space-y-6">
+              <div className="bg-white rounded-lg shadow-sm p-6">
+                <h3 className="font-bold text-lg text-gray-900 mb-3">Your Prompt</h3>
+                <textarea
+                  value={promptText}
+                  onChange={(e) => setPromptText(e.target.value)}
+                  placeholder="Write your prompt here..."
+                  className="w-full h-40 p-3 border border-gray-300 rounded-lg font-mono text-sm text-gray-900 resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                <div className="mt-2 flex items-center justify-between text-xs text-gray-600">
+                  <span>{wordCount} words</span>
+                  <span>{promptText.length} characters</span>
+                </div>
+              </div>
+
+              {llmOutput && (
+                <div className="bg-white rounded-lg shadow-sm p-6">
+                  <h3 className="font-bold text-lg text-gray-900 mb-3">LLM Output</h3>
+                  <div className="p-3 bg-gray-50 rounded border border-gray-200 font-mono text-sm text-gray-700 whitespace-pre-wrap">
+                    {llmOutput}
+                  </div>
+                </div>
+              )}
+
+              {evaluationResult && (
+                <div className="bg-white rounded-lg shadow-sm p-6">
+                  <h3 className="font-bold text-lg text-gray-900 mb-3">Evaluation Results</h3>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-gray-700">Total Score</span>
+                    <span className="text-2xl font-bold text-blue-600">{evaluationResult.score} pts</span>
+                  </div>
+                  <div className={`p-3 rounded border ${evaluationResult.passed ? 'bg-green-50 border-green-200' : 'bg-yellow-50 border-yellow-200'}`}>
+                    <div className="flex items-center gap-2 mb-1">
+                      {evaluationResult.passed
+                        ? <CheckCircleIcon className="w-4 h-4 text-green-600" />
+                        : <ExclamationCircleIcon className="w-4 h-4 text-orange-500" />}
+                      <span className={`text-sm font-semibold ${evaluationResult.passed ? 'text-green-800' : 'text-yellow-900'}`}>
+                        {evaluationResult.passed ? 'Passed' : 'Needs improvement'}
+                      </span>
+                    </div>
+                    <p className="text-sm text-gray-700">{evaluationResult.feedback}</p>
+                  </div>
+                </div>
+              )}
+
+              {actionError && (
+                <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-800">
+                  {actionError}
+                </div>
+              )}
+
+              <div className="flex gap-3">
                 <button
                   onClick={handleEvaluate}
-                  disabled={evaluating || (!activeProvider && byokConfig?.enabled) || !promptText.trim()}
-                  className="w-full px-4 py-3 bg-gradient-to-r from-orange-500 to-red-600 hover:from-orange-400 hover:to-red-500 disabled:opacity-50 text-white font-bold rounded-lg transition-all flex justify-center items-center gap-2"
+                  disabled={evaluating || (!activeProvider && !!byokConfig?.enabled) || !promptText.trim()}
+                  className="flex-1 px-6 py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  {evaluating ? (
-                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
-                  ) : (
-                    <><PlayIcon className="w-5 h-5" /> EXECUTE PROMPT</>
-                  )}
+                  {evaluating ? 'Evaluating...' : 'Test Prompt'}
+                </button>
+                <button
+                  onClick={handleSubmitRound}
+                  className="flex-1 px-6 py-3 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700"
+                >
+                  Submit Final
                 </button>
               </div>
             </div>
-            
-            {/* Output & Evaluation */}
-            <div className="bg-gray-800 rounded-xl border border-gray-700 flex flex-col shadow-xl overflow-hidden">
-              <div className="bg-gray-900 px-4 py-3 border-b border-gray-700 font-bold text-sm text-gray-300">
-                LLM RESPONSE & ANALYSIS
-              </div>
-              <div className="flex-1 p-4 overflow-y-auto space-y-4">
-                {llmOutput && (
-                  <div className="bg-gray-900 p-4 rounded-lg border border-gray-700">
-                    <h3 className="text-xs text-gray-500 font-bold uppercase mb-2">RAW OUTPUT</h3>
-                    <div className="font-mono text-sm text-gray-300 whitespace-pre-wrap">{llmOutput}</div>
-                  </div>
-                )}
-                
-                {evaluationResult && (
-                  <div className={`p-4 rounded-lg border ${evaluationResult.passed ? 'bg-green-900/20 border-green-500/50' : 'bg-red-900/20 border-red-500/50'}`}>
-                    <h3 className="text-xs font-bold uppercase mb-2 flex items-center gap-2">
-                      {evaluationResult.passed ? <CheckCircleIcon className="w-4 h-4 text-green-400" /> : <ExclamationCircleIcon className="w-4 h-4 text-red-400" />}
-                      <span className={evaluationResult.passed ? 'text-green-400' : 'text-red-400'}>
-                        {evaluationResult.passed ? 'MISSION SUCCESSFUL' : 'MISSION FAILED'}
-                      </span>
-                    </h3>
-                    <div className="text-sm text-gray-300 mb-2">{evaluationResult.feedback}</div>
-                    <div className="text-xl font-bold mt-2 font-mono text-white">Score: {evaluationResult.score} pts</div>
-                  </div>
-                )}
-                
-                {!llmOutput && !evaluationResult && !evaluating && (
-                  <div className="h-full flex flex-col items-center justify-center text-gray-600">
-                    <LightbulbIcon className="w-12 h-12 mb-2 opacity-50" />
-                    <p>Awaiting execution...</p>
-                  </div>
-                )}
-              </div>
-            </div>
           </div>
-          
         </div>
       </div>
     </div>

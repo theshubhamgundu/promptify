@@ -59,6 +59,100 @@ interface PromptHeistProps {
   navigate?: (page: any) => void;
 }
 
+function mapGenericChallenge(c: any, index: number): Challenge {
+  const cfg = c.configuration || {};
+  return {
+    id: c.id,
+    sub_round_number: c.sub_round_number ?? c.order_index ?? index + 1,
+    challenge_type: cfg.challenge_type || c.challenge_type || 'precision',
+    title: c.title,
+    description: c.description,
+    scenario_data: cfg.scenario_data || cfg,
+    evaluation_criteria: cfg.evaluation_criteria || c.evaluation_criteria || [],
+    max_points: c.max_points ?? c.base_points ?? 100,
+    time_limit_seconds: c.time_limit_seconds || cfg.time_limit_seconds || 600,
+    max_attempts: c.max_attempts || cfg.max_attempts || 3,
+  };
+}
+
+const FALLBACK_CHALLENGES: Challenge[] = [
+  {
+    id: 'fallback-precision',
+    sub_round_number: 1,
+    challenge_type: 'precision',
+    title: 'Precision: Write a Tight Prompt',
+    description: 'Write a clear, specific prompt that would produce a reliable, well-structured answer. Include the task, constraints, and output format.',
+    scenario_data: {
+      task: 'Write a prompt that asks an AI to summarize a news article into exactly 5 bullet points, each under 20 words, in a neutral tone.',
+      instructions: 'Be specific. Mention format, length, tone, and what to include or exclude.',
+    },
+    evaluation_criteria: [],
+    max_points: 150,
+    time_limit_seconds: 600,
+    max_attempts: 3,
+  },
+  {
+    id: 'fallback-constraint',
+    sub_round_number: 2,
+    challenge_type: 'constraint',
+    title: 'Constraints: Follow Every Rule',
+    description: 'Write a prompt AND the expected output that satisfies every constraint listed.',
+    scenario_data: {
+      task: 'Create a prompt that generates a product description matching all constraints.',
+      instructions: 'Your prompt must enforce every constraint. Then write the output you expect the model to produce.',
+      constraints: [
+        { description: 'Exactly 3 sentences' },
+        { description: 'Mention the product name once' },
+        { description: 'No exclamation marks' },
+        { description: 'Include a concrete benefit' },
+      ],
+    },
+    evaluation_criteria: [],
+    max_points: 150,
+    time_limit_seconds: 600,
+    max_attempts: 3,
+  },
+  {
+    id: 'fallback-context',
+    sub_round_number: 3,
+    challenge_type: 'context',
+    title: 'Context: Extract the Facts',
+    description: 'Write a prompt that extracts only the required facts from a noisy document.',
+    scenario_data: {
+      task: 'Extract the meeting time, location, and attendees from the noisy notes below.',
+      instructions: 'Your prompt should ignore filler and return only the requested facts.',
+      noisy_context: 'Hey team!! just a recap from yesterday — um we might move it but currently the design sync is Friday 3pm in Lab 4. Priya, Arjun, and Sam must join. Also someone left pizza in the fridge. Ignore the pizza. Parking is full. Friday 3:00 PM, Lab 4.',
+      expected_facts: ['Friday 3pm', 'Lab 4', 'Priya', 'Arjun', 'Sam'],
+      max_output_words: 40,
+    },
+    evaluation_criteria: [],
+    max_points: 150,
+    time_limit_seconds: 600,
+    max_attempts: 3,
+  },
+  {
+    id: 'fallback-debugging',
+    sub_round_number: 4,
+    challenge_type: 'debugging',
+    title: 'Debugging: Fix the Broken Prompt',
+    description: 'Rewrite the broken prompt so it actually produces the intended result.',
+    scenario_data: {
+      task: 'Fix this prompt. Keep the original intent but remove ambiguity and add missing constraints.',
+      instructions: 'Rewrite the prompt. Do not just restate the problem.',
+      broken_prompt: 'Tell me stuff about this maybe in a good way and make it short or long whatever.',
+      bad_outputs: [
+        { output: 'A rambling paragraph with no structure.', issue: 'no_format' },
+        { output: 'Off-topic jokes instead of the requested content.', issue: 'wrong_intent' },
+      ],
+      known_issues: ['vague', 'no format', 'no audience', 'no length limit'],
+    },
+    evaluation_criteria: [],
+    max_points: 150,
+    time_limit_seconds: 600,
+    max_attempts: 3,
+  },
+];
+
 export default function PromptHeist({ roundId, navigate }: PromptHeistProps) {
   const { currentEvent } = useEventStore();
   const { currentTeam } = useTeamStore();
@@ -171,41 +265,62 @@ export default function PromptHeist({ roundId, navigate }: PromptHeistProps) {
       }
       
       setRoundSession(roundSessionData);
-      
-      // Get or create prompt session
-      const { data: sessionData } = await supabase
-        .rpc('start_prompt_round_session', {
+
+      let promptSession: PromptSession | null = null;
+      try {
+        const { data: sessionData } = await supabase.rpc('start_prompt_round_session', {
           p_team_id: currentTeam!.id,
           p_round_id: roundId,
           p_round_session_id: roundSessionData.id
         });
-      
-      if (!sessionData) throw new Error('Failed to create session');
-      
-      // Load session details
-      const { data: promptSession, error: promptError } = await supabase
-        .from('prompt_round_sessions')
-        .select('*')
-        .eq('id', sessionData)
-        .single();
-      
-      if (promptError) throw promptError;
-      setSession(promptSession);
-      
-      // Load all challenges
-      const { data: challengesData, error: challengesError } = await supabase
+        if (sessionData) {
+          const { data } = await supabase.from('prompt_round_sessions').select('*').eq('id', sessionData).single();
+          promptSession = data;
+        }
+      } catch {
+        promptSession = null;
+      }
+
+      setSession(promptSession || {
+        id: roundSessionData.id,
+        current_sub_round: 1,
+        sub_round_1_score: 0,
+        sub_round_2_score: 0,
+        sub_round_3_score: 0,
+        sub_round_4_score: 0,
+        total_score: 0,
+        sub_round_1_status: 'IN_PROGRESS',
+        sub_round_2_status: 'LOCKED',
+        sub_round_3_status: 'LOCKED',
+        sub_round_4_status: 'LOCKED',
+      });
+
+      let challengesData: Challenge[] = [];
+      const promptChals = await supabase
         .from('prompt_challenges')
         .select('*')
         .eq('round_id', roundId)
         .order('sub_round_number');
-      
-      if (challengesError) throw challengesError;
+
+      if (promptChals.data && promptChals.data.length > 0) {
+        challengesData = promptChals.data as Challenge[];
+      } else {
+        const generic = await supabase
+          .from('challenges')
+          .select('*')
+          .eq('round_id', roundId)
+          .order('order_index');
+        challengesData = (generic.data || []).map(mapGenericChallenge);
+      }
+
+      if (challengesData.length === 0) {
+        challengesData = FALLBACK_CHALLENGES;
+      }
+
       setChallenges(challengesData);
-      
-      // Load current challenge
-      const current = challengesData.find((c: Challenge) => 
-        c.sub_round_number === promptSession.current_sub_round
-      );
+
+      const currentSub = promptSession?.current_sub_round || 1;
+      const current = challengesData.find((c: Challenge) => c.sub_round_number === currentSub) || challengesData[0];
       
       if (current) {
         setCurrentChallenge(current);
@@ -294,26 +409,30 @@ export default function PromptHeist({ roundId, navigate }: PromptHeistProps) {
           break;
           
         default:
-          throw new Error('Unknown challenge type');
+          evaluation = evaluatePrecision(promptText);
+          break;
       }
       
       setLastEvaluation(evaluation);
       
-      // Save submission
-      const { data: submissionId } = await supabase.rpc('submit_prompt_attempt', {
-        p_team_id: currentTeam!.id,
-        p_challenge_id: currentChallenge.id,
-        p_round_session_id: roundSession!.id,
-        p_attempt_number: currentAttempt,
-        p_prompt_text: promptText,
-        p_expected_output: expectedOutput,
-        p_evaluation_scores: evaluation.breakdown,
-        p_total_score: evaluation.totalScore,
-        p_max_score: evaluation.maxScore,
-        p_passed: evaluation.passed,
-        p_feedback: evaluation.feedback,
-        p_is_final: false
-      });
+      try {
+        await supabase.rpc('submit_prompt_attempt', {
+          p_team_id: currentTeam!.id,
+          p_challenge_id: currentChallenge.id,
+          p_round_session_id: roundSession!.id,
+          p_attempt_number: currentAttempt,
+          p_prompt_text: promptText,
+          p_expected_output: expectedOutput,
+          p_evaluation_scores: evaluation.breakdown,
+          p_total_score: evaluation.totalScore,
+          p_max_score: evaluation.maxScore,
+          p_passed: evaluation.passed,
+          p_feedback: evaluation.feedback,
+          p_is_final: false
+        });
+      } catch (saveErr) {
+        console.warn('Could not save attempt to server:', saveErr);
+      }
       
       // Add to attempts list
       setAttempts([...attempts, {
@@ -337,58 +456,77 @@ export default function PromptHeist({ roundId, navigate }: PromptHeistProps) {
   const executeFinalSubmission = async () => {
     try {
       setConfirmSubmit(false);
-      // Mark as final submission
-      await supabase.rpc('submit_prompt_attempt', {
-        p_team_id: currentTeam!.id,
-        p_challenge_id: currentChallenge!.id,
-        p_round_session_id: roundSession!.id,
-        p_attempt_number: currentAttempt - 1,
-        p_prompt_text: promptText,
-        p_expected_output: expectedOutput,
-        p_evaluation_scores: lastEvaluation.breakdown,
-        p_total_score: lastEvaluation.totalScore,
-        p_max_score: lastEvaluation.maxScore,
-        p_passed: lastEvaluation.passed,
-        p_feedback: lastEvaluation.feedback,
-        p_is_final: true
-      });
-      
-      // Complete sub-round
-      await supabase.rpc('complete_sub_round', {
-        p_team_id: currentTeam!.id,
-        p_round_id: roundId,
-        p_sub_round_number: currentChallenge!.sub_round_number,
-        p_score: lastEvaluation.totalScore
-      });
-      
-      // Move to next sub-round or finish
-      if (currentChallenge!.sub_round_number < 4) {
-        // Reset for next sub-round
+      if (lastEvaluation && currentChallenge && !String(currentChallenge.id).startsWith('fallback-')) {
+        await supabase.rpc('submit_prompt_attempt', {
+          p_team_id: currentTeam!.id,
+          p_challenge_id: currentChallenge.id,
+          p_round_session_id: roundSession!.id,
+          p_attempt_number: currentAttempt - 1,
+          p_prompt_text: promptText,
+          p_expected_output: expectedOutput,
+          p_evaluation_scores: lastEvaluation.breakdown,
+          p_total_score: lastEvaluation.totalScore,
+          p_max_score: lastEvaluation.maxScore,
+          p_passed: lastEvaluation.passed,
+          p_feedback: lastEvaluation.feedback,
+          p_is_final: true
+        });
+        await supabase.rpc('complete_sub_round', {
+          p_team_id: currentTeam!.id,
+          p_round_id: roundId,
+          p_sub_round_number: currentChallenge.sub_round_number,
+          p_score: lastEvaluation.totalScore
+        });
+      }
+
+      if (currentChallenge && currentChallenge.sub_round_number < challenges.length) {
+        const next = challenges.find(c => c.sub_round_number === currentChallenge.sub_round_number + 1) || challenges[currentChallenge.sub_round_number];
         setPromptText('');
         setExpectedOutput('');
         setAttempts([]);
         setCurrentAttempt(1);
         setLastEvaluation(null);
-        
-        // Load next challenge
-        await initializePromptHeist();
+        if (next) {
+          setCurrentChallenge(next);
+          setTimeLeft(next.time_limit_seconds);
+          setSession(prev => prev ? { ...prev, current_sub_round: next.sub_round_number } : prev);
+        }
       } else {
-        // All done, go to dashboard
-        navigate && navigate('dashboard');
+        await handleEndRound();
       }
-      
     } catch (err: any) {
       console.error('Submission error:', err);
-      setToast({ message: 'Submission failed: ' + err.message, type: 'error' });
+      if (currentChallenge && currentChallenge.sub_round_number < challenges.length) {
+        const next = challenges.find(c => c.sub_round_number === currentChallenge.sub_round_number + 1);
+        if (next) {
+          setCurrentChallenge(next);
+          setPromptText('');
+          setExpectedOutput('');
+          setAttempts([]);
+          setCurrentAttempt(1);
+          setLastEvaluation(null);
+          setTimeLeft(next.time_limit_seconds);
+        }
+      } else {
+        await handleEndRound();
+      }
     }
   };
 
   const handleSubmitFinal = () => {
-    if (!lastEvaluation) {
-      setToast({ message: 'Please evaluate your prompt first!', type: 'warning' });
-      return;
-    }
     setConfirmSubmit(true);
+  };
+
+  const handleEndRound = async () => {
+    try {
+      if (roundSession?.id) {
+        await supabase.rpc('submit_round_session', { p_round_session_id: roundSession.id });
+      }
+      navigate && navigate('dashboard');
+    } catch (err: any) {
+      setToast({ message: 'Failed to end round: ' + err.message, type: 'error' });
+      navigate && navigate('dashboard');
+    }
   };
 
   const handleAutoSubmit = async () => {
@@ -454,7 +592,13 @@ export default function PromptHeist({ roundId, navigate }: PromptHeistProps) {
           confirmLabel="Submit"
           cancelLabel="Cancel"
           variant="primary"
-          onConfirm={executeFinalSubmission}
+          onConfirm={() => {
+            if (lastEvaluation && currentChallenge) {
+              executeFinalSubmission();
+            } else {
+              handleEndRound();
+            }
+          }}
           onCancel={() => setConfirmSubmit(false)}
         />
       )}
@@ -545,6 +689,12 @@ export default function PromptHeist({ roundId, navigate }: PromptHeistProps) {
                     {formatTime(timeLeft)}
                   </span>
                 </div>
+                <button
+                  onClick={handleEndRound}
+                  className="px-5 py-2.5 bg-white border border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-50"
+                >
+                  End Round
+                </button>
               </div>
             </div>
           </div>
@@ -747,14 +897,12 @@ export default function PromptHeist({ roundId, navigate }: PromptHeistProps) {
                   {evaluating ? 'Evaluating...' : 'Test Prompt'}
                 </button>
                 
-                {lastEvaluation && (
-                  <button
-                    onClick={handleSubmitFinal}
-                    className="flex-1 px-6 py-3 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700"
-                  >
-                    Submit Final
-                  </button>
-                )}
+                <button
+                  onClick={handleSubmitFinal}
+                  className="flex-1 px-6 py-3 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700"
+                >
+                  Submit Final
+                </button>
               </div>
             </div>
           </div>

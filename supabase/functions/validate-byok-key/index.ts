@@ -14,8 +14,8 @@ interface ValidateRequest {
   provider: AIProvider;
   apiKey: string; // NEVER stored, only validated
   teamId: string;
-  roundSessionId: string;
-  challengeId: string;
+  roundSessionId?: string;
+  challengeId?: string;
 }
 
 serve(async (req) => {
@@ -29,7 +29,7 @@ serve(async (req) => {
     const { provider, apiKey, teamId, roundSessionId, challengeId }: ValidateRequest = await req.json();
 
     // Validate inputs (NOT the API key, just the structure)
-    if (!provider || !apiKey || !teamId || !roundSessionId || !challengeId) {
+    if (!provider || !apiKey || !teamId) {
       return new Response(
         JSON.stringify({ error: 'Missing required fields' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -133,15 +133,13 @@ serve(async (req) => {
       .from('byok_sessions')
       .upsert({
         team_id: teamId,
-        round_session_id: roundSessionId,
-        challenge_id: challengeId,
+        round_session_id: roundSessionId || null,
+        challenge_id: challengeId || null,
         provider: provider,
         provider_metadata: validationResult.metadata || {},
         is_validated: true,
         validated_at: new Date().toISOString(),
         expires_at: expiresAt.toISOString(),
-      }, {
-        onConflict: 'team_id,round_session_id,challenge_id,provider'
       });
 
     if (insertError) {
@@ -158,8 +156,9 @@ serve(async (req) => {
       action: 'BYOK_KEY_VALIDATED',
       details: {
         provider: provider,
-        challenge_id: challengeId,
-        round_session_id: roundSessionId,
+        challenge_id: challengeId || null,
+        round_session_id: roundSessionId || null,
+        context: challengeId ? 'CHALLENGE' : 'DASHBOARD'
       },
     });
 

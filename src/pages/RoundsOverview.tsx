@@ -230,10 +230,12 @@ export default function RoundsOverview({ navigate }: { navigate: (p: Page) => vo
             <Button
               onClick={() => {
                 // Navigate to quiz or regular round based on type
-                if (round.type === 'QUIZ') {
+                if (round.type === 'QUIZ' || round.type === 'KNOWLEDGE_TEST') {
                   navigate(`quiz-${round.id}` as Page);
-                } else if (round.type === 'PROMPT') {
+                } else if (round.type === 'PROMPT' || round.type === 'PROMPT_CHALLENGE') {
                   navigate(`prompt-heist-${round.id}` as Page);
+                } else if (round.type === 'VISION_CHALLENGE') {
+                  navigate(`vision-${round.id}` as Page);
                 } else {
                   navigate(`round-${round.id}` as Page);
                 }

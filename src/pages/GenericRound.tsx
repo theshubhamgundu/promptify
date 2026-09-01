@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
-import { RoundLayout } from '../components/RoundLayout';
-import { Button, Card, Toast } from '../components/ui';
+import { Button, Toast } from '../components/ui';
 import { useTeamStore } from '../stores/teamStore';
 import { RoundEngine, Round, Challenge } from '../lib/round-engine';
 import { useServerCountdown } from '../hooks/useServerTimer';
@@ -102,95 +101,136 @@ export default function GenericRound({ roundId, navigate }: { roundId: string, n
     }
   };
 
+  const handleEndRound = async () => {
+    try {
+      if (roundSession?.id) {
+        await supabase.rpc('submit_round_session', { p_round_session_id: roundSession.id });
+      }
+    } catch (err) {
+      console.warn('End round failed:', err);
+    }
+    navigate('dashboard');
+  };
+
   if (loading && !round) {
-    return <div className="p-6">Loading round configuration...</div>;
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <p className="text-gray-600">Loading round configuration...</p>
+      </div>
+    );
   }
 
   if (!round) {
-    return <div className="p-6">Round not found.</div>;
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <p className="text-gray-600">Round not found.</p>
+      </div>
+    );
   }
 
   return (
-    <>
+    <div className="min-h-screen bg-gray-50 flex flex-col">
       {phase === 'briefing' && (
-        <RoundLayout title={round.name} subtitle={round.description || ''}>
-          <Card className="p-8 text-center max-w-2xl mx-auto mt-10">
-            <h3 className="text-2xl font-bold font-heading mb-4">Ready to start?</h3>
-            <p className="text-gray-500 mb-8">
-              This round has {challenges.length} challenges. 
-              You have {round.duration_minutes} minutes to complete them once you begin.
+        <div className="flex-1 flex items-center justify-center p-8">
+          <div className="max-w-xl w-full bg-white rounded-2xl shadow-sm border border-gray-100 p-8 text-center">
+            <h3 className="text-2xl font-bold text-gray-900 font-heading mb-2">{round.name}</h3>
+            <p className="text-gray-500 mb-6">{round.description}</p>
+            <p className="text-sm text-gray-500 mb-8">
+              {challenges.length} challenges · {round.duration_minutes} minutes once you begin.
             </p>
             <Button onClick={handleStart} className="px-8 py-3 text-lg" disabled={loading}>
-              {loading ? "Starting..." : "Begin Round →"}
+              {loading ? 'Starting...' : 'Begin Round →'}
             </Button>
-          </Card>
-        </RoundLayout>
+          </div>
+        </div>
       )}
 
       {phase === 'workspace' && challenges.length > 0 && (
-        <RoundLayout 
-          title={round.name}
-          headerChildren={
-            <div className="flex flex-col items-end gap-1">
-              <div className="text-[10px] text-gray-500 uppercase tracking-widest font-heading font-bold">Time Remaining</div>
-              <div className="text-2xl font-bold font-mono tracking-tight text-gray-900 bg-white px-3 py-1 rounded-lg border border-gray-100 shadow-sm">
-                {minutes}:{seconds}
-              </div>
+        <div className="flex-1 flex min-h-0">
+          <div className="w-64 bg-white border-r border-gray-200 flex-shrink-0 flex flex-col">
+            <div className="p-4 border-b border-gray-200">
+              <h2 className="font-bold text-gray-900">{round.name}</h2>
+              <p className="text-sm text-gray-500">Challenge {currentChallengeIdx + 1} of {challenges.length}</p>
             </div>
-          }
-        >
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 h-full">
-            <div className="lg:col-span-1 space-y-4">
-              <Card className="p-5">
-                <div className="text-xs font-bold text-gray-400 uppercase tracking-widest font-heading mb-3">Challenge {currentChallengeIdx + 1} of {challenges.length}</div>
-                <h3 className="text-xl font-bold text-gray-900 font-heading mb-2">{challenges[currentChallengeIdx].title}</h3>
-                <div className="text-sm text-gray-600 prose prose-sm">
-                  {challenges[currentChallengeIdx].description}
-                </div>
-              </Card>
+            <div className="p-4 space-y-2 flex-1 overflow-y-auto">
+              {challenges.map((c, i) => (
+                <button
+                  key={c.id}
+                  onClick={() => { setCurrentChallengeIdx(i); setAnswer(''); }}
+                  className={`w-full text-left p-3 rounded-lg border-2 ${
+                    i === currentChallengeIdx ? 'border-orange-400 bg-orange-50' : 'border-gray-200 bg-gray-50 hover:bg-gray-100'
+                  }`}
+                >
+                  <div className="font-medium text-sm text-gray-900">{c.title}</div>
+                  <div className="text-xs text-gray-500 mt-1">{c.base_points} pts</div>
+                </button>
+              ))}
             </div>
-            
-            <div className="lg:col-span-2 flex flex-col gap-4 h-[600px]">
-              <Card className="flex-1 flex flex-col bg-white overflow-hidden p-5">
-                <div className="text-xs font-bold text-gray-400 uppercase tracking-widest font-heading mb-3">Your Answer</div>
-                <textarea
-                  className="w-full flex-1 resize-none bg-gray-50 border border-gray-200 rounded-xl p-4 font-mono text-sm focus:border-orange-500 focus:ring-2 focus:ring-orange-200 outline-none transition-all"
-                  placeholder="Type your answer or prompt here..."
-                  value={answer}
-                  onChange={(e) => setAnswer(e.target.value)}
-                />
-                <div className="mt-4 flex justify-between items-center">
-                  <span className="text-xs text-gray-400">
-                    Type: {challenges[currentChallengeIdx].type}
-                  </span>
-                  <Button onClick={handleSubmit} disabled={submitting || !answer.trim()}>
-                    {submitting ? "Evaluating..." : "Submit Answer"}
-                  </Button>
-                </div>
-              </Card>
+            <div className="p-4 border-t border-gray-200">
+              <button onClick={handleEndRound} className="w-full px-4 py-3 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700">
+                Submit Final
+              </button>
             </div>
           </div>
-        </RoundLayout>
+
+          <div className="flex-1 flex flex-col">
+            <div className="bg-white border-b border-gray-200 px-8 py-4 flex items-center justify-between">
+              <div>
+                <h1 className="text-2xl font-bold text-gray-900">{challenges[currentChallengeIdx].title}</h1>
+                <p className="text-sm text-gray-500 mt-0.5">{round.name}</p>
+              </div>
+              <div className="flex items-center gap-3">
+                <div className="bg-blue-50 px-4 py-2 rounded-lg font-mono text-lg font-bold text-blue-900">
+                  {minutes}:{seconds}
+                </div>
+                <button onClick={handleEndRound} className="px-4 py-2.5 bg-white border border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-50">
+                  End Round
+                </button>
+              </div>
+            </div>
+            <div className="flex-1 overflow-y-auto p-8">
+              <div className="max-w-5xl mx-auto grid grid-cols-2 gap-6">
+                <div className="bg-white rounded-lg shadow-sm p-6 border border-gray-100">
+                  <h3 className="font-bold text-lg text-gray-900 mb-3">Challenge</h3>
+                  <p className="text-sm text-gray-600 leading-relaxed whitespace-pre-wrap">
+                    {challenges[currentChallengeIdx].description}
+                  </p>
+                </div>
+                <div className="bg-white rounded-lg shadow-sm p-6 border border-gray-100 flex flex-col">
+                  <h3 className="font-bold text-lg text-gray-900 mb-3">Your Answer</h3>
+                  <textarea
+                    className="w-full flex-1 min-h-[220px] resize-none bg-gray-50 border border-gray-200 rounded-xl p-4 font-mono text-sm text-gray-900 focus:border-orange-400 focus:ring-2 focus:ring-orange-100 outline-none"
+                    placeholder="Type your answer here..."
+                    value={answer}
+                    onChange={(e) => setAnswer(e.target.value)}
+                  />
+                  <div className="mt-4 flex justify-end">
+                    <Button onClick={handleSubmit} disabled={submitting || !answer.trim()}>
+                      {submitting ? 'Evaluating...' : 'Submit Answer'}
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
 
       {phase === 'result' && (
-        <RoundLayout title={round.name} subtitle="Round Complete">
-          <Card className="p-12 text-center max-w-2xl mx-auto mt-10">
-            <div className="text-6xl mb-6">🏆</div>
-            <h3 className="text-3xl font-bold font-heading mb-4">Round Completed!</h3>
-            <p className="text-gray-500 mb-8">
-              Great work. Your score has been submitted to the leaderboard.
-            </p>
-            <Button onClick={() => navigate('rounds')} variant="outline" className="px-8 py-3">
-              Back to Overview
+        <div className="flex-1 flex items-center justify-center p-8">
+          <div className="max-w-xl w-full bg-white rounded-2xl shadow-sm border border-gray-100 p-12 text-center">
+            <h3 className="text-3xl font-bold font-heading text-gray-900 mb-3">Round Completed</h3>
+            <p className="text-gray-500 mb-8">Your score has been submitted to the leaderboard.</p>
+            <Button onClick={() => navigate('dashboard')} className="px-8 py-3">
+              Back to Dashboard
             </Button>
-          </Card>
-        </RoundLayout>
+          </div>
+        </div>
       )}
 
       {toast && (
         <Toast message={toast.msg} type={toast.type} onClose={() => setToast(null)} />
       )}
-    </>
+    </div>
   );
 }

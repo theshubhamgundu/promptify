@@ -4,6 +4,7 @@ import { useEventStore } from '../stores/eventStore';
 import { useTeamStore } from '../stores/teamStore';
 import { CheckCircleIcon, CircleIcon, ClockIcon, ExclamationCircleIcon, AlertTriangleIcon, ShieldIcon } from '../components/icons';
 import { ConfirmDialog } from '../components/ui';
+import { sounds } from '../lib/sound';
 
 interface Challenge {
   id: string;
@@ -251,6 +252,7 @@ export default function QuizRound({ roundId, navigate }: QuizRoundProps) {
   }, [currentChallengeIndex, challenges]);
 
   const handleOptionSelect = async (challengeId: string, optionLabel: string, type: string) => {
+    sounds.select();
     const currentAnswer = answers.get(challengeId) || [];
     let newAnswer: string[];
     if (type === 'MULTIPLE_CHOICE' || type === 'SINGLE_ANSWER') { // Assume all multiple_choice for Quiz
@@ -381,17 +383,17 @@ export default function QuizRound({ roundId, navigate }: QuizRoundProps) {
         </div>
       )}
       
-      <div className="w-64 bg-white border-r border-gray-200 flex-shrink-0 overflow-y-auto">
+      <div className="w-64 bg-white border-r border-gray-200 flex-shrink-0 flex flex-col">
         <div className="p-4 border-b border-gray-200">
           <h2 className="font-bold text-gray-900 text-lg mb-1">Questions</h2>
           <p className="text-sm text-gray-600">{answeredCount} of {challenges.length} answered</p>
         </div>
-        <div className="p-4 space-y-2">
+        <div className="p-4 space-y-2 flex-1 overflow-y-auto">
           {challenges.map((chal, idx) => {
             const isAnswered = answers.has(chal.id) && answers.get(chal.id)!.length > 0;
             const isCurrent = idx === currentChallengeIndex;
             return (
-              <button key={chal.id} onClick={() => setCurrentChallengeIndex(idx)} className={`w-full text-left px-4 py-3 rounded-lg transition-all ${isCurrent ? 'bg-blue-600 text-white shadow-md' : isAnswered ? 'bg-green-50 text-green-900 hover:bg-green-100' : 'bg-gray-50 text-gray-700 hover:bg-gray-100'}`}>
+              <button key={chal.id} onClick={() => { sounds.click(); setCurrentChallengeIndex(idx); }} className={`w-full text-left px-4 py-3 rounded-lg transition-all ${isCurrent ? 'bg-blue-600 text-white shadow-md' : isAnswered ? 'bg-green-50 text-green-900 hover:bg-green-100' : 'bg-gray-50 text-gray-700 hover:bg-gray-100'}`}>
                 <div className="flex items-center justify-between">
                   <span className="font-medium">Question {idx + 1}</span>
                   {isAnswered && !isCurrent && <CheckCircleIcon className="w-5 h-5 text-green-600" />}
@@ -401,7 +403,7 @@ export default function QuizRound({ roundId, navigate }: QuizRoundProps) {
             );
           })}
         </div>
-        <div className="p-4 border-t border-gray-200">
+        <div className="p-4 border-t border-gray-200 flex-shrink-0">
           <button onClick={handleSubmitQuiz} disabled={submitting} className="w-full px-4 py-3 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
             {submitting ? 'Submitting...' : 'End Quiz'}
           </button>
@@ -415,7 +417,7 @@ export default function QuizRound({ roundId, navigate }: QuizRoundProps) {
               <h1 className="text-2xl font-bold text-gray-900">{round?.name}</h1>
               <p className="text-sm text-gray-600 mt-1">Question {currentChallengeIndex + 1} of {challenges.length}</p>
             </div>
-            <div className="flex items-center gap-6">
+            <div className="flex items-center gap-4">
               <div className="flex items-center gap-2 px-4 py-2 bg-gray-50 rounded-lg">
                 <ShieldIcon className="w-5 h-5 text-gray-600" />
                 <div className="text-sm font-medium text-gray-900">Tabs: {tabSwitchCount}/3 • Warns: {securityWarnings}/5</div>
@@ -424,6 +426,9 @@ export default function QuizRound({ roundId, navigate }: QuizRoundProps) {
                 <ClockIcon className={`w-5 h-5 ${timeLeft < 300 ? 'text-red-600' : 'text-blue-600'}`} />
                 <span className={`font-mono text-lg font-bold ${timeLeft < 300 ? 'text-red-900' : 'text-blue-900'}`}>{formatTime(timeLeft)}</span>
               </div>
+              <button onClick={handleSubmitQuiz} disabled={submitting} className="px-5 py-2.5 bg-green-600 text-white rounded-lg font-bold hover:bg-green-700 disabled:opacity-50">
+                {submitting ? 'Submitting...' : 'End Quiz'}
+              </button>
             </div>
           </div>
         </div>
@@ -456,13 +461,13 @@ export default function QuizRound({ roundId, navigate }: QuizRoundProps) {
               </div>
             </div>
             <div className="mt-6 flex items-center justify-between">
-              <button onClick={() => setCurrentChallengeIndex(Math.max(0, currentChallengeIndex - 1))} disabled={currentChallengeIndex === 0} className="px-6 py-3 bg-white border border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-50 disabled:opacity-50">← Previous</button>
+              <button onClick={() => { sounds.click(); setCurrentChallengeIndex(Math.max(0, currentChallengeIndex - 1)); }} disabled={currentChallengeIndex === 0} className="px-6 py-3 bg-white border border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-50 disabled:opacity-50">← Previous</button>
               {currentChallengeIndex === challenges.length - 1 ? (
                 <button onClick={handleSubmitQuiz} disabled={submitting} className="px-6 py-3 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 disabled:opacity-50">
                   {submitting ? 'Submitting...' : 'Submit Quiz'}
                 </button>
               ) : (
-                <button onClick={() => setCurrentChallengeIndex(Math.min(challenges.length - 1, currentChallengeIndex + 1))} disabled={currentChallengeIndex === challenges.length - 1} className="px-6 py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50">Next →</button>
+                <button onClick={() => { sounds.click(); setCurrentChallengeIndex(Math.min(challenges.length - 1, currentChallengeIndex + 1)); }} disabled={currentChallengeIndex === challenges.length - 1} className="px-6 py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50">Next →</button>
               )}
             </div>
           </div>

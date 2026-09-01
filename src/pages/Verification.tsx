@@ -34,7 +34,7 @@ export default function Verification({ onApprove }: { onApprove: () => void }) {
         .from('team_sessions')
         .select('state')
         .eq('team_id', currentTeam.id)
-        .single();
+        .maybeSingle();
         
       if (data && data.state === 'VERIFIED' && mounted) {
         setState('approved');
