@@ -30,36 +30,36 @@ export function PromptSheet({ challengeSessionId, refreshTrigger }: PromptSheetP
     <div className={`flex flex-col transition-all duration-300 ${isExpanded ? 'h-96' : 'h-12'}`}>
       {/* Header / Toggle */}
       <div 
-        className="h-12 flex-none flex items-center justify-between px-6 bg-slate-900 border-b border-slate-800 cursor-pointer hover:bg-slate-800/80 transition-colors"
+        className="h-12 flex-none flex items-center justify-between px-6 bg-slate-50 border-b border-slate-200 cursor-pointer hover:bg-slate-100 transition-colors"
         onClick={() => setIsExpanded(!isExpanded)}
       >
         <div className="flex items-center space-x-3">
-          <Database className="w-4 h-4 text-cyan-500" />
-          <h3 className="text-sm font-semibold text-white">Immutable Prompt Sheet</h3>
-          <div className="px-2 py-0.5 bg-slate-800 rounded text-xs text-slate-400 border border-slate-700">
+          <Database className="w-4 h-4 text-cyan-600" />
+          <h3 className="text-sm font-semibold text-slate-900">Immutable Prompt Sheet</h3>
+          <div className="px-2 py-0.5 bg-white rounded text-xs text-slate-500 border border-slate-200 shadow-sm">
             {entries.length} interactions
           </div>
         </div>
-        <div className="flex items-center space-x-4 text-xs text-slate-400">
+        <div className="flex items-center space-x-4 text-xs text-slate-500">
           <span>Records are permanent and cannot be edited or deleted.</span>
-          {isExpanded ? <ChevronDown className="w-5 h-5" /> : <ChevronUp className="w-5 h-5" />}
+          {isExpanded ? <ChevronDown className="w-5 h-5 text-slate-400" /> : <ChevronUp className="w-5 h-5 text-slate-400" />}
         </div>
       </div>
 
       {/* Content */}
       {isExpanded && (
-        <div className="flex-1 overflow-y-auto p-4 bg-slate-950 flex flex-col space-y-3">
+        <div className="flex-1 overflow-y-auto p-4 bg-white flex flex-col space-y-3">
           {isLoading && entries.length === 0 ? (
             <div className="text-center text-slate-500 py-8 text-sm">Loading interactions...</div>
           ) : entries.length === 0 ? (
             <div className="text-center text-slate-500 py-8 text-sm">No AI interactions recorded yet.</div>
           ) : (
             entries.map((entry) => (
-              <div key={entry.id} className="bg-slate-900 border border-slate-800 rounded-lg p-4 flex flex-col space-y-3">
+              <div key={entry.id} className="bg-slate-50 border border-slate-200 rounded-lg p-4 flex flex-col space-y-3 shadow-sm">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center space-x-3">
-                    <span className="text-xs font-mono font-bold text-slate-500">#{entry.sequence_number}</span>
-                    <span className="text-xs font-medium text-cyan-400 bg-cyan-950 px-2 py-0.5 rounded">
+                    <span className="text-xs font-mono font-bold text-slate-400">#{entry.sequence_number}</span>
+                    <span className="text-xs font-medium text-cyan-700 bg-cyan-50 px-2 py-0.5 rounded border border-cyan-100">
                       {entry.provider} / {entry.model}
                     </span>
                     {entry.status === 'SUCCESS' ? (
@@ -75,16 +75,16 @@ export function PromptSheet({ challengeSessionId, refreshTrigger }: PromptSheetP
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
-                  <div className="bg-slate-950 rounded p-3 border border-slate-800">
-                    <div className="text-[10px] text-slate-500 uppercase tracking-wider mb-2 font-semibold">Prompt</div>
-                    <div className="text-sm text-slate-300 whitespace-pre-wrap font-mono line-clamp-4">
+                  <div className="bg-white rounded p-3 border border-slate-200 shadow-sm">
+                    <div className="text-[10px] text-slate-400 uppercase tracking-wider mb-2 font-semibold">Prompt</div>
+                    <div className="text-sm text-slate-700 whitespace-pre-wrap font-mono line-clamp-4">
                       {entry.prompt}
                     </div>
                   </div>
-                  <div className="bg-slate-950 rounded p-3 border border-slate-800">
-                    <div className="text-[10px] text-slate-500 uppercase tracking-wider mb-2 font-semibold">Response</div>
-                    <div className="text-sm text-slate-400 whitespace-pre-wrap line-clamp-4">
-                      {entry.response || (entry.status === 'FAILED' ? <span className="text-red-400 italic">Request failed: {entry.error_code}</span> : <span className="italic text-slate-600">No response recorded</span>)}
+                  <div className="bg-white rounded p-3 border border-slate-200 shadow-sm">
+                    <div className="text-[10px] text-slate-400 uppercase tracking-wider mb-2 font-semibold">Response</div>
+                    <div className="text-sm text-slate-600 whitespace-pre-wrap line-clamp-4">
+                      {entry.response || (entry.status === 'FAILED' ? <span className="text-red-500 italic">Request failed: {entry.error_code}</span> : <span className="italic text-slate-400">No response recorded</span>)}
                     </div>
                   </div>
                 </div>

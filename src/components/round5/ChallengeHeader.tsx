@@ -31,33 +31,40 @@ export function ChallengeHeader({
   });
 
   return (
-    <div className="flex flex-col bg-slate-900 border-b border-slate-800">
+    <div className="flex flex-col bg-white border-b border-slate-200 shadow-sm">
       <div className="flex items-center justify-between px-6 py-3">
         <div className="flex items-center space-x-4">
-          <div className="px-3 py-1 bg-slate-800 text-slate-300 rounded-md text-sm font-medium border border-slate-700">
+          <div className="px-3 py-1 bg-slate-100 text-slate-700 rounded-md text-sm font-medium border border-slate-200">
             Round 5
           </div>
-          <h1 className="text-xl font-bold text-white">{challengeName}</h1>
+          <h1 className="text-xl font-bold text-slate-900">{challengeName}</h1>
         </div>
 
-        <div className="flex items-center space-x-6">
-          <div className="flex items-center space-x-2 text-amber-400 bg-slate-800 px-3 py-1.5 rounded border border-slate-700">
+        <div className="flex items-center space-x-4">
+          <div className="flex items-center space-x-2 text-amber-600 bg-amber-50 px-3 py-1.5 rounded border border-amber-200">
             <Trophy className="w-4 h-4" />
             <span className="font-mono font-medium">{score} pts</span>
           </div>
 
           <div className={`flex items-center space-x-2 px-4 py-1.5 rounded border ${
             percent < 10 
-              ? 'bg-red-500/10 border-red-500/50 text-red-500' 
+              ? 'bg-red-50 border-red-200 text-red-600' 
               : percent < 25
-              ? 'bg-amber-500/10 border-amber-500/50 text-amber-500'
-              : 'bg-slate-800 border-slate-700 text-cyan-400'
+              ? 'bg-amber-50 border-amber-200 text-amber-600'
+              : 'bg-slate-50 border-slate-200 text-slate-700'
           }`}>
             <Timer className="w-5 h-5" />
             <span className="text-xl font-mono font-bold">
               {minutes}:{seconds}
             </span>
           </div>
+          
+          <button 
+            onClick={onTimeEnd}
+            className="ml-4 px-4 py-1.5 bg-cyan-600 hover:bg-cyan-700 text-white font-medium rounded shadow-sm transition-colors"
+          >
+            Submit Challenge
+          </button>
         </div>
       </div>
 

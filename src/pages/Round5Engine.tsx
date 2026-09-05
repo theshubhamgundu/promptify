@@ -68,7 +68,7 @@ export default function Round5Engine({ roundId, navigate }: Round5EngineProps) {
           .maybeSingle();
 
         if (!rsData) {
-          const { data: newRs } = await supabase
+          const { data: newRs, error: insertErr } = await supabase
             .from('round_sessions')
             .insert({
               team_id: currentTeam.id,
@@ -78,7 +78,18 @@ export default function Round5Engine({ roundId, navigate }: Round5EngineProps) {
             .select()
             .maybeSingle();
             
-          rsData = newRs;
+          if (insertErr) {
+            // If duplicate key error (409) due to concurrent mount, just re-fetch
+            const { data: retryRs } = await supabase
+              .from('round_sessions')
+              .select('*')
+              .eq('team_id', currentTeam.id)
+              .eq('round_id', roundId)
+              .maybeSingle();
+            rsData = retryRs;
+          } else {
+            rsData = newRs;
+          }
         }
 
         if (rsData?.completed_at) {
@@ -154,17 +165,17 @@ export default function Round5Engine({ roundId, navigate }: Round5EngineProps) {
   };
 
   if (isLoading) {
-    return <div className="flex h-screen items-center justify-center bg-slate-950 text-white">Loading...</div>;
+    return <div className="flex h-screen items-center justify-center bg-white text-slate-500">Loading...</div>;
   }
 
   if (isRoundFinished) {
     return (
-      <div className="flex flex-col h-screen bg-slate-950 text-slate-200 items-center justify-center">
-        <h1 className="text-4xl font-bold text-white mb-4">Round 5 Complete</h1>
-        <p className="text-slate-400 mb-8">You have completed all AI Systems Challenges.</p>
+      <div className="flex flex-col h-screen bg-slate-50 text-slate-600 items-center justify-center">
+        <h1 className="text-4xl font-bold text-slate-900 mb-4">Round 5 Complete</h1>
+        <p className="text-slate-500 mb-8">You have completed all AI Systems Challenges.</p>
         <button 
           onClick={() => navigate('dashboard')}
-          className="px-6 py-2 bg-cyan-600 hover:bg-cyan-500 text-white rounded-lg"
+          className="px-6 py-2 bg-cyan-600 hover:bg-cyan-700 text-white rounded-lg shadow-sm"
         >
           Return to Dashboard
         </button>
@@ -173,7 +184,7 @@ export default function Round5Engine({ roundId, navigate }: Round5EngineProps) {
   }
 
   if (!roundSession || !challenges.length || !challengeSession) {
-    return <div className="flex h-screen items-center justify-center bg-slate-950 text-white">Preparing challenge...</div>;
+    return <div className="flex h-screen items-center justify-center bg-white text-slate-500">Preparing challenge...</div>;
   }
 
   const currentChallenge = challenges[currentIdx];

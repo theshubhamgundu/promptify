@@ -89,22 +89,22 @@ export function AIWorkspace({
   };
 
   return (
-    <div className="flex flex-col h-full relative">
-      <div className="p-4 border-b border-slate-800 flex flex-col space-y-4">
+    <div className="flex flex-col h-full relative bg-white">
+      <div className="p-4 border-b border-slate-200 flex flex-col space-y-4 bg-slate-50">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-white flex items-center space-x-2">
+          <h2 className="text-lg font-semibold text-slate-900 flex items-center space-x-2">
             <span>AI Workspace</span>
-            <ShieldCheck className="w-4 h-4 text-cyan-500" title="Secure BYOK Environment" />
+            <ShieldCheck className="w-4 h-4 text-cyan-600" title="Secure BYOK Environment" />
           </h2>
           
           <div className="flex items-center space-x-2">
-            <span className="text-xs text-slate-400">Status:</span>
+            <span className="text-xs text-slate-500">Status:</span>
             {isByokValid ? (
-              <span className="flex items-center text-xs text-emerald-400 bg-emerald-400/10 px-2 py-1 rounded">
+              <span className="flex items-center text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-1 rounded">
                 <CheckCircle2 className="w-3 h-3 mr-1" /> Ready
               </span>
             ) : (
-              <span className="flex items-center text-xs text-amber-400 bg-amber-400/10 px-2 py-1 rounded">
+              <span className="flex items-center text-xs text-amber-700 bg-amber-50 border border-amber-200 px-2 py-1 rounded">
                 <KeyRound className="w-3 h-3 mr-1" /> Key Required
               </span>
             )}
@@ -115,7 +115,7 @@ export function AIWorkspace({
           <select 
             value={provider}
             onChange={(e) => setProvider(e.target.value as AIProvider)}
-            className="flex-1 bg-slate-800 border border-slate-700 rounded-md text-sm p-2 text-white outline-none focus:border-cyan-500"
+            className="flex-1 bg-white border border-slate-200 rounded-md text-sm p-2 text-slate-900 outline-none focus:border-cyan-500 shadow-sm"
           >
             {allowedProviders.map((p: string) => (
               <option key={p} value={p}>{p}</option>
@@ -125,7 +125,7 @@ export function AIWorkspace({
             type="text"
             value={model}
             onChange={(e) => setModel(e.target.value)}
-            className="flex-1 bg-slate-800 border border-slate-700 rounded-md text-sm p-2 text-white outline-none focus:border-cyan-500"
+            className="flex-1 bg-white border border-slate-200 rounded-md text-sm p-2 text-slate-900 outline-none focus:border-cyan-500 shadow-sm"
             placeholder="Model (e.g. gpt-4o)"
           />
         </div>
@@ -133,21 +133,21 @@ export function AIWorkspace({
 
       <div className="flex-1 overflow-y-auto p-4 flex flex-col space-y-4">
         {lastResponse && (
-          <div className="bg-slate-800/50 rounded-lg p-4 border border-slate-700 text-sm whitespace-pre-wrap">
-            <div className="text-xs text-cyan-400 mb-2 font-mono">Response from {provider}</div>
+          <div className="bg-slate-50 rounded-lg p-4 border border-slate-200 text-sm text-slate-800 whitespace-pre-wrap shadow-sm">
+            <div className="text-xs text-cyan-600 mb-2 font-mono">Response from {provider}</div>
             {lastResponse}
           </div>
         )}
         
         {error && (
-          <div className="bg-red-500/10 border border-red-500/50 rounded-lg p-4 text-sm text-red-400 flex items-start space-x-2">
+          <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-sm text-red-600 flex items-start space-x-2">
             <AlertTriangle className="w-5 h-5 flex-shrink-0 mt-0.5" />
             <span>{error}</span>
           </div>
         )}
       </div>
 
-      <form onSubmit={handleSubmit} className="p-4 border-t border-slate-800 bg-slate-900/50">
+      <form onSubmit={handleSubmit} className="p-4 border-t border-slate-200 bg-slate-50">
         <div className="relative">
           <textarea
             value={prompt}
@@ -158,12 +158,12 @@ export function AIWorkspace({
               }
             }}
             placeholder="Type your prompt... (Cmd+Enter to send)"
-            className="w-full bg-slate-800 border border-slate-700 rounded-lg p-3 pr-12 text-sm text-white placeholder-slate-500 outline-none focus:border-cyan-500 resize-none h-32"
+            className="w-full bg-white border border-slate-200 rounded-lg p-3 pr-12 text-sm text-slate-900 placeholder-slate-400 outline-none focus:border-cyan-500 resize-none h-32 shadow-sm"
           />
           <button
             type="submit"
             disabled={isSubmitting || !prompt.trim() || !isByokValid}
-            className="absolute bottom-3 right-3 p-2 bg-cyan-600 hover:bg-cyan-500 disabled:bg-slate-700 text-white rounded-md transition-colors"
+            className="absolute bottom-3 right-3 p-2 bg-cyan-600 hover:bg-cyan-700 disabled:bg-slate-300 text-white rounded-md transition-colors"
           >
             {isSubmitting ? (
               <Loader2 className="w-4 h-4 animate-spin" />
