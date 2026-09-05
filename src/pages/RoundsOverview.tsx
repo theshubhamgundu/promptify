@@ -111,6 +111,7 @@ export default function RoundsOverview({ navigate }: { navigate: (p: Page) => vo
       case 'ESCAPE_ROOM': return PuzzleIcon;
       case 'AI_BATTLE': return SwordsIcon;
       case 'AI_GRANDMASTER': return CrownIcon;
+      case 'AI_SYSTEMS': return BrainIcon;
       default: return TargetIcon;
     }
   };

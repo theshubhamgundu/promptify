@@ -12,6 +12,7 @@ import { BYOKConnect, BYOKConnected } from '../components/BYOKConnect';
 import { byokSession, AIProvider, BYOKConfig } from '../lib/byok-service';
 import { sounds } from '../lib/sound';
 import { useEffect } from 'react';
+import { supabase } from '../lib/supabase';
 
 interface Round {
   id: string | number;
@@ -34,6 +35,7 @@ const getIconForType = (type: string) => {
     case 'PUZZLE': return PuzzleIcon;
     case 'BATTLE_ROYALE': return SwordsIcon;
     case 'VISION_CHALLENGE': return EyeIcon;
+    case 'AI_SYSTEMS': return BrainIcon;
     default: return CrownIcon;
   }
 };
@@ -72,7 +74,21 @@ export default function Dashboard({ navigate }: { navigate: (p: Page) => void })
   
   const currentTeam = useTeamStore(s => s.currentTeam);
   const members = useTeamStore(s => s.members);
+  const currentEvent = useEventStore(s => s.currentEvent);
   const dbRounds = useEventStore(s => s.rounds);
+  const setRounds = useEventStore(s => s.setRounds);
+  
+  useEffect(() => {
+    async function refreshRounds() {
+      if (currentEvent?.id) {
+        const { data } = await supabase.from('rounds').select('*').eq('event_id', currentEvent.id).order('order_index');
+        if (data) {
+          setRounds(data as any);
+        }
+      }
+    }
+    refreshRounds();
+  }, [currentEvent?.id, setRounds]);
   
   const teamName = currentTeam?.name || 'Your Team';
 
@@ -233,6 +249,8 @@ export default function Dashboard({ navigate }: { navigate: (p: Page) => void })
                         navigate(`vision-${round.id}` as any);
                       } else if (round.type === 'AI_ADVERSARIAL' || round.type === 'ADVERSARIAL_CHALLENGE') {
                         navigate(`round4-${round.id}` as any);
+                      } else if (round.type === 'AI_SYSTEMS' || round.type === 'SYSTEMS_CHALLENGE') {
+                        navigate(`round5-${round.id}` as any);
                       } else {
                         navigate(`round-${round.id}` as any);
                       }

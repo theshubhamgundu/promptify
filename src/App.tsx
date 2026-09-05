@@ -35,6 +35,8 @@ import PromptHeist from './pages/PromptHeist';
 import VisionRound from './pages/VisionRound';
 import Round4Engine from './pages/Round4Engine';
 import Round4Monitor from './pages/admin/Round4Monitor';
+import Round5Engine from './pages/Round5Engine';
+import Round5Monitor from './pages/admin/Round5Monitor';
 import TuringHumanConsole from './pages/admin/TuringHumanConsole';
 import AdminLayout from './components/AdminLayout';
 import FullscreenEnforcer from './components/FullscreenEnforcer';
@@ -196,6 +198,10 @@ export default function App() {
         const roundId = page.replace('round4-', '');
         return <Round4Engine roundId={roundId} navigate={navigate} />;
       }
+      if (page.startsWith('round5-'))  {
+        const roundId = page.replace('round5-', '');
+        return <Round5Engine roundId={roundId} navigate={navigate} />;
+      }
       if (page === 'final-results')   return <FinalResults navigate={navigate} />;
       if (page === 'leaderboard')     return <Leaderboard />;
       if (page === 'progress')        return <MyProgress />;
@@ -217,6 +223,7 @@ export default function App() {
       if (page === 'admin-sessions')     return <SessionManager navigate={navigate} />;
       if (page === 'admin-vision-monitor') return <VisionMonitor navigate={navigate} />;
       if (page === 'admin-round4-monitor') return <Round4Monitor navigate={navigate} />;
+      if (page === 'admin-round5-monitor') return <Round5Monitor navigate={navigate} />;
       if (page === 'admin-turing-console') return <TuringHumanConsole navigate={navigate} />;
       if (page === 'admin-monitor')       return <LiveMonitor navigate={navigate} />;
       if (page === 'admin-snapshots')     return <SnapshotManager navigate={navigate} />;
@@ -235,7 +242,7 @@ export default function App() {
   };
 
   const isAdminPage = page.startsWith('admin');
-  const isRoundPage = page.startsWith('quiz-') || page.startsWith('quiz-results-') || page.startsWith('prompt-heist-') || page.startsWith('round-') || page.startsWith('vision-') || page.startsWith('round4-');
+  const isRoundPage = page.startsWith('quiz-') || page.startsWith('quiz-results-') || page.startsWith('prompt-heist-') || page.startsWith('round-') || page.startsWith('vision-') || page.startsWith('round4-') || page.startsWith('round5-');
 
   return (
     <>
