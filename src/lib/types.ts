@@ -67,7 +67,216 @@ export interface Database {
           created_at?: string
         }
       }
-      // I'll add more types as needed during implementation...
+      rounds: {
+        Row: {
+          id: string
+          event_id: string
+          name: string
+          description: string | null
+          type: string
+          order_index: number
+          duration_minutes: number
+          scoring_config: any
+          is_active: boolean
+          status?: string
+          created_at?: string
+          challenges?: any[]
+        }
+        Insert: {
+          id?: string
+          event_id: string
+          name: string
+          description?: string | null
+          type: string
+          order_index: number
+          duration_minutes?: number
+          scoring_config?: any
+          is_active?: boolean
+          status?: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          event_id?: string
+          name?: string
+          description?: string | null
+          type?: string
+          order_index?: number
+          duration_minutes?: number
+          scoring_config?: any
+          is_active?: boolean
+          status?: string
+          created_at?: string
+        }
+      }
+      participants: {
+        Row: {
+          id: string
+          team_id: string
+          name: string
+          email: string
+          role: string
+          device_fingerprint?: string | null
+          verified?: boolean
+          is_verified?: boolean
+          created_at?: string
+        }
+        Insert: {
+          id?: string
+          team_id: string
+          name: string
+          email: string
+          role: string
+          device_fingerprint?: string | null
+          verified?: boolean
+          is_verified?: boolean
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          team_id?: string
+          name?: string
+          email?: string
+          role?: string
+          device_fingerprint?: string | null
+          verified?: boolean
+          is_verified?: boolean
+          created_at?: string
+        }
+      }
+      challenges: {
+        Row: {
+          id: string
+          round_id: string
+          order_index: number
+          title: string
+          description: string
+          type: string
+          base_points: number
+          max_attempts: number | null
+          configuration: any
+          created_at?: string
+        }
+        Insert: {
+          id?: string
+          round_id: string
+          order_index: number
+          title: string
+          description: string
+          type: string
+          base_points?: number
+          max_attempts?: number | null
+          configuration?: any
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          round_id?: string
+          order_index?: number
+          title?: string
+          description?: string
+          type?: string
+          base_points?: number
+          max_attempts?: number | null
+          configuration?: any
+          created_at?: string
+        }
+      }
+      round_sessions: {
+        Row: {
+          id: string
+          team_id: string
+          round_id: string
+          status: string
+          start_time: string
+          end_time: string | null
+          completed_at: string | null
+          score: number
+          time_remaining_seconds: number | null
+          duration_minutes: number
+          is_locked: boolean
+          created_at?: string
+        }
+        Insert: {
+          id?: string
+          team_id: string
+          round_id: string
+          status?: string
+          start_time?: string
+          end_time?: string | null
+          completed_at?: string | null
+          score?: number
+          time_remaining_seconds?: number | null
+          duration_minutes?: number
+          is_locked?: boolean
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          team_id?: string
+          round_id?: string
+          status?: string
+          start_time?: string
+          end_time?: string | null
+          completed_at?: string | null
+          score?: number
+          time_remaining_seconds?: number | null
+          duration_minutes?: number
+          is_locked?: boolean
+          created_at?: string
+        }
+      }
+      submissions: {
+        Row: {
+          id: string
+          team_id: string
+          challenge_id: string
+          round_session_id?: string
+          attempt_number: number
+          payload: any
+          score: number
+          max_score: number
+          passed: boolean
+          feedback?: any
+          is_final: boolean
+          created_at?: string
+        }
+        Insert: {
+          id?: string
+          team_id: string
+          challenge_id: string
+          round_session_id?: string
+          attempt_number: number
+          payload: any
+          score?: number
+          max_score?: number
+          passed?: boolean
+          feedback?: any
+          is_final?: boolean
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          team_id?: string
+          challenge_id?: string
+          round_session_id?: string
+          attempt_number?: number
+          payload?: any
+          score?: number
+          max_score?: number
+          passed?: boolean
+          feedback?: any
+          is_final?: boolean
+          created_at?: string
+        }
+      }
+      [key: string]: any
+    }
+    Views: {
+      [key: string]: any
+    }
+    Functions: {
+      [key: string]: any
     }
   }
 }

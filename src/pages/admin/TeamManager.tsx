@@ -194,11 +194,11 @@ export default function TeamManager({ navigate }: { navigate: (p: Page) => void 
           {filteredTeams.map((team, i) => (
             <div
               key={team.id}
-              className={`rounded-2xl border bg-white shadow-sm overflow-hidden transition-all group flex flex-col
+              className={`rounded-2xl border bg-white shadow-sm overflow-hidden transition-all group flex flex-col cursor-pointer
                 ${team.status === 'SUSPENDED' ? 'border-red-200 opacity-75' : 'border-gray-100 hover:border-gray-200 hover:shadow-md'}
               `}
             >
-              <div className="p-5 flex-1">
+              <div className="p-5 flex-1" onClick={() => navigate(`admin-team-${team.id}`)}>
                 <div className="flex items-start gap-4 mb-4">
                   {/* Avatar */}
                   <div className={`w-12 h-12 bg-gradient-to-br ${team.status === 'SUSPENDED' ? 'from-gray-400 to-gray-500 grayscale' : teamColors[i % teamColors.length]} rounded-xl flex items-center justify-center shadow-sm flex-shrink-0`}>
@@ -266,13 +266,19 @@ export default function TeamManager({ navigate }: { navigate: (p: Page) => void 
               {/* Actions Footer */}
               <div className="px-5 py-3 bg-gray-50 border-t border-gray-100 flex items-center justify-between">
                  <button
-                    onClick={() => setSuspendTarget(team)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSuspendTarget(team);
+                    }}
                     className={`text-xs font-bold transition-colors ${team.status === 'SUSPENDED' ? 'text-green-600 hover:text-green-700' : 'text-amber-600 hover:text-amber-700'}`}
                   >
                     {team.status === 'SUSPENDED' ? 'Resume Team' : 'Suspend Team'}
                   </button>
                   <button
-                    onClick={() => setDeleteTarget(team)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setDeleteTarget(team);
+                    }}
                     className="text-xs font-bold text-red-500 hover:text-red-600 transition-colors"
                   >
                     Delete

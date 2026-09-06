@@ -44,6 +44,7 @@ export default function TuringTestChallenge({
     efficiencyBonus: number;
     questionsUsed: number;
   } | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -172,7 +173,7 @@ export default function TuringTestChallenge({
     } catch (err: any) {
       console.error('Turing question error:', err);
       sounds.error();
-      alert(err.message || 'Error submitting question');
+      setErrorMessage(err.message || 'Error submitting question');
     } finally {
       setIsWaitingReply(false);
     }
@@ -208,7 +209,7 @@ export default function TuringTestChallenge({
     } catch (err: any) {
       console.error('Verdict submission error:', err);
       sounds.error();
-      alert(err.message || 'Failed to submit verdict');
+      setErrorMessage(err.message || 'Failed to submit verdict');
     } finally {
       setIsSubmittingVerdict(false);
     }
@@ -216,6 +217,22 @@ export default function TuringTestChallenge({
 
   return (
     <div className="space-y-5">
+      {/* Error Message */}
+      {errorMessage && (
+        <div className="p-4 bg-red-50 border border-red-200 rounded-xl flex items-start gap-3">
+          <ExclamationCircleIcon className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+          <div className="flex-1">
+            <div className="text-sm font-medium text-red-900">{errorMessage}</div>
+            <button 
+              onClick={() => setErrorMessage(null)} 
+              className="text-xs text-red-700 hover:text-red-900 underline mt-1"
+            >
+              Dismiss
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Challenge Instructions & Objective Card */}
       <div className="p-6 bg-white border border-gray-200 rounded-2xl shadow-sm space-y-3">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">

@@ -18,13 +18,10 @@ export function ModelDuelChallenge({ challenge, challengeSession, onComplete }: 
 
   useEffect(() => {
     async function loadTasks() {
-      const { data } = await supabase
-        .from('model_duel_tasks')
-        .select('*')
-        .eq('challenge_id', challenge.id)
-        .eq('is_visible', true)
-        .order('order_index', { ascending: true });
-      if (data) setTasks(data);
+      // Note: model_duel_tasks table doesn't exist in the database
+      // Using empty array for now - this challenge type may not be fully implemented
+      console.warn('ModelDuelChallenge: model_duel_tasks table does not exist');
+      setTasks([]);
     }
     loadTasks();
   }, [challenge.id]);

@@ -32,6 +32,21 @@ export default function Round5Engine({ roundId, navigate }: Round5EngineProps) {
   const [isRoundFinished, setIsRoundFinished] = useState<boolean>(false);
   const [promptSheetTrigger, setPromptSheetTrigger] = useState<number>(0);
 
+  // Mark round as completed when finished
+  useEffect(() => {
+    if (isRoundFinished && roundSession?.id && roundSession.status !== 'COMPLETED') {
+      supabase
+        .from('round_sessions')
+        .update({ 
+          status: 'COMPLETED', 
+          completed_at: new Date().toISOString(),
+          score: roundSession.score || 0
+        })
+        .eq('id', roundSession.id)
+        .then(() => console.log('Round 5 marked as COMPLETED'));
+    }
+  }, [isRoundFinished, roundSession?.id, roundSession?.status, roundSession?.score]);
+
   // 1. Fetch Round and Challenges
   useEffect(() => {
     async function loadRoundData() {
@@ -116,23 +131,46 @@ export default function Round5Engine({ roundId, navigate }: Round5EngineProps) {
       if (!currentChallenge) return;
 
       try {
-        // RPC handles session creation and timer start
-        const { data: result, error } = await supabase.rpc('start_round5_challenge', {
-          p_team_id: currentTeam.id,
-          p_round_session_id: roundSession.id,
-          p_challenge_id: currentChallenge.id,
-          p_duration_minutes: currentChallenge.configuration?.durationMinutes || 10
-        });
+        // Check if challenge session already exists
+        let { data: existingSession } = await supabase
+          .from('challenge_sessions')
+          .select('*')
+          .eq('round_session_id', roundSession.id)
+          .eq('challenge_id', currentChallenge.id)
+          .maybeSingle();
 
-        if (error) throw error;
-        
-        if (result && result.success) {
-          setChallengeSession(result.session);
-          
-          if (result.session.status === 'COMPLETED' || result.session.status === 'TIMEOUT') {
+        if (existingSession) {
+          setChallengeSession(existingSession);
+          if (existingSession.status === 'COMPLETED' || existingSession.status === 'TIMEOUT') {
             handleChallengeComplete();
           }
+          return;
         }
+
+        // Create new challenge session
+        const durationMinutes = currentChallenge.configuration?.durationMinutes || 10;
+        const startTime = new Date();
+        const deadlineTime = new Date(startTime.getTime() + durationMinutes * 60 * 1000);
+
+        const { data: newSession, error } = await supabase
+          .from('challenge_sessions')
+          .insert({
+            team_id: currentTeam.id,
+            round_session_id: roundSession.id,
+            challenge_id: currentChallenge.id,
+            started_at: startTime.toISOString(),
+            deadline_at: deadlineTime.toISOString(),
+            status: 'IN_PROGRESS'
+          })
+          .select()
+          .single();
+
+        if (error) {
+          console.error('Error creating challenge session:', error);
+          return;
+        }
+
+        setChallengeSession(newSession);
       } catch (e) {
         console.error('Error starting challenge:', e);
       }
@@ -146,16 +184,8 @@ export default function Round5Engine({ roundId, navigate }: Round5EngineProps) {
       setCurrentIdx(currentIdx + 1);
       setChallengeSession(null);
     } else {
-      // Complete entire round
-      try {
-        await supabase.rpc('complete_round5_session', {
-          p_team_id: currentTeam!.id,
-          p_round_session_id: roundSession.id
-        });
-        setIsRoundFinished(true);
-      } catch (e) {
-        console.error('Error completing round:', e);
-      }
+      // Complete entire round - just set flag, useEffect will update DB
+      setIsRoundFinished(true);
     }
   };
 

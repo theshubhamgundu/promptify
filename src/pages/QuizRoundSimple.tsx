@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useTeamStore } from '../stores/teamStore';
+import { supabase } from '../lib/supabase';
 import { CheckCircleIcon, CircleIcon, ClockIcon } from '../components/icons';
 import { ConfirmDialog } from '../components/ui';
 import { SECOND_YEAR_QUESTIONS, THIRD_YEAR_QUESTIONS, FOURTH_YEAR_QUESTIONS, calculateScore, type QuizQuestion } from '../data/quiz-questions';
@@ -40,7 +41,73 @@ export default function QuizRoundSimple({ roundId, navigate }: QuizRoundSimplePr
   const [securityViolationCount, setSecurityViolationCount] = useState(0);
   const [toast, setToast] = useState<{ message: string; type: 'warning' | 'error' | 'success' } | null>(null);
   const [confirmSubmit, setConfirmSubmit] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isRestored, setIsRestored] = useState(false);
   
+  const LOCAL_STORAGE_KEY = `quiz_answers_${currentTeam?.id || 'unknown'}_${roundId || 'unknown'}`;
+  
+  // Check if session exists on mount
+  useEffect(() => {
+    async function checkExistingSession() {
+      if (!currentTeam || !roundId) return;
+      
+      try {
+        const { data } = await supabase
+          .from('quiz_sessions')
+          .select('status')
+          .eq('team_id', currentTeam.id)
+          .eq('round_id', roundId)
+          .maybeSingle();
+          
+        if ((data as any)?.status === 'GRADED') {
+          setIsSubmitted(true);
+          setShowResults(true);
+          // We'll also clear local storage as it's safe now
+          localStorage.removeItem(LOCAL_STORAGE_KEY);
+        }
+      } catch (e) {
+        console.error('Failed to check existing session', e);
+      }
+    }
+    
+    checkExistingSession();
+  }, [currentTeam?.id, roundId, LOCAL_STORAGE_KEY]);
+  
+  // Restore from local storage on mount
+  useEffect(() => {
+    if (isRestored) return;
+    
+    const saved = localStorage.getItem(LOCAL_STORAGE_KEY);
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        const restoredAnswers = new Map<string, string[]>();
+        Object.entries(parsed).forEach(([k, v]) => {
+          restoredAnswers.set(k, v as string[]);
+        });
+        if (restoredAnswers.size > 0) {
+          setAnswers(restoredAnswers);
+          console.log('Restored previous answers from local storage');
+        }
+      } catch (e) {
+        console.error('Failed to parse saved answers', e);
+      }
+    }
+    setIsRestored(true);
+  }, [isRestored, LOCAL_STORAGE_KEY]);
+  
+  // Auto-save to local storage every 30 seconds
+  useEffect(() => {
+    if (isSubmitted || !isRestored || answers.size === 0) return;
+    
+    const interval = setInterval(() => {
+      const answersObj = Object.fromEntries(answers.entries());
+      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(answersObj));
+    }, 30000);
+    
+    return () => clearInterval(interval);
+  }, [answers, isSubmitted, isRestored, LOCAL_STORAGE_KEY]);
+
   const showToast = (message: string, type: 'warning' | 'error' | 'success' = 'warning') => {
     setToast({ message, type });
     setTimeout(() => setToast(null), 3000);
@@ -178,26 +245,102 @@ export default function QuizRoundSimple({ roundId, navigate }: QuizRoundSimplePr
     setAnswers(newAnswers);
   };
   
-  const handleSubmitQuiz = () => {
-    if (isSubmitted) return;
+  const handleSubmitQuiz = async () => {
+    if (isSubmitted || isSubmitting) return;
     
-    setIsSubmitted(true);
+    setIsSubmitting(true);
     
-    // Calculate score
+    // Calculate score locally
     const scoreResult = calculateScore(questions, answers);
     
-    // Score is calculated client-side for display; the authoritative score is recorded via submit_round_session RPC
-    // Show success message and navigate to dashboard
-    showToast(`✅ Quiz submitted! Score: ${scoreResult.totalScore}/${scoreResult.totalPoints}`, 'success');
-    setTimeout(() => {
-      if (navigate) {
-        navigate('dashboard');
+    // Save to localStorage one last time just in case
+    const answersObj = Object.fromEntries(answers.entries());
+    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(answersObj));
+    
+    showToast(`Submitting quiz...`, 'warning');
+    
+    try {
+      if (!currentTeam || !roundId) {
+        throw new Error('Missing team or round info');
       }
-    }, 2000);
+      
+      // Prevent thundering herd by waiting 0-3 seconds
+      const jitter = Math.floor(Math.random() * 3000);
+      await new Promise(resolve => setTimeout(resolve, jitter));
+      
+      // Format payload for RPC
+      const payload = questions.map(q => ({
+        question_id: q.id,
+        selected_options: answers.get(q.id) || [],
+        correct_answers: q.correctAnswers,
+        points: q.points
+      }));
+      
+      let attempt = 0;
+      let success = false;
+      let rpcError = null;
+      
+      // Retry loop with exponential backoff (max 3 tries)
+      while (attempt < 3 && !success) {
+        if (attempt > 0) {
+          await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, attempt)));
+        }
+        
+        try {
+          const { data, error } = await supabase.rpc('submit_quiz_bulk', {
+            p_team_id: currentTeam.id,
+            p_round_id: roundId,
+            p_answers: payload,
+            p_time_remaining: timeLeft
+          });
+          
+          if (error) throw error;
+          if (data && !data.success && !data.already_submitted) {
+            throw new Error(data.error || 'Unknown error');
+          }
+          
+          success = true;
+        } catch (e) {
+          rpcError = e;
+          attempt++;
+        }
+      }
+      
+      if (!success) {
+        throw rpcError;
+      }
+      
+      // Success! Clear local storage
+      localStorage.removeItem(LOCAL_STORAGE_KEY);
+      
+      setIsSubmitted(true);
+      setIsSubmitting(false);
+      showToast(`✅ Quiz submitted! Score: ${scoreResult.totalScore}/${scoreResult.totalPoints}`, 'success');
+      
+      setTimeout(() => {
+        if (navigate) {
+          navigate('dashboard');
+        }
+      }, 2000);
+      
+    } catch (err) {
+      console.error('Failed to submit quiz to server', err);
+      setIsSubmitting(false);
+      showToast('❌ Submission failed. Answers saved locally. Try again.', 'error');
+    }
   };
   
+  const checkUnansweredAndSubmit = () => {
+    const unansweredCount = questions.length - Array.from(answers.values()).filter(a => a.length > 0).length;
+    if (unansweredCount > 0) {
+      showToast(`You have ${unansweredCount} unanswered questions. Please attempt them before submitting!`, 'error');
+    } else {
+      setConfirmSubmit(true);
+    }
+  };
+
   const handleEndQuiz = () => {
-    setConfirmSubmit(true);
+    checkUnansweredAndSubmit();
   };
   
   const toggleMarkQuestion = () => {
@@ -638,9 +781,7 @@ export default function QuizRoundSimple({ roundId, navigate }: QuizRoundSimplePr
             
             {currentQuestionIndex === questions.length - 1 ? (
               <button
-                onClick={() => {
-                  setConfirmSubmit(true);
-                }}
+                onClick={checkUnansweredAndSubmit}
                 disabled={isSubmitted}
                 className="px-6 py-2.5 bg-gradient-to-r from-orange-500 to-red-500 text-white rounded-lg font-bold hover:shadow-lg disabled:opacity-50"
               >

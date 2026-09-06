@@ -110,6 +110,21 @@ export default function VisionRound({ roundId, navigate }: { roundId: string; na
     }
   }, [phase]);
 
+  // Mark round as completed when phase changes to complete
+  useEffect(() => {
+    if (phase === 'complete' && roundSession?.id && roundSession.status !== 'COMPLETED') {
+      supabase
+        .from('round_sessions')
+        .update({ 
+          status: 'COMPLETED', 
+          completed_at: new Date().toISOString(),
+          score: totalScore 
+        })
+        .eq('id', roundSession.id)
+        .then(() => console.log('Round marked as COMPLETED'));
+    }
+  }, [phase, roundSession?.id, roundSession?.status, totalScore]);
+
   // ── Load round data ───────────────────────────────────────────────
   useEffect(() => {
     if (!roundId || !currentTeam) return;
@@ -148,12 +163,16 @@ export default function VisionRound({ roundId, navigate }: { roundId: string; na
       }
       setRoundSession(rs);
 
-      // Get existing challenge sessions
-      const { data: sessions } = await supabase
-        .from('challenge_sessions')
-        .select('*')
-        .eq('team_id', currentTeam!.id)
-        .eq('round_session_id', rs?.id);
+      // Get existing challenge sessions (only if round session exists)
+      let sessions = null;
+      if (rs?.id) {
+        const { data: sessionData } = await supabase
+          .from('challenge_sessions')
+          .select('*')
+          .eq('team_id', currentTeam!.id)
+          .eq('round_session_id', rs.id);
+        sessions = sessionData;
+      }
 
       if (sessions) {
         setChallengeSessions(sessions as ChallengeSession[]);

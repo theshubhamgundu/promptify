@@ -20,28 +20,11 @@ export function EmergenceChallenge({ challenge, challengeSession, onComplete }: 
 
   useEffect(() => {
     async function loadSession() {
-      const { data: sData } = await supabase
-        .from('emergence_sessions')
-        .select('*, emergence_environments(available_actions)')
-        .eq('challenge_session_id', challengeSession.id)
-        .single();
-        
-      if (sData) {
-        setSession(sData);
-        
-        const { data: aData } = await supabase
-          .from('emergence_actions')
-          .select('*')
-          .eq('session_id', sData.id)
-          .order('sequence_number', { ascending: false }); // Newest first for history
-          
-        if (aData) {
-          setActions(aData);
-          if (aData.length > 0) {
-            setLatestObservation(aData[0].observation);
-          }
-        }
-      }
+      // Note: emergence_sessions table doesn't exist in the database
+      // This challenge type may not be fully implemented
+      console.warn('EmergenceChallenge: emergence_sessions table does not exist');
+      setSession(null);
+      setActions([]);
     }
     loadSession();
   }, [challengeSession.id]);
@@ -101,7 +84,7 @@ export function EmergenceChallenge({ challenge, challengeSession, onComplete }: 
     }
   };
 
-  if (!session) return <div className="p-8 text-white">Initializing Environment...</div>;
+  if (!session) return <div className="p-8 text-white">Emergence challenge not available (database table missing)</div>;
 
   const availableActions = session.emergence_environments?.available_actions || [];
 

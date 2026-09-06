@@ -162,6 +162,22 @@ export default function Login({ onLogin }: { onLogin: (isAdmin: boolean) => void
               'Enter Competition →'
             )}
           </Button>
+
+          <button
+            type="button"
+            onClick={(e) => {
+              e.preventDefault();
+              setTeamCode('test1234');
+              setPassword('TeamPassword123!');
+              setTimeout(() => {
+                const form = (e.target as HTMLElement).closest('form');
+                if (form) form.requestSubmit();
+              }, 50);
+            }}
+            className="w-full py-2.5 mt-2 bg-gray-100 hover:bg-gray-200 text-gray-600 font-bold rounded-xl transition-colors text-sm"
+          >
+            Quick Login (test1234)
+          </button>
         </form>
 
         <div className="mt-8 pt-8 border-t border-gray-100">

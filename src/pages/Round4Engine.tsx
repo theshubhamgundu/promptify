@@ -133,6 +133,8 @@ export default function Round4Engine({ roundId, navigate }: Round4EngineProps) {
 
     async function initChallengeSession() {
       try {
+        console.log('[Round4] Initializing challenge session for:', activeChallenge.title);
+        
         const { data, error } = await (supabase.rpc as any)('start_round4_challenge', {
           p_team_id: currentTeam!.id,
           p_round_session_id: roundSession.id,
@@ -150,10 +152,22 @@ export default function Round4Engine({ roundId, navigate }: Round4EngineProps) {
           const now = Date.now();
           const remainingSecs = Math.max(0, Math.floor((deadline - now) / 1000));
 
-          setTimeLeft(remainingSecs);
-          setIsTimedOut(remainingSecs <= 0 || data.session.status === 'TIMEOUT');
+          console.log('[Round4] Timer setup:', {
+            deadline: data.session.deadline_at,
+            now: new Date().toISOString(),
+            remainingSecs,
+            sessionStatus: data.session.status
+          });
 
-          if (remainingSecs > 0) {
+          setTimeLeft(remainingSecs);
+          
+          // IMPORTANT: Only set timeout if actually timed out, not just because remainingSecs is 0 on first load
+          const shouldBeTimedOut = data.session.status === 'TIMEOUT' || data.session.status === 'COMPLETED';
+          setIsTimedOut(shouldBeTimedOut);
+          
+          console.log('[Round4] isTimedOut set to:', shouldBeTimedOut);
+
+          if (remainingSecs > 0 && !shouldBeTimedOut) {
             sounds.start();
           }
         }
@@ -199,8 +213,9 @@ export default function Round4Engine({ roundId, navigate }: Round4EngineProps) {
   const handleNextChallenge = async () => {
     sounds.click();
     if (currentIdx < challenges.length - 1) {
+      console.log('[Round4] Moving to next challenge, resetting timeout state');
+      setIsTimedOut(false); // Reset timeout for next challenge
       setCurrentIdx(prev => prev + 1);
-      setIsTimedOut(false);
     } else {
       // Complete entire round
       await handleCompleteRound();

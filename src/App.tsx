@@ -8,7 +8,6 @@ import RoundsOverview from './pages/RoundsOverview';
 import GenericRound from './pages/GenericRound';
 import FinalResults from './pages/FinalResults';
 import Leaderboard from './pages/Leaderboard';
-import MyProgress from './pages/MyProgress';
 import Submissions from './pages/Submissions';
 import Team from './pages/Team';
 import HelpRules from './pages/HelpRules';
@@ -76,6 +75,45 @@ export default function App() {
   
   // Initialize heartbeat if in the app
   useSessionHeartbeat();
+  
+  // Check Supabase session on mount to restore auth state
+  useEffect(() => {
+    const checkSession = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (session) {
+        // User has active session - keep them logged in
+        const saved = localStorage.getItem('authState');
+        if (saved === 'app' || saved === 'verification') {
+          setAuthState(saved);
+        } else {
+          setAuthState('app');
+          localStorage.setItem('authState', 'app');
+        }
+      } else {
+        // No session - force login
+        setAuthState('login');
+        localStorage.setItem('authState', 'login');
+      }
+    };
+    
+    checkSession();
+    
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_OUT') {
+        setAuthState('login');
+        localStorage.setItem('authState', 'login');
+      } else if (event === 'SIGNED_IN' && session) {
+        // Check if user needs verification or can go straight to app
+        // This logic should match your Login component behavior
+      }
+    });
+    
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, []);
   
   // Save authState to localStorage whenever it changes
   useEffect(() => {
@@ -169,71 +207,72 @@ export default function App() {
   }
 
   const renderPage = () => {
-    const key = page; // used as key for transition
+    // Ensure page is always a string
+    const currentPage = typeof page === 'string' ? page : 'dashboard';
+    const key = currentPage; // used as key for transition
 
     const content = (() => {
-      if (page === 'dashboard')       return <Dashboard navigate={navigate} />;
-      if (page === 'rounds')          return <RoundsOverview navigate={navigate} />;
-      if (page.startsWith('quiz-'))   {
-        const roundId = page.replace('quiz-', '');
-        return <QuizRound roundId={roundId} navigate={navigate} />;
+      if (currentPage === 'dashboard')       return <Dashboard navigate={navigate} />;
+      if (currentPage === 'rounds')          return <RoundsOverview navigate={navigate} />;
+      if (currentPage.startsWith('quiz-'))   {
+        const roundId = currentPage.replace('quiz-', '');
+        return <QuizRoundSimple roundId={roundId} navigate={navigate} />;
       }
-      if (page.startsWith('quiz-results-')) {
-        const roundId = page.replace('quiz-results-', '');
+      if (currentPage.startsWith('quiz-results-')) {
+        const roundId = currentPage.replace('quiz-results-', '');
         return <QuizResults roundId={roundId} navigate={navigate} />;
       }
-      if (page.startsWith('prompt-heist-'))  {
-        const roundId = page.replace('prompt-heist-', '');
+      if (currentPage.startsWith('prompt-heist-'))  {
+        const roundId = currentPage.replace('prompt-heist-', '');
         return <PromptHeist roundId={roundId} navigate={navigate} />;
       }
-      if (page.startsWith('round-'))  {
-        const roundId = page.replace('round-', '');
+      if (currentPage.startsWith('round-'))  {
+        const roundId = currentPage.replace('round-', '');
         return <GenericRound roundId={roundId} navigate={navigate} />;
       }
-      if (page.startsWith('vision-'))  {
-        const roundId = page.replace('vision-', '');
+      if (currentPage.startsWith('vision-'))  {
+        const roundId = currentPage.replace('vision-', '');
         return <VisionRound roundId={roundId} navigate={navigate} />;
       }
-      if (page.startsWith('round4-'))  {
-        const roundId = page.replace('round4-', '');
+      if (currentPage.startsWith('round4-'))  {
+        const roundId = currentPage.replace('round4-', '');
         return <Round4Engine roundId={roundId} navigate={navigate} />;
       }
-      if (page.startsWith('round5-'))  {
-        const roundId = page.replace('round5-', '');
+      if (currentPage.startsWith('round5-'))  {
+        const roundId = currentPage.replace('round5-', '');
         return <Round5Engine roundId={roundId} navigate={navigate} />;
       }
-      if (page === 'final-results')   return <FinalResults navigate={navigate} />;
-      if (page === 'leaderboard')     return <Leaderboard />;
-      if (page === 'progress')        return <MyProgress />;
-      if (page === 'submissions')     return <Submissions />;
-      if (page === 'team')            return <Team />;
-      if (page === 'help')            return <HelpRules />;
-      if (page === 'admin')           return <AdminDashboard navigate={navigate} />;
-      if (page === 'admin-events')    return <EventManager navigate={navigate} />;
-      if (page === 'admin-teams')     return <TeamManager navigate={navigate} />;
-      if (page.startsWith('admin-team-')) {
-        const teamId = page.replace('admin-team-', '');
+      if (currentPage === 'final-results')   return <FinalResults navigate={navigate} />;
+      if (currentPage === 'leaderboard')     return <Leaderboard />;
+      if (currentPage === 'submissions')     return <Submissions />;
+      if (currentPage === 'team')            return <Team />;
+      if (currentPage === 'help')            return <HelpRules />;
+      if (currentPage === 'admin')           return <AdminDashboard navigate={navigate} />;
+      if (currentPage === 'admin-events')    return <EventManager navigate={navigate} />;
+      if (currentPage === 'admin-teams')     return <TeamManager navigate={navigate} />;
+      if (currentPage.startsWith('admin-team-')) {
+        const teamId = currentPage.replace('admin-team-', '');
         return <TeamDetail teamId={teamId} navigate={navigate} />;
       }
-      if (page === 'admin-rounds')    return <RoundManager navigate={navigate} />;
-      if (page === 'admin-leaderboard') return <AdminLeaderboard navigate={navigate} />;
-      if (page === 'admin-logs')      return <ActivityLogViewer navigate={navigate} />;
-      if (page === 'admin-participants') return <ParticipantManager navigate={navigate} />;
-      if (page === 'admin-verification') return <VerificationManager navigate={navigate} />;
-      if (page === 'admin-sessions')     return <SessionManager navigate={navigate} />;
-      if (page === 'admin-vision-monitor') return <VisionMonitor navigate={navigate} />;
-      if (page === 'admin-round4-monitor') return <Round4Monitor navigate={navigate} />;
-      if (page === 'admin-round5-monitor') return <Round5Monitor navigate={navigate} />;
-      if (page === 'admin-turing-console') return <TuringHumanConsole navigate={navigate} />;
-      if (page === 'admin-monitor')       return <LiveMonitor navigate={navigate} />;
-      if (page === 'admin-snapshots')     return <SnapshotManager navigate={navigate} />;
-      if (page === 'admin-submissions')  return <SubmissionsReview navigate={navigate} />;
-      if (page === 'admin-announcements') return <Announcements navigate={navigate} />;
-      if (page === 'admin-quiz')         return <QuizManager />;
+      if (currentPage === 'admin-rounds')    return <RoundManager navigate={navigate} />;
+      if (currentPage === 'admin-leaderboard') return <AdminLeaderboard navigate={navigate} />;
+      if (currentPage === 'admin-logs')      return <ActivityLogViewer navigate={navigate} />;
+      if (currentPage === 'admin-participants') return <ParticipantManager navigate={navigate} />;
+      if (currentPage === 'admin-verification') return <VerificationManager navigate={navigate} />;
+      if (currentPage === 'admin-sessions')     return <SessionManager navigate={navigate} />;
+      if (currentPage === 'admin-vision-monitor') return <VisionMonitor navigate={navigate} />;
+      if (currentPage === 'admin-round4-monitor') return <Round4Monitor navigate={navigate} />;
+      if (currentPage === 'admin-round5-monitor') return <Round5Monitor navigate={navigate} />;
+      if (currentPage === 'admin-turing-console') return <TuringHumanConsole navigate={navigate} />;
+      if (currentPage === 'admin-monitor')       return <LiveMonitor navigate={navigate} />;
+      if (currentPage === 'admin-snapshots')     return <SnapshotManager navigate={navigate} />;
+      if (currentPage === 'admin-submissions')  return <SubmissionsReview navigate={navigate} />;
+      if (currentPage === 'admin-announcements') return <Announcements navigate={navigate} />;
+      if (currentPage === 'admin-quiz')         return <QuizManager />;
       
       return (
         <div className="flex items-center justify-center h-full text-gray-400 text-sm">
-          Page "{page}" coming soon
+          Page "{currentPage}" coming soon
         </div>
       );
     })();
@@ -241,8 +280,8 @@ export default function App() {
     return <PageView pageKey={key}>{content}</PageView>;
   };
 
-  const isAdminPage = page.startsWith('admin');
-  const isRoundPage = page.startsWith('quiz-') || page.startsWith('quiz-results-') || page.startsWith('prompt-heist-') || page.startsWith('round-') || page.startsWith('vision-') || page.startsWith('round4-') || page.startsWith('round5-');
+  const isAdminPage = typeof page === 'string' && page.startsWith('admin');
+  const isRoundPage = typeof page === 'string' && (page.startsWith('quiz-') || page.startsWith('quiz-results-') || page.startsWith('prompt-heist-') || page.startsWith('round-') || page.startsWith('vision-') || page.startsWith('round4-') || page.startsWith('round5-'));
 
   return (
     <>

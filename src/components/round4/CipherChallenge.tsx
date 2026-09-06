@@ -83,8 +83,14 @@ export default function CipherChallenge({
     const validWords = dictionary.filter(d => d.word.trim() && d.meaning.trim());
     const validRules = grammarRules.filter(r => r.trim());
 
-    if (validWords.length === 0) { alert('Please define at least 1 dictionary word.'); return; }
-    if (!encodedRiddle.trim()) { alert('Please provide the encoded riddle.'); return; }
+    if (validWords.length === 0) { 
+      setFeedback({ success: false, message: 'Please define at least 1 dictionary word.' }); 
+      return; 
+    }
+    if (!encodedRiddle.trim()) { 
+      setFeedback({ success: false, message: 'Please provide the encoded riddle.' }); 
+      return; 
+    }
 
     setIsEvaluating(true);
     setFeedback(null);
@@ -152,7 +158,7 @@ State the exact final solution clearly in English at the end.`;
     } catch (err: any) {
       console.error('Cipher evaluation error:', err);
       sounds.error();
-      alert(err.message || 'Evaluation error');
+      setFeedback({ success: false, message: err.message || 'Evaluation error' });
     } finally {
       setIsEvaluating(false);
     }

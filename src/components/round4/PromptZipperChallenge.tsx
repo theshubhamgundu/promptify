@@ -41,6 +41,7 @@ export default function PromptZipperChallenge({
     totalScore: number;
     probeDetails?: { question: string; correct: boolean }[];
   } | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   // Live word counter
   const wordCount = useMemo(() => {
@@ -148,7 +149,7 @@ export default function PromptZipperChallenge({
     } catch (err: any) {
       console.error('Prompt zipper evaluation error:', err);
       sounds.error();
-      alert(err.message || 'Error evaluating prompt compression');
+      setErrorMessage(err.message || 'Error evaluating prompt compression');
     } finally {
       setIsEvaluating(false);
     }
@@ -156,6 +157,22 @@ export default function PromptZipperChallenge({
 
   return (
     <div className="space-y-5">
+      {/* Error Message */}
+      {errorMessage && (
+        <div className="p-4 bg-red-50 border border-red-200 rounded-xl flex items-start gap-3">
+          <ExclamationCircleIcon className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+          <div className="flex-1">
+            <div className="text-sm font-medium text-red-900">{errorMessage}</div>
+            <button 
+              onClick={() => setErrorMessage(null)} 
+              className="text-xs text-red-700 hover:text-red-900 underline mt-1"
+            >
+              Dismiss
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Challenge Instructions & Objective Card */}
       <div className="p-6 bg-white border border-gray-200 rounded-2xl shadow-sm space-y-3">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">

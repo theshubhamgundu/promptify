@@ -57,7 +57,7 @@ export default function AdminDashboard({ navigate }: { navigate: (p: Page) => vo
 
       // Submissions (across all teams in this event)
       const { count: subsCount } = await supabase
-        .from('submissions')
+        .from('vw_all_submissions')
         .select('id', { count: 'exact', head: true })
         .in('team_id', teamIds.length ? teamIds : ['00000000-0000-0000-0000-000000000000']);
 

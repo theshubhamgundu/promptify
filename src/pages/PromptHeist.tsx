@@ -456,6 +456,11 @@ export default function PromptHeist({ roundId, navigate }: PromptHeistProps) {
   const executeFinalSubmission = async () => {
     try {
       setConfirmSubmit(false);
+      console.log('[PromptHeist] executeFinalSubmission called');
+      console.log('[PromptHeist] Current challenge:', currentChallenge?.title, 'sub_round:', currentChallenge?.sub_round_number);
+      console.log('[PromptHeist] Total challenges:', challenges.length);
+      console.log('[PromptHeist] All challenge sub_round_numbers:', challenges.map(c => c.sub_round_number));
+      
       if (lastEvaluation && currentChallenge && !String(currentChallenge.id).startsWith('fallback-')) {
         await supabase.rpc('submit_prompt_attempt', {
           p_team_id: currentTeam!.id,
@@ -479,26 +484,39 @@ export default function PromptHeist({ roundId, navigate }: PromptHeistProps) {
         });
       }
 
-      if (currentChallenge && currentChallenge.sub_round_number < challenges.length) {
-        const next = challenges.find(c => c.sub_round_number === currentChallenge.sub_round_number + 1) || challenges[currentChallenge.sub_round_number];
-        setPromptText('');
-        setExpectedOutput('');
-        setAttempts([]);
-        setCurrentAttempt(1);
-        setLastEvaluation(null);
+      // Look for the next challenge by sub_round_number
+      if (currentChallenge) {
+        const nextSubRoundNumber = currentChallenge.sub_round_number + 1;
+        console.log(`[PromptHeist] Looking for challenge with sub_round_number = ${nextSubRoundNumber}`);
+        
+        const next = challenges.find(c => c.sub_round_number === nextSubRoundNumber);
+        
         if (next) {
+          console.log(`[PromptHeist] ✓ Found next challenge: "${next.title}" (sub_round: ${next.sub_round_number})`);
+          setPromptText('');
+          setExpectedOutput('');
+          setAttempts([]);
+          setCurrentAttempt(1);
+          setLastEvaluation(null);
           setCurrentChallenge(next);
           setTimeLeft(next.time_limit_seconds);
           setSession(prev => prev ? { ...prev, current_sub_round: next.sub_round_number } : prev);
+        } else {
+          console.log('[PromptHeist] ✗ No challenge found with sub_round_number =', nextSubRoundNumber);
+          console.log('[PromptHeist] This was the last challenge, ending round');
+          await handleEndRound();
         }
       } else {
+        console.log('[PromptHeist] No current challenge, ending round');
         await handleEndRound();
       }
     } catch (err: any) {
-      console.error('Submission error:', err);
-      if (currentChallenge && currentChallenge.sub_round_number < challenges.length) {
+      console.error('[PromptHeist] Submission error:', err);
+      // On error, still try to advance if there's a next challenge
+      if (currentChallenge) {
         const next = challenges.find(c => c.sub_round_number === currentChallenge.sub_round_number + 1);
         if (next) {
+          console.log('[PromptHeist] Error occurred but found next challenge, advancing anyway');
           setCurrentChallenge(next);
           setPromptText('');
           setExpectedOutput('');
@@ -506,6 +524,8 @@ export default function PromptHeist({ roundId, navigate }: PromptHeistProps) {
           setCurrentAttempt(1);
           setLastEvaluation(null);
           setTimeLeft(next.time_limit_seconds);
+        } else {
+          await handleEndRound();
         }
       } else {
         await handleEndRound();
@@ -520,7 +540,14 @@ export default function PromptHeist({ roundId, navigate }: PromptHeistProps) {
   const handleEndRound = async () => {
     try {
       if (roundSession?.id) {
-        await supabase.rpc('submit_round_session', { p_round_session_id: roundSession.id });
+        // Mark round as completed directly
+        await supabase
+          .from('round_sessions')
+          .update({
+            status: 'COMPLETED',
+            completed_at: new Date().toISOString()
+          })
+          .eq('id', roundSession.id);
       }
       navigate && navigate('dashboard');
     } catch (err: any) {
@@ -587,9 +614,13 @@ export default function PromptHeist({ roundId, navigate }: PromptHeistProps) {
 
       {confirmSubmit && (
         <ConfirmDialog
-          title="Submit Final Answer?"
-          message="Are you sure you want to submit this as your final answer? You cannot change it later."
-          confirmLabel="Submit"
+          title={challenges.find(c => c.sub_round_number === currentChallenge.sub_round_number + 1) ? "Move to Next Challenge?" : "Submit Final Answer?"}
+          message={
+            challenges.find(c => c.sub_round_number === currentChallenge.sub_round_number + 1)
+              ? `Are you sure you want to submit this challenge and move to "${challenges.find(c => c.sub_round_number === currentChallenge.sub_round_number + 1)?.title || 'the next challenge'}"? You cannot return to this challenge.`
+              : "Are you sure you want to submit your final answer and complete this round? You cannot change it later."
+          }
+          confirmLabel={challenges.find(c => c.sub_round_number === currentChallenge.sub_round_number + 1) ? "Next Challenge" : "Submit Final"}
           cancelLabel="Cancel"
           variant="primary"
           onConfirm={() => {
@@ -897,12 +928,22 @@ export default function PromptHeist({ roundId, navigate }: PromptHeistProps) {
                   {evaluating ? 'Evaluating...' : 'Test Prompt'}
                 </button>
                 
-                <button
-                  onClick={handleSubmitFinal}
-                  className="flex-1 px-6 py-3 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700"
-                >
-                  Submit Final
-                </button>
+                {/* Check if there's actually a next challenge by looking for sub_round_number + 1 */}
+                {challenges.find(c => c.sub_round_number === currentChallenge.sub_round_number + 1) ? (
+                  <button
+                    onClick={handleSubmitFinal}
+                    className="flex-1 px-6 py-3 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700"
+                  >
+                    Next Challenge →
+                  </button>
+                ) : (
+                  <button
+                    onClick={handleSubmitFinal}
+                    className="flex-1 px-6 py-3 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700"
+                  >
+                    Submit Final
+                  </button>
+                )}
               </div>
             </div>
           </div>
