@@ -7,7 +7,7 @@
    - Auto-generate team code: AIDX + 4 digits
 ═════════════════════════════════════════════════════════════════ */
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { supabase } from "../lib/supabase";
 import { ArrowLeft, CheckCircle, Mail, Hash, Building, Phone } from "lucide-react";
 
@@ -37,7 +37,7 @@ export default function Registration({ onBack }: RegistrationProps) {
   
   const [member1, setMember1] = useState<TeamMember>({
     name: "",
-    email: "",
+    email: "@gmail.com",
     phone: "",
     rollNumber: "",
     year: "",
@@ -47,7 +47,7 @@ export default function Registration({ onBack }: RegistrationProps) {
   
   const [member2, setMember2] = useState<TeamMember>({
     name: "",
-    email: "",
+    email: "@gmail.com",
     phone: "",
     rollNumber: "",
     year: "",
@@ -616,11 +616,21 @@ function MemberForm({ memberNumber, member, setMember, college, branches, sectio
             type="text"
             value={member.email.split("@")[0] || ""}
             onChange={(e) => {
-              const username = e.target.value.replace(/[@\s]/g, "");
+              // Strip out @ symbol and anything after it, plus common domain typos
+              let username = e.target.value
+                .split('@')[0] // Take only part before @
+                .replace(/gmail\.com/gi, '') // Remove gmail.com
+                .replace(/vignanits\.ac\.in/gi, '') // Remove vignanits.ac.in
+                .replace(/gmail/gi, '') // Remove gmail variations
+                .replace(/vignan/gi, '') // Remove vignan variations
+                .replace(/\.com/gi, '') // Remove .com
+                .replace(/\.in/gi, '') // Remove .in
+                .replace(/[@\s]/g, ""); // Remove @ and spaces
+              
               const domain = member.email.includes("@") ? member.email.split("@")[1] : "gmail.com";
-              setMember({ ...member, email: username ? `${username}@${domain}` : "" });
+              setMember({ ...member, email: username ? `${username}@${domain}` : `@${domain}` });
             }}
-            placeholder="Enter your email"
+            placeholder="username"
             required
             style={{
               flex: 1,
@@ -640,7 +650,7 @@ function MemberForm({ memberNumber, member, setMember, college, branches, sectio
             value={member.email.includes("@") ? member.email.split("@")[1] : "gmail.com"}
             onChange={(e) => {
               const username = member.email.split("@")[0] || "";
-              setMember({ ...member, email: username ? `${username}@${e.target.value}` : "" });
+              setMember({ ...member, email: username ? `${username}@${e.target.value}` : `@${e.target.value}` });
             }}
             style={{
               fontFamily: "'Nunito', sans-serif",
@@ -657,7 +667,7 @@ function MemberForm({ memberNumber, member, setMember, college, branches, sectio
             }}
           >
             <option value="gmail.com">@gmail.com</option>
-            <option value="vignanits.ac.in">@vignanits.ac.in</option>
+            {college === "VITS" && <option value="vignanits.ac.in">@vignanits.ac.in</option>}
           </select>
         </div>
       </div>
@@ -797,17 +807,19 @@ function MemberForm({ memberNumber, member, setMember, college, branches, sectio
               style={{
                 width: "100%",
                 fontFamily: "'Nunito', sans-serif",
-                fontWeight: 600,
-                fontSize: 14,
+                fontWeight: 700,
+                fontSize: 13,
                 padding: "12px 14px",
                 border: "2px solid #111111",
                 borderRadius: 8,
                 outline: "none",
-                background: "#FAF7F2",
+                background: "#FFD027",
+                color: "#111111",
                 cursor: "pointer",
+                whiteSpace: "nowrap",
               }}
             >
-              <option value="">Select</option>
+              <option value="">Select Branch</option>
               {branches.map((b) => (
                 <option key={b} value={b}>
                   {b}
@@ -837,17 +849,19 @@ function MemberForm({ memberNumber, member, setMember, college, branches, sectio
               style={{
                 width: "100%",
                 fontFamily: "'Nunito', sans-serif",
-                fontWeight: 600,
-                fontSize: 14,
+                fontWeight: 700,
+                fontSize: 13,
                 padding: "12px 14px",
                 border: "2px solid #111111",
                 borderRadius: 8,
                 outline: "none",
-                background: "#FAF7F2",
+                background: "#FFD027",
+                color: "#111111",
                 cursor: "pointer",
+                whiteSpace: "nowrap",
               }}
             >
-              <option value="">Select</option>
+              <option value="">Select Section</option>
               {sections.map((s) => (
                 <option key={s} value={s}>
                   {s}
