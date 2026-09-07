@@ -92,3 +92,6 @@ export const VolumeXIcon = ic('M11 5L6 9H2v6h4l5 4V5z|M23 9l-6 6|M17 9l6 6');
 export const SparklesIcon = ic('M12 3l1.912 5.885L20 10.8l-4.756 3.456L17.09 20.1 12 16.395 6.91 20.1l1.846-5.844L4 10.8l6.088-1.915L12 3z');
 
 
+
+export const UploadIcon = ic('M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4|M17 8l-5-5-5 5|M12 3v12');
+export const FileIcon = ic('M13 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V9z|M13 2v7h7');

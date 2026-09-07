@@ -3,16 +3,24 @@ import { supabase } from '../lib/supabase';
 import { useTeamStore } from '../stores/teamStore';
 import { useEventStore } from '../stores/eventStore';
 import { useServerCountdown } from '../hooks/useServerTimer';
-import { ConfirmDialog } from '../components/ui';
 import { sounds } from '../lib/sound';
 import {
-  EyeIcon, ClockIcon, CheckCircleIcon, XCircleIcon,
-  AlertTriangleIcon, ArrowRightIcon, ZapIcon, TargetIcon,
-  LockIcon, SendIcon, PlayIcon, VolumeIcon, VolumeXIcon,
+  EyeIcon, ClockIcon, CheckCircleIcon, XCircleIcon, UploadIcon,
+  AlertTriangleIcon, ArrowRightIcon, ZapIcon, TargetIcon, PlayIcon,
+  LockIcon, UnlockIcon, FileIcon, VolumeIcon, VolumeXIcon, XIcon,
 } from '../components/icons';
 import type { Page } from '../components/Layout';
 
 // ── Types ─────────────────────────────────────────────────────────────
+interface SubQuestion {
+  id: number;
+  unlockAfterSubmit: boolean;
+  title: string;
+  description: string;
+  maxFiles: number;
+  points: number;
+}
+
 interface Challenge {
   id: string;
   title: string;
@@ -20,17 +28,21 @@ interface Challenge {
   order_index: number;
   base_points: number;
   max_attempts: number;
+  time_limit_minutes: number;
   configuration: {
-    mediaUrl: string;
-    mediaType: 'image' | 'video';
-    evaluationType: 'EXACT_MATCH' | 'NUMERIC' | 'NORMALIZED_TEXT';
-    correctAnswer: string;
-    instructions?: string;
-    scoring?: {
+    mediaUrl?: string;
+    mediaType?: 'image' | 'video';
+    requiresFileUpload: boolean;
+    acceptedFileTypes: string[];
+    maxFileSize: number;
+    maxFiles: number;
+    minDuration?: number;
+    maxDuration?: number;
+    instructions: string;
+    subQuestions?: SubQuestion[];
+    scoring: {
       basePoints: number;
-      attemptBonuses: number[];
-      speedBonuses: { maxSeconds: number; bonus: number }[];
-      hintPenalties?: number[];
+      subQuestionPoints: number[];
     };
   };
 }
@@ -44,19 +56,18 @@ interface ChallengeSession {
   status: 'IN_PROGRESS' | 'COMPLETED' | 'TIMEOUT';
   total_time_seconds: number | null;
   attempts_used: number;
-  is_correct: boolean;
   score: number;
+  submission_data?: {
+    mainSubmitted: boolean;
+    subQuestionsCompleted: number[];
+    files: string[];
+  };
 }
 
-interface SubmissionResult {
-  success: boolean;
-  isCorrect?: boolean;
-  score?: number;
-  attemptNumber?: number;
-  attemptsRemaining?: number;
-  timeTaken?: number;
-  status?: string;
-  error?: string;
+interface UploadedFile {
+  file: File;
+  preview: string;
+  type: 'image' | 'video';
 }
 
 // ── Component ─────────────────────────────────────────────────────────
@@ -70,15 +81,15 @@ export default function VisionRound({ roundId, navigate }: { roundId: string; na
   const [roundSession, setRoundSession] = useState<any>(null);
 
   const [currentChallengeIdx, setCurrentChallengeIdx] = useState(0);
-  const [phase, setPhase] = useState<'briefing' | 'active' | 'result' | 'complete'>('briefing');
-  const [answer, setAnswer] = useState('');
+  const [phase, setPhase] = useState<'briefing' | 'main' | 'sub' | 'result' | 'complete'>('briefing');
+  const [currentSubQuestion, setCurrentSubQuestion] = useState<number>(-1);
+  const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
   const [submitting, setSubmitting] = useState(false);
-  const [lastResult, setLastResult] = useState<SubmissionResult | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [showConfirm, setShowConfirm] = useState(false);
   const [totalScore, setTotalScore] = useState(0);
 
-  const answerRef = useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const currentChallenge = challenges[currentChallengeIdx] || null;
   const currentSession = challengeSessions.find(s => s.challenge_id === currentChallenge?.id) || null;
 
@@ -86,31 +97,29 @@ export default function VisionRound({ roundId, navigate }: { roundId: string; na
 
   // ── Timer ─────────────────────────────────────────────────────────
   const deadlineStr = currentSession?.deadline_at || null;
+  const timeLimit = currentChallenge?.time_limit_minutes || 15;
   const { minutes, seconds: secs, total: timerTotal, percent: timerPercent } = useServerCountdown(
     deadlineStr,
-    8 * 60,
+    timeLimit * 60,
     () => handleTimeout()
   );
 
-  // Sound cue when under 60 seconds
-  const lastUrgentSec = useRef<number | null>(null);
+  // Sound effects
   useEffect(() => {
-    if (phase === 'active' && timerTotal > 0 && timerTotal <= 60 && timerTotal % 15 === 0) {
-      if (lastUrgentSec.current !== timerTotal) {
-        lastUrgentSec.current = timerTotal;
+    if (phase === 'main' || phase === 'sub') {
+      if (timerTotal > 0 && timerTotal <= 60 && timerTotal % 15 === 0) {
         sounds.timeUrgent();
       }
     }
   }, [phase, timerTotal]);
 
-  // Sound cue on completion
   useEffect(() => {
     if (phase === 'complete') {
       sounds.victory();
     }
   }, [phase]);
 
-  // Mark round as completed when phase changes to complete
+  // Mark round as completed
   useEffect(() => {
     if (phase === 'complete' && roundSession?.id && roundSession.status !== 'COMPLETED') {
       supabase
@@ -132,11 +141,9 @@ export default function VisionRound({ roundId, navigate }: { roundId: string; na
     async function load() {
       setLoading(true);
 
-      // Get round info
       const roundInfo = dbRounds.find(r => r.id === roundId);
       setRound(roundInfo || null);
 
-      // Get challenges for this round
       const { data: challengeData } = await supabase
         .from('challenges')
         .select('*')
@@ -145,7 +152,6 @@ export default function VisionRound({ roundId, navigate }: { roundId: string; na
 
       if (challengeData) setChallenges(challengeData as Challenge[]);
 
-      // Get or create round session
       let { data: rs } = await supabase
         .from('round_sessions')
         .select('*')
@@ -163,7 +169,6 @@ export default function VisionRound({ roundId, navigate }: { roundId: string; na
       }
       setRoundSession(rs);
 
-      // Get existing challenge sessions (only if round session exists)
       let sessions = null;
       if (rs?.id) {
         const { data: sessionData } = await supabase
@@ -176,28 +181,61 @@ export default function VisionRound({ roundId, navigate }: { roundId: string; na
 
       if (sessions) {
         setChallengeSessions(sessions as ChallengeSession[]);
-
-        // Calculate total score
         const total = sessions.reduce((sum: number, s: any) => sum + (s.score || 0), 0);
         setTotalScore(total);
 
-        // Find the first incomplete challenge
         if (challengeData) {
           const firstIncomplete = challengeData.findIndex((c: any) =>
             !sessions.find((s: any) => s.challenge_id === c.id && s.status !== 'IN_PROGRESS')
           );
 
           if (firstIncomplete === -1) {
-            // All challenges done
             setPhase('complete');
           } else {
             setCurrentChallengeIdx(firstIncomplete);
             const existingSession = sessions.find((s: any) => s.challenge_id === challengeData[firstIncomplete].id);
-            if (existingSession) {
-              setPhase('active');
+            if (existingSession && existingSession.submission_data?.mainSubmitted) {
+              setPhase('sub');
+            } else if (existingSession && existingSession.status === 'IN_PROGRESS') {
+              // Resume existing session
+              setPhase('main');
+            } else {
+              // Auto-start new challenge session
+              const challenge = challengeData[firstIncomplete];
+              if (challenge && rs?.id) {
+                supabase.rpc('start_challenge_session', {
+                  p_team_id: currentTeam!.id,
+                  p_round_session_id: rs.id,
+                  p_challenge_id: challenge.id,
+                  p_duration_minutes: challenge.configuration?.timeLimitMinutes || 15,
+                }).then(({ data, error }) => {
+                  if (!error && data?.session) {
+                    setChallengeSessions(prev => {
+                      const exists = prev.find(s => s.challenge_id === challenge.id);
+                      if (exists) return prev;
+                      return [...prev, data.session as ChallengeSession];
+                    });
+                    setPhase('main');
+                  }
+                });
+              }
             }
           }
         }
+      } else if (challengeData && challengeData.length > 0 && rs?.id) {
+        // No sessions yet, auto-start first challenge
+        const challenge = challengeData[0];
+        supabase.rpc('start_challenge_session', {
+          p_team_id: currentTeam!.id,
+          p_round_session_id: rs.id,
+          p_challenge_id: challenge.id,
+          p_duration_minutes: challenge.configuration?.timeLimitMinutes || 15,
+        }).then(({ data, error }) => {
+          if (!error && data?.session) {
+            setChallengeSessions([data.session as ChallengeSession]);
+            setPhase('main');
+          }
+        });
       }
 
       setLoading(false);
@@ -206,7 +244,7 @@ export default function VisionRound({ roundId, navigate }: { roundId: string; na
     load();
   }, [roundId, currentTeam]);
 
-  // ── Start a challenge ─────────────────────────────────────────────
+  // ── Start challenge ───────────────────────────────────────────────
   const startChallenge = useCallback(async () => {
     if (!currentTeam || !currentChallenge || !roundSession) return;
     sounds.start();
@@ -215,7 +253,7 @@ export default function VisionRound({ roundId, navigate }: { roundId: string; na
       p_team_id: currentTeam.id,
       p_round_session_id: roundSession.id,
       p_challenge_id: currentChallenge.id,
-      p_duration_minutes: 8,
+      p_duration_minutes: currentChallenge.time_limit_minutes,
     });
 
     if (error) {
@@ -233,100 +271,307 @@ export default function VisionRound({ roundId, navigate }: { roundId: string; na
       });
     }
 
-    setPhase('active');
-    setAnswer('');
-    setLastResult(null);
-    setTimeout(() => answerRef.current?.focus(), 100);
+    setPhase('main');
+    setUploadedFiles([]);
+    setError(null);
   }, [currentTeam, currentChallenge, roundSession]);
 
-  // ── Submit answer ─────────────────────────────────────────────────
-  const submitAnswer = useCallback(async () => {
-    if (!currentTeam || !currentChallenge || !roundSession || !answer.trim()) return;
+  // ── File handling ─────────────────────────────────────────────────
+  const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    if (!files.length) return;
 
-    setSubmitting(true);
-    setLastResult(null);
-    sounds.click();
+    const config = currentChallenge?.configuration;
+    if (!config) return;
 
-    // Get participant id
-    const { data: participant } = await supabase
-      .from('participants')
-      .select('id')
-      .eq('team_id', currentTeam.id)
-      .limit(1)
-      .single();
+    const maxFiles = phase === 'main' ? config.maxFiles : currentChallenge.configuration.subQuestions?.[currentSubQuestion]?.maxFiles || 1;
 
-    const { data, error } = await supabase.rpc('evaluate_vision_submission', {
-      p_team_id: currentTeam.id,
-      p_challenge_id: currentChallenge.id,
-      p_round_session_id: roundSession.id,
-      p_participant_id: participant?.id || null,
-      p_answer: answer.trim(),
-    });
-
-    setSubmitting(false);
-
-    if (error) {
+    if (uploadedFiles.length + files.length > maxFiles) {
+      setError(`Maximum ${maxFiles} file(s) allowed`);
       sounds.error();
-      setLastResult({ success: false, error: error.message });
       return;
     }
 
-    const result = data as SubmissionResult;
-    setLastResult(result);
-    setAnswer('');
+    const newFiles: UploadedFile[] = [];
+    files.forEach(file => {
+      if (!config.acceptedFileTypes.includes(file.type)) {
+        setError(`Invalid file type: ${file.type}`);
+        sounds.error();
+        return;
+      }
 
-    if (result.isCorrect) {
+      if (file.size > config.maxFileSize) {
+        setError(`File too large: ${(file.size / 1024 / 1024).toFixed(2)}MB (max: ${config.maxFileSize / 1024 / 1024}MB)`);
+        sounds.error();
+        return;
+      }
+
+      const preview = URL.createObjectURL(file);
+      const type = file.type.startsWith('image/') ? 'image' : 'video';
+      newFiles.push({ file, preview, type });
+    });
+
+    setUploadedFiles(prev => [...prev, ...newFiles]);
+    setError(null);
+    sounds.click();
+
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  }, [currentChallenge, uploadedFiles, phase, currentSubQuestion]);
+
+  const removeFile = useCallback((index: number) => {
+    setUploadedFiles(prev => {
+      URL.revokeObjectURL(prev[index].preview);
+      return prev.filter((_, i) => i !== index);
+    });
+    sounds.click();
+  }, []);
+
+  // ── Submit main challenge ─────────────────────────────────────────
+  const submitMain = useCallback(async () => {
+    if (!currentTeam || !currentChallenge || uploadedFiles.length === 0) {
+      setError('Please upload at least one file');
+      return;
+    }
+
+    // If no session exists, create one first
+    if (!currentSession && roundSession) {
+      sounds.click();
+      const { data, error: sessionError } = await supabase.rpc('start_challenge_session', {
+        p_team_id: currentTeam.id,
+        p_round_session_id: roundSession.id,
+        p_challenge_id: currentChallenge.id,
+        p_duration_minutes: currentChallenge.configuration?.timeLimitMinutes || 8,
+      });
+
+      if (sessionError || !data?.session) {
+        setError('Failed to start challenge session');
+        sounds.error();
+        return;
+      }
+
+      setChallengeSessions(prev => [...prev, data.session as ChallengeSession]);
+      
+      // Retry submission with new session
+      setTimeout(() => submitMain(), 100);
+      return;
+    }
+
+    if (!currentSession) {
+      setError('No active challenge session');
+      return;
+    }
+
+    const config = currentChallenge.configuration;
+    if (uploadedFiles.length !== config.maxFiles) {
+      setError(`Please upload exactly ${config.maxFiles} file(s)`);
+      return;
+    }
+
+    setSubmitting(true);
+    setError(null);
+    sounds.click();
+
+    try {
+      // Upload files to Supabase Storage
+      const uploadedUrls: string[] = [];
+      for (const { file } of uploadedFiles) {
+        const fileName = `${currentTeam.id}/${currentChallenge.id}/${Date.now()}_${file.name}`;
+        const { error: uploadError } = await supabase.storage
+          .from('challenge-submissions')
+          .upload(fileName, file);
+
+        if (uploadError) throw uploadError;
+
+        const { data: { publicUrl } } = supabase.storage
+          .from('challenge-submissions')
+          .getPublicUrl(fileName);
+
+        uploadedUrls.push(publicUrl);
+      }
+
+      // Update session with submission data
+      const submissionData = {
+        mainSubmitted: true,
+        subQuestionsCompleted: [],
+        files: uploadedUrls,
+      };
+
+      await supabase
+        .from('challenge_sessions')
+        .update({
+          submission_data: submissionData,
+          score: config.scoring.basePoints,
+        })
+        .eq('id', currentSession.id);
+
+      // Refresh sessions
+      const { data: sessions } = await supabase
+        .from('challenge_sessions')
+        .select('*')
+        .eq('team_id', currentTeam.id)
+        .eq('round_session_id', roundSession.id);
+
+      if (sessions) {
+        setChallengeSessions(sessions as ChallengeSession[]);
+        const total = sessions.reduce((sum: number, s: any) => sum + (s.score || 0), 0);
+        setTotalScore(total);
+      }
+
       sounds.success();
-    } else {
+      setUploadedFiles([]);
+
+      // Check if there are sub-questions
+      if (config.subQuestions && config.subQuestions.length > 0) {
+        setPhase('sub');
+        setCurrentSubQuestion(0);
+      } else {
+        setPhase('result');
+      }
+    } catch (err: any) {
+      setError(err.message || 'Upload failed');
       sounds.error();
+    } finally {
+      setSubmitting(false);
+    }
+  }, [currentTeam, currentChallenge, currentSession, roundSession, uploadedFiles]);
+
+  // ── Submit sub-question ───────────────────────────────────────────
+  const submitSubQuestion = useCallback(async () => {
+    if (!currentTeam || !currentChallenge || !currentSession || uploadedFiles.length === 0) {
+      setError('Please upload at least one file');
+      return;
     }
 
-    // Refresh challenge sessions
-    const { data: sessions } = await supabase
-      .from('challenge_sessions')
-      .select('*')
-      .eq('team_id', currentTeam.id)
-      .eq('round_session_id', roundSession.id);
+    const subQuestion = currentChallenge.configuration.subQuestions?.[currentSubQuestion];
+    if (!subQuestion) return;
 
-    if (sessions) {
-      setChallengeSessions(sessions as ChallengeSession[]);
-      const total = sessions.reduce((sum: number, s: any) => sum + (s.score || 0), 0);
-      setTotalScore(total);
+    if (uploadedFiles.length !== subQuestion.maxFiles) {
+      setError(`Please upload exactly ${subQuestion.maxFiles} file(s)`);
+      return;
     }
 
-    if (result.status === 'COMPLETED') {
-      setPhase('result');
+    setSubmitting(true);
+    setError(null);
+    sounds.click();
+
+    try {
+      // Upload files
+      const uploadedUrls: string[] = [];
+      for (const { file } of uploadedFiles) {
+        const fileName = `${currentTeam.id}/${currentChallenge.id}/sub${subQuestion.id}_${Date.now()}_${file.name}`;
+        const { error: uploadError } = await supabase.storage
+          .from('challenge-submissions')
+          .upload(fileName, file);
+
+        if (uploadError) throw uploadError;
+
+        const { data: { publicUrl } } = supabase.storage
+          .from('challenge-submissions')
+          .getPublicUrl(fileName);
+
+        uploadedUrls.push(publicUrl);
+      }
+
+      // Update session
+      const existingData = currentSession.submission_data || { mainSubmitted: true, subQuestionsCompleted: [], files: [] };
+      const updatedData = {
+        ...existingData,
+        subQuestionsCompleted: [...(existingData.subQuestionsCompleted || []), subQuestion.id],
+        files: [...(existingData.files || []), ...uploadedUrls],
+      };
+
+      const newScore = (currentSession.score || 0) + subQuestion.points;
+
+      await supabase
+        .from('challenge_sessions')
+        .update({
+          submission_data: updatedData,
+          score: newScore,
+        })
+        .eq('id', currentSession.id);
+
+      // Refresh sessions
+      const { data: sessions } = await supabase
+        .from('challenge_sessions')
+        .select('*')
+        .eq('team_id', currentTeam.id)
+        .eq('round_session_id', roundSession.id);
+
+      if (sessions) {
+        setChallengeSessions(sessions as ChallengeSession[]);
+        const total = sessions.reduce((sum: number, s: any) => sum + (s.score || 0), 0);
+        setTotalScore(total);
+      }
+
+      sounds.success();
+      setUploadedFiles([]);
+
+      // Move to next sub-question or result
+      const subQuestions = currentChallenge.configuration.subQuestions || [];
+      if (currentSubQuestion < subQuestions.length - 1) {
+        setCurrentSubQuestion(currentSubQuestion + 1);
+      } else {
+        // Mark as completed
+        await supabase
+          .from('challenge_sessions')
+          .update({ status: 'COMPLETED', completed_at: new Date().toISOString() })
+          .eq('id', currentSession.id);
+
+        setPhase('result');
+      }
+    } catch (err: any) {
+      setError(err.message || 'Upload failed');
+      sounds.error();
+    } finally {
+      setSubmitting(false);
     }
-  }, [currentTeam, currentChallenge, roundSession, answer]);
+  }, [currentTeam, currentChallenge, currentSession, roundSession, uploadedFiles, currentSubQuestion]);
 
   // ── Handle timeout ────────────────────────────────────────────────
   const handleTimeout = useCallback(() => {
     sounds.error();
     setPhase('result');
-    setLastResult({ success: false, error: 'Time expired!', status: 'TIMEOUT' });
+    setError('Time expired!');
   }, []);
 
   // ── Advance to next challenge ─────────────────────────────────────
-  const advanceToNext = useCallback(() => {
+  const advanceToNext = useCallback(async () => {
     sounds.click();
     if (currentChallengeIdx < challenges.length - 1) {
-      setCurrentChallengeIdx(currentChallengeIdx + 1);
-      setPhase('briefing');
-      setLastResult(null);
-      setAnswer('');
+      const nextIdx = currentChallengeIdx + 1;
+      setCurrentChallengeIdx(nextIdx);
+      setCurrentSubQuestion(-1);
+      setUploadedFiles([]);
+      setError(null);
+      
+      // Auto-start next challenge
+      if (currentTeam && roundSession) {
+        const nextChallenge = challenges[nextIdx];
+        const { data, error } = await supabase.rpc('start_challenge_session', {
+          p_team_id: currentTeam.id,
+          p_round_session_id: roundSession.id,
+          p_challenge_id: nextChallenge.id,
+          p_duration_minutes: nextChallenge.configuration?.timeLimitMinutes || 15,
+        });
+
+        if (!error && data?.session) {
+          setChallengeSessions(prev => {
+            const exists = prev.find(s => s.challenge_id === nextChallenge.id);
+            if (exists) return prev;
+            return [...prev, data.session as ChallengeSession];
+          });
+        }
+      }
+      
+      setPhase('main');
     } else {
       setPhase('complete');
     }
-  }, [currentChallengeIdx, challenges.length]);
+  }, [currentChallengeIdx, challenges, currentTeam, roundSession]);
 
-  const handleEndRound = async () => {
-    try {
-      if (roundSession?.id) {
-        await supabase.rpc('submit_round_session', { p_round_session_id: roundSession.id });
-      }
-    } catch (err) {
-      console.warn('End round submit failed:', err);
-    }
+  const handleEndRound = () => {
     navigate('dashboard');
   };
 
@@ -336,7 +581,7 @@ export default function VisionRound({ roundId, navigate }: { roundId: string; na
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="text-center">
           <div className="w-12 h-12 border-4 border-orange-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-          <p className="text-gray-600">Loading Round 3...</p>
+          <p className="text-gray-600">Loading Vision Challenge...</p>
         </div>
       </div>
     );
@@ -345,11 +590,6 @@ export default function VisionRound({ roundId, navigate }: { roundId: string; na
   // ── Round Complete ────────────────────────────────────────────────
   if (phase === 'complete') {
     const completedSessions = challengeSessions.filter(s => s.status !== 'IN_PROGRESS');
-    const correctCount = completedSessions.filter(s => s.is_correct).length;
-    const totalAttempts = completedSessions.reduce((sum, s) => sum + s.attempts_used, 0);
-    const totalTime = completedSessions.reduce((sum, s) => sum + (s.total_time_seconds || 0), 0);
-    const accuracy = completedSessions.length > 0 ? Math.round((correctCount / completedSessions.length) * 100) : 0;
-
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50 p-8">
         <div className="max-w-lg w-full bg-white rounded-2xl shadow-sm border border-gray-100 p-8">
@@ -357,32 +597,13 @@ export default function VisionRound({ roundId, navigate }: { roundId: string; na
             <div className="w-16 h-16 bg-orange-50 border border-orange-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
               <EyeIcon className="w-8 h-8 text-orange-500" />
             </div>
-            <h1 className="text-2xl font-bold text-gray-900 font-heading mb-1">Round Complete</h1>
-            <p className="text-sm text-gray-500">Vision & Reasoning Challenge</p>
+            <h1 className="text-2xl font-bold text-gray-900 font-heading mb-1">Round Complete!</h1>
+            <p className="text-sm text-gray-500">Vision & Creation Challenge</p>
           </div>
 
           <div className="bg-orange-50 rounded-xl p-6 mb-6 text-center border border-orange-100">
             <div className="text-4xl font-black text-orange-600 font-heading">{totalScore}</div>
             <div className="text-sm text-orange-700 mt-1">Total Points</div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3 mb-6">
-            <div className="bg-gray-50 rounded-xl p-3 text-center border border-gray-100">
-              <div className="text-lg font-bold text-gray-900">{correctCount}/{challenges.length}</div>
-              <div className="text-[10px] text-gray-500 uppercase tracking-wider">Correct</div>
-            </div>
-            <div className="bg-gray-50 rounded-xl p-3 text-center border border-gray-100">
-              <div className="text-lg font-bold text-gray-900">{accuracy}%</div>
-              <div className="text-[10px] text-gray-500 uppercase tracking-wider">Accuracy</div>
-            </div>
-            <div className="bg-gray-50 rounded-xl p-3 text-center border border-gray-100">
-              <div className="text-lg font-bold text-gray-900">{totalAttempts}/{challenges.length * 3}</div>
-              <div className="text-[10px] text-gray-500 uppercase tracking-wider">Attempts</div>
-            </div>
-            <div className="bg-gray-50 rounded-xl p-3 text-center border border-gray-100">
-              <div className="text-lg font-bold text-gray-900">{Math.floor(totalTime / 60)}m {totalTime % 60}s</div>
-              <div className="text-[10px] text-gray-500 uppercase tracking-wider">Total Time</div>
-            </div>
           </div>
 
           <div className="space-y-2 mb-6">
@@ -392,10 +613,10 @@ export default function VisionRound({ roundId, navigate }: { roundId: string; na
                 <div key={c.id} className="flex items-center gap-3 bg-gray-50 rounded-xl px-4 py-2.5 border border-gray-100">
                   <div className="w-6 h-6 rounded-full bg-white border border-gray-200 flex items-center justify-center text-xs font-bold text-gray-700">{i + 1}</div>
                   <div className="flex-1 text-sm text-gray-700 truncate">{c.title}</div>
-                  {sess?.is_correct ? (
+                  {sess?.status === 'COMPLETED' ? (
                     <CheckCircleIcon className="w-4 h-4 text-green-600" />
                   ) : (
-                    <XCircleIcon className="w-4 h-4 text-red-500" />
+                    <XCircleIcon className="w-4 h-4 text-gray-300" />
                   )}
                   <div className="text-sm font-bold text-gray-900 w-12 text-right">{sess?.score || 0}</div>
                 </div>
@@ -414,28 +635,29 @@ export default function VisionRound({ roundId, navigate }: { roundId: string; na
     );
   }
 
-  // ── Active Round UI ───────────────────────────────────────────────
-  const attemptsUsed = currentSession?.attempts_used || 0;
-  const maxAttempts = currentChallenge?.max_attempts || 3;
-  const attemptsRemaining = maxAttempts - attemptsUsed;
-
+  // ── Active UI ─────────────────────────────────────────────────────
   const timerColor = timerTotal > 300 ? 'text-green-700' : timerTotal > 120 ? 'text-amber-700' : 'text-red-700';
   const timerBox = timerTotal > 300 ? 'bg-green-50' : timerTotal > 120 ? 'bg-amber-50' : 'bg-red-50';
 
+  const config = currentChallenge?.configuration;
+  const currentSubQ = config?.subQuestions?.[currentSubQuestion];
+  const maxFilesAllowed = phase === 'main' ? config?.maxFiles || 1 : currentSubQ?.maxFiles || 1;
+  const completedSubQuestions = currentSession?.submission_data?.subQuestionsCompleted || [];
+
   return (
-    <div className="min-h-screen flex flex-col bg-gray-50 overflow-hidden">
+    <div className="h-screen flex flex-col bg-gray-50">
+      {/* Header */}
       <div className="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between flex-shrink-0">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">{round?.name || 'Round 3'}</h1>
-          <p className="text-sm text-gray-600 mt-0.5">Challenge {currentChallengeIdx + 1} of {challenges.length}</p>
+          <p className="text-sm text-gray-600">Challenge {currentChallengeIdx + 1} of {challenges.length}</p>
         </div>
 
         <div className="flex items-center gap-2">
           {challenges.map((c, i) => {
             const sess = challengeSessions.find(s => s.challenge_id === c.id);
             const isCurrent = i === currentChallengeIdx;
-            const isComplete = sess?.status === 'COMPLETED' || sess?.status === 'TIMEOUT';
-            const isCorrect = sess?.is_correct;
+            const isComplete = sess?.status === 'COMPLETED';
             return (
               <div
                 key={c.id}
@@ -443,36 +665,35 @@ export default function VisionRound({ roundId, navigate }: { roundId: string; na
                   isCurrent
                     ? 'bg-orange-500 text-white'
                     : isComplete
-                    ? isCorrect
-                      ? 'bg-green-100 text-green-700 border border-green-200'
-                      : 'bg-red-50 text-red-600 border border-red-200'
+                    ? 'bg-green-100 text-green-700 border border-green-200'
                     : 'bg-gray-100 text-gray-500 border border-gray-200'
                 }`}
               >
-                {isComplete ? (isCorrect ? '✓' : '✗') : i + 1}
+                {isComplete ? '✓' : i + 1}
               </div>
             );
           })}
         </div>
 
         <div className="flex items-center gap-3">
-          <div className={`${timerBox} px-4 py-2 rounded-lg flex items-center gap-2`}>
-            <ClockIcon className={`w-4 h-4 ${timerColor}`} />
-            <span className={`text-lg font-mono font-bold ${timerColor}`}>
-              {phase === 'active' ? `${minutes}:${secs}` : '08:00'}
-            </span>
-          </div>
-          <div className="bg-gray-50 px-4 py-2 rounded-lg border border-gray-100 text-center">
+          {(phase === 'main' || phase === 'sub') && (
+            <div className={`${timerBox} px-4 py-2 rounded-lg flex items-center gap-2`}>
+              <ClockIcon className={`w-4 h-4 ${timerColor}`} />
+              <span className={`text-lg font-mono font-bold ${timerColor}`}>
+                {minutes}:{secs}
+              </span>
+            </div>
+          )}
+          <div className="bg-gray-50 px-4 py-2 rounded-lg border border-gray-100">
             <div className="text-lg font-bold text-gray-900 leading-none">{totalScore}</div>
-            <div className="text-[9px] text-gray-500 uppercase mt-0.5">Score</div>
+            <div className="text-[9px] text-gray-500 uppercase">Score</div>
           </div>
           <button
             onClick={() => {
               const muted = sounds.toggleMute();
               setSoundMuted(muted);
             }}
-            title={soundMuted ? 'Unmute audio' : 'Mute audio'}
-            className="p-2.5 rounded-lg bg-white border border-gray-200 text-gray-500 hover:bg-gray-50"
+            className="p-2.5 rounded-lg bg-white border border-gray-200 hover:bg-gray-50"
           >
             {soundMuted ? <VolumeXIcon className="w-4 h-4 text-red-500" /> : <VolumeIcon className="w-4 h-4 text-gray-600" />}
           </button>
@@ -485,7 +706,8 @@ export default function VisionRound({ roundId, navigate }: { roundId: string; na
         </div>
       </div>
 
-      {phase === 'active' && (
+      {/* Timer Bar */}
+      {(phase === 'main' || phase === 'sub') && (
         <div className="h-1 bg-gray-200 flex-shrink-0">
           <div
             className={`h-full transition-all duration-1000 ${
@@ -496,98 +718,17 @@ export default function VisionRound({ roundId, navigate }: { roundId: string; na
         </div>
       )}
 
-      <div className="flex-1 flex overflow-hidden">
-        {phase === 'briefing' ? (
-          <div className="flex-1 flex items-center justify-center p-8">
-            <div className="max-w-xl w-full bg-white rounded-2xl shadow-sm border border-gray-100 p-8">
-              <div className="text-center mb-6">
-                <div className="w-14 h-14 bg-orange-50 border border-orange-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                  <TargetIcon className="w-7 h-7 text-orange-500" />
-                </div>
-                <div className="text-xs text-orange-600 font-bold uppercase tracking-widest mb-2">
-                  Challenge {currentChallengeIdx + 1} of {challenges.length}
-                </div>
-                <h2 className="text-2xl font-bold text-gray-900 font-heading mb-2">
-                  {currentChallenge?.title || 'Challenge'}
-                </h2>
-                <p className="text-sm text-gray-600 leading-relaxed">
-                  {currentChallenge?.description}
-                </p>
-              </div>
-
-              <div className="bg-gray-50 rounded-xl p-4 mb-5 space-y-2.5 border border-gray-100">
-                <div className="flex items-center gap-2 text-sm text-gray-700">
-                  <ClockIcon className="w-4 h-4 text-amber-500" />
-                  <span><strong>8 minutes</strong> to solve this challenge</span>
-                </div>
-                <div className="flex items-center gap-2 text-sm text-gray-700">
-                  <TargetIcon className="w-4 h-4 text-red-500" />
-                  <span><strong>3 attempts</strong> maximum</span>
-                </div>
-                <div className="flex items-center gap-2 text-sm text-gray-700">
-                  <ZapIcon className="w-4 h-4 text-green-600" />
-                  <span><strong>Speed & accuracy</strong> earn bonus points</span>
-                </div>
-              </div>
-
-              <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 mb-6">
-                <div className="flex items-start gap-3">
-                  <BrainIconSVG className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
-                  <div>
-                    <div className="text-sm font-semibold text-blue-900 mb-1">External AI Tools Allowed</div>
-                    <div className="text-xs text-blue-800/80 leading-relaxed">
-                      You may use ChatGPT, Gemini, Claude, or any other AI tool in a separate tab to analyze the media. Submit your final answer here.
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <button
-                onClick={startChallenge}
-                className="w-full py-3.5 bg-orange-500 hover:bg-orange-600 text-white font-semibold rounded-xl transition-colors flex items-center justify-center gap-2"
-              >
-                <PlayIcon className="w-5 h-5" />
-                Start Challenge
-              </button>
-            </div>
-          </div>
-        ) : phase === 'result' ? (
+      {/* Main Content */}
+      <div className="flex-1 flex overflow-hidden min-h-0">
+        {phase === 'result' ? (
           <div className="flex-1 flex items-center justify-center p-8">
             <div className="max-w-md w-full bg-white rounded-2xl shadow-sm border border-gray-100 p-8 text-center">
-              {currentSession?.is_correct ? (
-                <>
-                  <div className="w-16 h-16 bg-green-50 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <CheckCircleIcon className="w-8 h-8 text-green-600" />
-                  </div>
-                  <h2 className="text-2xl font-bold text-green-700 font-heading mb-2">Correct!</h2>
-                  <div className="text-4xl font-black text-gray-900 font-heading mb-1">+{currentSession.score}</div>
-                  <div className="text-sm text-gray-500 mb-4">points earned</div>
-                  <div className="grid grid-cols-2 gap-3 mb-6">
-                    <div className="bg-gray-50 rounded-xl p-3 border border-gray-100">
-                      <div className="text-sm font-bold text-gray-900">{currentSession.attempts_used}</div>
-                      <div className="text-[10px] text-gray-500">Attempts</div>
-                    </div>
-                    <div className="bg-gray-50 rounded-xl p-3 border border-gray-100">
-                      <div className="text-sm font-bold text-gray-900">{Math.floor((currentSession.total_time_seconds || 0) / 60)}m {(currentSession.total_time_seconds || 0) % 60}s</div>
-                      <div className="text-[10px] text-gray-500">Time</div>
-                    </div>
-                  </div>
-                </>
-              ) : (
-                <>
-                  <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <XCircleIcon className="w-8 h-8 text-red-500" />
-                  </div>
-                  <h2 className="text-2xl font-bold text-red-600 font-heading mb-2">
-                    {currentSession?.status === 'TIMEOUT' ? "Time's Up!" : 'Not Solved'}
-                  </h2>
-                  <p className="text-sm text-gray-500 mb-6">
-                    {currentSession?.status === 'TIMEOUT'
-                      ? 'The 8-minute timer expired.'
-                      : 'All 3 attempts were used.'}
-                  </p>
-                </>
-              )}
+              <div className="w-16 h-16 bg-green-50 rounded-full flex items-center justify-center mx-auto mb-4">
+                <CheckCircleIcon className="w-8 h-8 text-green-600" />
+              </div>
+              <h2 className="text-2xl font-bold text-green-700 font-heading mb-2">Challenge Complete!</h2>
+              <div className="text-4xl font-black text-gray-900 font-heading mb-1">+{currentSession?.score || 0}</div>
+              <div className="text-sm text-gray-500 mb-6">points earned</div>
 
               <button
                 onClick={advanceToNext}
@@ -603,157 +744,218 @@ export default function VisionRound({ roundId, navigate }: { roundId: string; na
           </div>
         ) : (
           <>
-            <div className="flex-1 flex flex-col bg-white border-r border-gray-200">
-              <div className="px-4 py-2.5 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
-                <div className="text-xs text-gray-600 font-semibold uppercase tracking-wider">
-                  {currentChallenge?.configuration?.mediaType === 'video' ? 'Video' : 'Image'} — Analyze carefully
-                </div>
-                <div className="text-xs text-gray-400">Click to open in a new tab</div>
-              </div>
-              <div className="flex-1 flex items-center justify-center p-6 overflow-auto bg-gray-50">
-                {currentChallenge?.configuration?.mediaType === 'video' ? (
-                  <video
-                    src={currentChallenge.configuration.mediaUrl}
-                    controls
-                    className="max-w-full max-h-full rounded-xl shadow-sm border border-gray-200"
-                  />
-                ) : (
-                  <img
-                    src={currentChallenge?.configuration?.mediaUrl}
-                    alt="Challenge media"
-                    className="max-w-full max-h-full object-contain rounded-xl shadow-sm border border-gray-200 cursor-zoom-in bg-white"
-                    onClick={() => {
-                      window.open(currentChallenge?.configuration?.mediaUrl, '_blank');
-                    }}
-                  />
-                )}
-              </div>
-            </div>
-
-            <div className="w-[400px] flex-shrink-0 flex flex-col bg-white">
-              <div className="p-5 border-b border-gray-100 overflow-y-auto" style={{ maxHeight: '45%' }}>
-                <div className="text-xs text-orange-600 font-bold uppercase tracking-widest mb-2">
-                  Challenge {currentChallengeIdx + 1}
-                </div>
-                <h2 className="text-xl font-bold text-gray-900 font-heading mb-3">
-                  {currentChallenge?.title}
-                </h2>
-                <p className="text-sm text-gray-600 leading-relaxed mb-4">
-                  {currentChallenge?.description}
-                </p>
-
-                {currentChallenge?.configuration?.instructions && (
-                  <div className="bg-blue-50 rounded-xl p-3 border border-blue-100">
-                    <div className="text-xs text-blue-900 leading-relaxed">
-                      {currentChallenge.configuration.instructions}
-                    </div>
+            {/* Left: Reference Media */}
+            {config?.mediaUrl && (
+              <div className="flex-1 flex flex-col bg-white border-r border-gray-200">
+                <div className="px-4 py-2.5 bg-gray-50 border-b border-gray-200">
+                  <div className="text-xs text-gray-600 font-semibold uppercase tracking-wider">
+                    Reference {config.mediaType === 'video' ? 'Video' : 'Image'}
                   </div>
-                )}
-              </div>
-
-              <div className="px-5 py-3 border-b border-gray-100 bg-gray-50">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs text-gray-500 font-bold uppercase">Attempts</span>
-                  <span className="text-xs text-gray-500">{attemptsUsed} / {maxAttempts} used</span>
                 </div>
-                <div className="flex gap-1.5">
-                  {Array.from({ length: maxAttempts }).map((_, i) => (
-                    <div
-                      key={i}
-                      className={`h-2 flex-1 rounded-full ${
-                        i < attemptsUsed ? 'bg-red-400' : 'bg-gray-200'
-                      }`}
+                <div className="flex-1 flex items-center justify-center p-6 overflow-auto bg-gray-50">
+                  {config.mediaType === 'video' ? (
+                    <video
+                      src={config.mediaUrl}
+                      controls
+                      className="max-w-full max-h-full rounded-xl shadow-sm border border-gray-200"
                     />
-                  ))}
+                  ) : (
+                    <img
+                      src={config.mediaUrl}
+                      alt="Reference"
+                      className="max-w-full max-h-full object-contain rounded-xl shadow-sm border border-gray-200 cursor-zoom-in"
+                      onClick={() => window.open(config.mediaUrl, '_blank')}
+                    />
+                  )}
                 </div>
               </div>
+            )}
 
-              {lastResult && (
-                <div className={`px-5 py-3 border-b ${
-                  lastResult.isCorrect ? 'bg-green-50 border-green-100' : 'bg-red-50 border-red-100'
-                }`}>
-                  <div className="flex items-center gap-2">
-                    {lastResult.isCorrect ? (
-                      <CheckCircleIcon className="w-4 h-4 text-green-600" />
-                    ) : (
-                      <XCircleIcon className="w-4 h-4 text-red-500" />
-                    )}
-                    <span className={`text-sm font-semibold ${lastResult.isCorrect ? 'text-green-700' : 'text-red-700'}`}>
-                      {lastResult.isCorrect ? 'Correct!' : lastResult.error || 'Incorrect — try again'}
-                    </span>
-                  </div>
-                  {lastResult.attemptsRemaining !== undefined && lastResult.attemptsRemaining > 0 && (
-                    <div className="text-xs text-gray-500 mt-1">
-                      {lastResult.attemptsRemaining} attempt{lastResult.attemptsRemaining !== 1 ? 's' : ''} remaining
+            {/* Right: Upload Area */}
+            <div className="w-[500px] flex-shrink-0 flex flex-col bg-white max-h-full">
+              <div className="p-4 border-b border-gray-100 flex-shrink-0">
+                {phase === 'main' ? (
+                  <>
+                    <div className="text-[10px] text-orange-600 font-bold uppercase tracking-widest mb-1">
+                      Main Challenge
                     </div>
-                  )}
+                    <h2 className="text-lg font-bold text-gray-900 font-heading mb-1.5">
+                      {currentChallenge?.title}
+                    </h2>
+                    <p className="text-xs text-gray-700 leading-snug mb-2">
+                      {currentChallenge?.description}
+                    </p>
+                    <div className="bg-blue-50 border border-blue-100 rounded-lg p-2.5">
+                      <div className="text-[10px] text-blue-700 font-semibold uppercase tracking-wider mb-0.5">
+                        Instructions
+                      </div>
+                      <p className="text-xs text-blue-900 leading-snug">
+                        {config?.instructions}
+                      </p>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="flex items-center gap-2 mb-1.5">
+                      <UnlockIcon className="w-4 h-4 text-green-600" />
+                      <div className="text-[10px] text-green-600 font-bold uppercase tracking-widest">
+                        Bonus Sub-Question {currentSubQuestion + 1}
+                      </div>
+                    </div>
+                    <h3 className="text-base font-bold text-gray-900 font-heading mb-1.5">
+                      {currentSubQ?.title}
+                    </h3>
+                    <p className="text-xs text-gray-600 leading-snug">
+                      {currentSubQ?.description}
+                    </p>
+                    <div className="mt-2 flex items-center gap-2 text-xs">
+                      <span className="text-gray-500">Reward:</span>
+                      <span className="font-bold text-green-600">+{currentSubQ?.points} points</span>
+                    </div>
+                  </>
+                )}
+              </div>
+
+              {/* Sub-questions Progress */}
+              {phase === 'sub' && config?.subQuestions && (
+                <div className="px-4 py-2 bg-gray-50 border-b border-gray-100 flex-shrink-0">
+                  <div className="text-[10px] text-gray-500 font-bold uppercase mb-1.5">Sub-Questions Progress</div>
+                  <div className="flex gap-2">
+                    {config.subQuestions.map((sq, i) => (
+                      <div
+                        key={sq.id}
+                        className={`flex-1 h-2 rounded-full ${
+                          completedSubQuestions.includes(sq.id)
+                            ? 'bg-green-500'
+                            : i === currentSubQuestion
+                            ? 'bg-orange-500'
+                            : 'bg-gray-200'
+                        }`}
+                      />
+                    ))}
+                  </div>
                 </div>
               )}
 
-              <div className="mt-auto p-5 border-t border-gray-100 bg-white">
-                <div className="text-xs text-gray-500 font-bold uppercase tracking-wider mb-2">
-                  Your Answer
+              {/* Error Message */}
+              {error && (
+                <div className="px-4 py-2 bg-red-50 border-b border-red-100 flex-shrink-0">
+                  <div className="flex items-center gap-2 text-xs text-red-700">
+                    <AlertTriangleIcon className="w-4 h-4" />
+                    <span>{error}</span>
+                  </div>
                 </div>
-                <div className="flex gap-2">
-                  <input
-                    ref={answerRef}
-                    type="text"
-                    value={answer}
-                    onChange={(e) => setAnswer(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && answer.trim() && !submitting) {
-                        setShowConfirm(true);
-                      }
-                    }}
-                    placeholder="Enter your answer..."
-                    disabled={submitting || attemptsRemaining <= 0}
-                    className="flex-1 bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-gray-900 text-sm placeholder-gray-400 focus:outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-100 disabled:opacity-50"
-                  />
+              )}
+
+              {/* Upload Area */}
+              <div className="flex-1 p-4 overflow-y-auto min-h-0">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  multiple
+                  accept={config?.acceptedFileTypes.join(',')}
+                  onChange={handleFileSelect}
+                  className="hidden"
+                />
+
+                {uploadedFiles.length === 0 ? (
                   <button
-                    onClick={() => setShowConfirm(true)}
-                    disabled={!answer.trim() || submitting || attemptsRemaining <= 0}
-                    className="px-5 py-3 bg-orange-500 hover:bg-orange-600 disabled:bg-gray-200 disabled:text-gray-400 text-white font-semibold rounded-xl transition-colors flex items-center gap-2 disabled:cursor-not-allowed"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={submitting}
+                    className="w-full h-40 border-2 border-dashed border-gray-300 rounded-xl hover:border-orange-400 hover:bg-orange-50/50 transition-colors flex flex-col items-center justify-center gap-2 text-gray-500 hover:text-orange-600"
                   >
-                    {submitting ? (
-                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    ) : (
-                      <SendIcon className="w-4 h-4" />
-                    )}
-                    Submit
+                    <UploadIcon className="w-7 h-7" />
+                    <div className="text-center">
+                      <div className="font-semibold text-sm">Click to upload files</div>
+                      <div className="text-xs mt-0.5">
+                        Upload {maxFilesAllowed} {config?.acceptedFileTypes.includes('video/mp4') ? 'video' : 'image'}(s)
+                      </div>
+                    </div>
                   </button>
-                </div>
-                <div className="text-[10px] text-gray-400 mt-2">
-                  Each submission uses one attempt. {attemptsRemaining > 0 ? `${attemptsRemaining} remaining.` : 'No attempts remaining.'}
-                </div>
+                ) : (
+                  <>
+                    <div className="grid grid-cols-2 gap-2.5 mb-3">
+                      {uploadedFiles.map((uf, i) => (
+                        <div key={i} className="relative group">
+                          {uf.type === 'image' ? (
+                            <img
+                              src={uf.preview}
+                              alt={`Upload ${i + 1}`}
+                              className="w-full h-28 object-cover rounded-lg border border-gray-200"
+                            />
+                          ) : (
+                            <video
+                              src={uf.preview}
+                              className="w-full h-28 object-cover rounded-lg border border-gray-200"
+                            />
+                          )}
+                          <button
+                            onClick={() => removeFile(i)}
+                            className="absolute top-1 right-1 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                          >
+                            <XIcon className="w-3 h-3" />
+                          </button>
+                          <div className="absolute bottom-1 left-1 px-1.5 py-0.5 bg-black/60 text-white text-[9px] rounded truncate max-w-[90%]">
+                            {uf.file.name}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {uploadedFiles.length < maxFilesAllowed && (
+                      <button
+                        onClick={() => fileInputRef.current?.click()}
+                        disabled={submitting}
+                        className="w-full py-2 border border-gray-300 rounded-lg hover:bg-gray-50 text-xs text-gray-700 font-medium"
+                      >
+                        Add More Files ({uploadedFiles.length}/{maxFilesAllowed})
+                      </button>
+                    )}
+                  </>
+                )}
+              </div>
+
+              {/* Submit Button */}
+              <div className="p-4 border-t border-gray-100 flex-shrink-0 bg-white">
+                <button
+                  onClick={phase === 'main' ? submitMain : submitSubQuestion}
+                  disabled={submitting || uploadedFiles.length === 0 || uploadedFiles.length !== maxFilesAllowed}
+                  className="w-full py-2.5 bg-orange-500 hover:bg-orange-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-semibold rounded-xl transition-colors flex items-center justify-center gap-2 text-sm"
+                >
+                  {submitting ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      Uploading...
+                    </>
+                  ) : (
+                    <>
+                      <UploadIcon className="w-4 h-4" />
+                      Submit {phase === 'main' ? 'Main Challenge' : 'Sub-Question'}
+                    </>
+                  )}
+                </button>
+                {uploadedFiles.length > 0 && uploadedFiles.length !== maxFilesAllowed && (
+                  <div className="text-[10px] text-gray-500 text-center mt-1.5">
+                    Need exactly {maxFilesAllowed} file(s) to submit
+                  </div>
+                )}
               </div>
             </div>
           </>
         )}
       </div>
-
-      {showConfirm && (
-        <ConfirmDialog
-          title="Submit Answer?"
-          message={`You are about to submit "${answer}" as your answer. This will use 1 of your ${attemptsRemaining} remaining attempts. Are you sure?`}
-          confirmLabel="Submit"
-          onConfirm={() => {
-            setShowConfirm(false);
-            submitAnswer();
-          }}
-          onCancel={() => setShowConfirm(false)}
-        />
-      )}
     </div>
   );
 }
 
-// Simple Brain icon inline (since BrainIcon is a custom component, not from the `ic` helper)
 function BrainIconSVG({ className }: { className?: string }) {
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" className={className}>
-      <path d="M12 5a3 3 0 10-5.997.125 4 4 0 00-2.526 5.77 4 4 0 00.556 6.588A4 4 0 1012 18z" />
-      <path d="M12 5a3 3 0 115.997.125 4 4 0 012.526 5.77 4 4 0 01-.556 6.588A4 4 0 1112 18z" />
-      <path d="M15 13a4.5 4.5 0 01-3-4 4.5 4.5 0 01-3 4" />
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z" />
+      <path d="M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z" />
+      <path d="M15 13a4.5 4.5 0 0 1-3-4 4.5 4.5 0 0 1-3 4" />
+      <path d="M17.599 6.5a3 3 0 0 0 .399-1.375" />
+      <path d="M6.003 5.125A3 3 0 0 0 6.401 6.5" />
     </svg>
   );
 }

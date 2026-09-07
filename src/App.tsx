@@ -300,6 +300,7 @@ export default function App() {
 
   const isAdminPage = typeof page === 'string' && page.startsWith('admin');
   const isRoundPage = typeof page === 'string' && (page.startsWith('quiz-') || page.startsWith('quiz-results-') || page.startsWith('prompt-heist-') || page.startsWith('round-') || page.startsWith('vision-') || page.startsWith('round4-') || page.startsWith('round5-'));
+  const isQuizPage = typeof page === 'string' && (page.startsWith('quiz-') || page.startsWith('quiz-results-'));
 
   return (
     <>
@@ -308,20 +309,22 @@ export default function App() {
           {renderPage()}
         </AdminLayout>
       ) : isRoundPage ? (
-        <FullscreenEnforcer>
-          {renderPage()}
-        </FullscreenEnforcer>
-      ) : (
-        <FullscreenEnforcer>
-          <Layout
-            page={page}
-            navigate={navigate}
-            offline={!isOnline}
-            onSessionAlert={() => setSessionAlert(true)}
-          >
+        isQuizPage ? (
+          <FullscreenEnforcer>
             {renderPage()}
-          </Layout>
-        </FullscreenEnforcer>
+          </FullscreenEnforcer>
+        ) : (
+          renderPage()
+        )
+      ) : (
+        <Layout
+          page={page}
+          navigate={navigate}
+          offline={!isOnline}
+          onSessionAlert={() => setSessionAlert(true)}
+        >
+          {renderPage()}
+        </Layout>
       )}
 
       {/* Session alert overlay */}
