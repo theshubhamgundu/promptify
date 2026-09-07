@@ -40,6 +40,7 @@ import TuringHumanConsole from './pages/admin/TuringHumanConsole';
 import AdminLayout from './components/AdminLayout';
 import FullscreenEnforcer from './components/FullscreenEnforcer';
 import LandingPage from './pages/LandingPage';
+import Registration from './pages/Registration';
 import { SyncEngine } from './lib/sync-engine';
 import { IntegrityMonitor } from './lib/integrity-monitor';
 import { supabase } from './lib/supabase';
@@ -57,10 +58,11 @@ function PageView({ pageKey, children }: { pageKey: string; children: React.Reac
 }
 
 export default function App() {
-  // Landing page state
+  // Landing and Registration state
   const [showLanding, setShowLanding] = useState(() => {
     return localStorage.getItem('hasVisitedLanding') !== 'true';
   });
+  const [showRegistration, setShowRegistration] = useState(false);
 
   // Initialize authState from localStorage
   const [authState, setAuthState] = useState<'login' | 'verification' | 'app'>(() => {
@@ -193,12 +195,26 @@ export default function App() {
   }
 
   if (authState === 'login') {
+    // Show registration page if requested
+    if (showRegistration) {
+      return <Registration onBack={() => {
+        setShowRegistration(false);
+        setShowLanding(true);
+      }} />;
+    }
+
     // Show landing page on first visit or when explicitly requested
     if (showLanding) {
-      return <LandingPage onEnter={() => {
-        setShowLanding(false);
-        localStorage.setItem('hasVisitedLanding', 'true');
-      }} />;
+      return <LandingPage 
+        onEnter={() => {
+          setShowLanding(false);
+          localStorage.setItem('hasVisitedLanding', 'true');
+        }}
+        onRegister={() => {
+          setShowLanding(false);
+          setShowRegistration(true);
+        }}
+      />;
     }
 
     return (

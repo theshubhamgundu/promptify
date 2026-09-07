@@ -292,7 +292,7 @@ export default function Dashboard({ navigate }: { navigate: (p: Page) => void })
                     }
                     if (round.status === 'completed') {
                       sounds.error();
-                      setToast({ message: 'You have already completed this round. Contact an admin if you need to reset it.', variant: 'warning' });
+                      // Round already completed - admin can reset if needed
                       return;
                     }
                     
