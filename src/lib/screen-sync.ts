@@ -113,6 +113,41 @@ export const ANNOUNCEMENT_PRESETS: ScreenAnnouncement[] = [
   },
 ];
 
+const CUSTOM_TEMPLATES_KEY = 'promptify_custom_templates';
+
+export function getCustomTemplates(): ScreenAnnouncement[] {
+  try {
+    const saved = localStorage.getItem(CUSTOM_TEMPLATES_KEY);
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      if (Array.isArray(parsed)) return parsed;
+    }
+  } catch {}
+  return [];
+}
+
+export function saveCustomTemplate(template: ScreenAnnouncement): ScreenAnnouncement[] {
+  const existing = getCustomTemplates();
+  const filtered = existing.filter(t => t.title !== template.title);
+  const updated = [template, ...filtered];
+  localStorage.setItem(CUSTOM_TEMPLATES_KEY, JSON.stringify(updated));
+  return updated;
+}
+
+export function deleteCustomTemplate(title: string): ScreenAnnouncement[] {
+  const existing = getCustomTemplates();
+  const updated = existing.filter(t => t.title !== title);
+  localStorage.setItem(CUSTOM_TEMPLATES_KEY, JSON.stringify(updated));
+  return updated;
+}
+
+export function getAllTemplates(): ScreenAnnouncement[] {
+  const custom = getCustomTemplates();
+  const customTitles = new Set(custom.map(c => c.title));
+  const builtIn = ANNOUNCEMENT_PRESETS.filter(p => !customTitles.has(p.title));
+  return [...custom, ...builtIn];
+}
+
 const BROADCAST_CHANNEL_NAME = 'promptify_screen_sync_channel';
 
 // ── Screen Page Assignment ───────────────────────────────────────────────

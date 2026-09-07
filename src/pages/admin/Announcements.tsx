@@ -13,6 +13,9 @@ import {
   setScreenPage,
   getScreenAnnouncement,
   setScreenAnnouncement,
+  getAllTemplates,
+  saveCustomTemplate,
+  deleteCustomTemplate,
   subscribeToScreenChanges,
   type DisplayPageType,
   type ScreenAnnouncement,
@@ -47,6 +50,16 @@ export default function Announcements({ navigate }: { navigate: (p: Page) => voi
   // Active Selected Screen: 0 means 'GLOBAL' (All Screens), 1-5 means Screen 1 to 5
   const [selectedScreen, setSelectedScreen] = useState<number>(1);
 
+  // Template Library list (combining built-in and user-created custom templates)
+  const [templateList, setTemplateList] = useState<ScreenAnnouncement[]>(() => getAllTemplates());
+  const [showAddTemplateModal, setShowAddTemplateModal] = useState(false);
+  const [newTemplateForm, setNewTemplateForm] = useState<ScreenAnnouncement>({
+    title: '',
+    message: '',
+    priority: 'IMPORTANT',
+    pinned: true,
+  });
+
   // Screen to Page mapping
   const [screenPages, setScreenPages] = useState<Record<number, DisplayPageType>>(() => {
     const initial: Record<number, DisplayPageType> = {};
@@ -70,6 +83,7 @@ export default function Announcements({ navigate }: { navigate: (p: Page) => voi
   const [saving, setSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<AnnouncementItem | null>(null);
   const [copiedScreen, setCopiedScreen] = useState<number | null>(null);
+  const [templateSavedToast, setTemplateSavedToast] = useState(false);
 
   const [form, setForm] = useState({
     title: 'STARTS IN 10 MINS',
@@ -179,7 +193,8 @@ export default function Announcements({ navigate }: { navigate: (p: Page) => voi
     }
   };
 
-  const applyPreset = (preset: typeof ANNOUNCEMENT_PRESETS[0]) => {
+  // 1-Click apply template to currently selected screen
+  const applyPreset = (preset: ScreenAnnouncement) => {
     setForm(prev => ({
       ...prev,
       title: preset.title,
@@ -187,6 +202,80 @@ export default function Announcements({ navigate }: { navigate: (p: Page) => voi
       priority: preset.priority,
       pinned: preset.pinned ?? true,
     }));
+  };
+
+  // 1-Click Instant Apply & Publish template directly to target screen
+  const handleDirectApplyAndPublish = (preset: ScreenAnnouncement, targetScreenId: number) => {
+    // Update local form state
+    setForm(prev => ({
+      ...prev,
+      title: preset.title,
+      message: preset.message,
+      priority: preset.priority,
+      pinned: preset.pinned ?? true,
+      scope: targetScreenId === 0 ? 'GLOBAL' : `SCREEN_${targetScreenId}`,
+    }));
+
+    if (targetScreenId > 0) {
+      setScreenAnnouncement(targetScreenId, preset);
+      setScreenAnnouncements(prev => ({ ...prev, [targetScreenId]: preset }));
+      handlePageChangeForScreen(targetScreenId, 'announcements');
+    } else {
+      ALL_SCREENS.forEach(s => {
+        setScreenAnnouncement(s.id, preset);
+        setScreenAnnouncements(prev => ({ ...prev, [s.id]: preset }));
+        handlePageChangeForScreen(s.id, 'announcements');
+      });
+    }
+
+    dispatchRealtimeSync(
+      {
+        id: `ann-${Date.now()}`,
+        title: preset.title,
+        message: preset.message,
+        priority: preset.priority,
+        pinned: preset.pinned ?? true,
+        is_active: true,
+        scope: targetScreenId === 0 ? 'GLOBAL' : `SCREEN_${targetScreenId}`,
+        created_at: new Date().toISOString(),
+      },
+      targetScreenId
+    );
+  };
+
+  // Save current form content as a new reusable template
+  const handleSaveAsTemplate = () => {
+    if (!form.title.trim()) return;
+    const newTpl: ScreenAnnouncement = {
+      title: form.title,
+      message: form.message,
+      priority: form.priority,
+      pinned: form.pinned,
+    };
+    saveCustomTemplate(newTpl);
+    setTemplateList(getAllTemplates());
+    setTemplateSavedToast(true);
+    setTimeout(() => setTemplateSavedToast(false), 2500);
+  };
+
+  // Create new template from Modal
+  const handleCreateNewTemplateModal = () => {
+    if (!newTemplateForm.title.trim()) return;
+    saveCustomTemplate(newTemplateForm);
+    setTemplateList(getAllTemplates());
+    // Also apply it to active form
+    applyPreset(newTemplateForm);
+    setShowAddTemplateModal(false);
+    setNewTemplateForm({ title: '', message: '', priority: 'IMPORTANT', pinned: true });
+    setTemplateSavedToast(true);
+    setTimeout(() => setTemplateSavedToast(false), 2500);
+  };
+
+  // Delete custom template
+  const handleDeleteTemplate = (title: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    deleteCustomTemplate(title);
+    setTemplateList(getAllTemplates());
   };
 
   const handlePageChangeForScreen = (screenId: number, page: DisplayPageType) => {
@@ -493,7 +582,7 @@ export default function Announcements({ navigate }: { navigate: (p: Page) => voi
       {/* ── 2. VIEW 1: UNIFIED WYSIWYG TEMPLATE STUDIO (Image 2) ── */}
       {activeTab === 'studio' && (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-          {/* Left / Top (7 Columns): Live Interactive Template Canvas */}
+          {/* Left / Top (7 Columns): Live Interactive Template Canvas & Template Library */}
           <div className="lg:col-span-7 space-y-4">
             <div className="bg-white p-5 rounded-3xl border border-gray-200 shadow-sm">
               <div className="flex items-center justify-between mb-4">
@@ -564,34 +653,92 @@ export default function Announcements({ navigate }: { navigate: (p: Page) => voi
               </div>
             </div>
 
-            {/* Quick Presets Grid (Click to Load onto Template) */}
+            {/* ── Reusable Templates Library (Click to apply / + Add New Template) ── */}
             <div className="bg-white p-5 rounded-3xl border border-gray-200 shadow-sm space-y-3">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
                   <ZapIcon className="w-4 h-4 text-orange-500" />
                   <span className="text-xs font-black uppercase font-heading tracking-wider text-gray-700">
-                    Quick Presets (Click to Load onto Template)
+                    Template Library (Click to display on Screen {selectedScreen === 0 ? 'All' : selectedScreen})
                   </span>
                 </div>
-                <span className="text-[11px] font-bold text-gray-400">1-Click Apply</span>
+
+                {/* + Add New Template Button */}
+                <button
+                  type="button"
+                  onClick={() => setShowAddTemplateModal(true)}
+                  className="px-3 py-1.5 rounded-xl bg-orange-500 hover:bg-orange-600 text-white text-xs font-black font-heading transition-all shadow-sm flex items-center gap-1"
+                >
+                  <span>+ Add New Template</span>
+                </button>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5">
-                {ANNOUNCEMENT_PRESETS.map((p, idx) => (
-                  <button
-                    key={idx}
-                    type="button"
-                    onClick={() => applyPreset(p)}
-                    className="text-left p-3 rounded-2xl bg-gray-50 hover:bg-orange-50/80 border border-gray-200 hover:border-orange-300 transition-all group"
-                  >
-                    <div className="text-xs font-black font-heading text-gray-900 group-hover:text-orange-600 truncate">
-                      {p.title}
+              {/* Template Cards Grid */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5 max-h-80 overflow-y-auto pr-1">
+                {templateList.map((tpl, idx) => {
+                  const isSelected = form.title === tpl.title;
+                  const isCustom = idx < templateList.length - ANNOUNCEMENT_PRESETS.length;
+
+                  return (
+                    <div
+                      key={idx}
+                      onClick={() => applyPreset(tpl)}
+                      className={`text-left p-3 rounded-2xl border transition-all cursor-pointer relative group flex flex-col justify-between ${
+                        isSelected
+                          ? 'bg-amber-100/90 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]'
+                          : 'bg-gray-50 hover:bg-orange-50/80 border-gray-200 hover:border-orange-300'
+                      }`}
+                    >
+                      <div>
+                        <div className="flex items-center justify-between mb-1">
+                          <span
+                            className={`text-[9px] font-black uppercase px-1.5 py-0.5 rounded-md ${
+                              tpl.priority === 'URGENT'
+                                ? 'bg-red-500 text-white'
+                                : tpl.priority === 'IMPORTANT'
+                                ? 'bg-amber-500 text-black'
+                                : 'bg-slate-200 text-slate-700'
+                            }`}
+                          >
+                            {tpl.priority}
+                          </span>
+
+                          {/* Delete button if custom template */}
+                          {isCustom && (
+                            <button
+                              type="button"
+                              onClick={(e) => handleDeleteTemplate(tpl.title, e)}
+                              className="text-gray-400 hover:text-red-600 text-xs p-0.5"
+                              title="Delete this template"
+                            >
+                              ✕
+                            </button>
+                          )}
+                        </div>
+
+                        <div className="text-xs font-black font-heading text-gray-900 group-hover:text-orange-600 line-clamp-1">
+                          {tpl.title}
+                        </div>
+                        <div className="text-[11px] text-gray-600 font-medium line-clamp-2 mt-0.5">
+                          {tpl.message}
+                        </div>
+                      </div>
+
+                      {/* 1-Click Instant Apply & Publish Button */}
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDirectApplyAndPublish(tpl, selectedScreen);
+                        }}
+                        className="mt-2.5 w-full py-1.5 rounded-xl bg-black hover:bg-slate-800 text-white text-[10px] font-black uppercase tracking-wider flex items-center justify-center gap-1 transition-transform active:scale-95 shadow-sm"
+                        title={`Instantly apply & broadcast to Screen ${selectedScreen === 0 ? 'All' : selectedScreen}`}
+                      >
+                        <span>⚡ Apply to Screen {selectedScreen === 0 ? 'All' : selectedScreen}</span>
+                      </button>
                     </div>
-                    <div className="text-[11px] text-gray-500 font-medium line-clamp-1 mt-0.5">
-                      {p.message}
-                    </div>
-                  </button>
-                ))}
+                  );
+                })}
               </div>
             </div>
           </div>
@@ -695,8 +842,8 @@ export default function Announcements({ navigate }: { navigate: (p: Page) => voi
                 </div>
               </div>
 
-              {/* Big Orange Publish Button */}
-              <div className="pt-4 border-t border-gray-100">
+              {/* Action Buttons: Save Template & Publish Live */}
+              <div className="pt-4 border-t border-gray-100 space-y-2.5">
                 <button
                   onClick={() => handlePublish(true)}
                   disabled={saving || !form.title.trim()}
@@ -711,6 +858,21 @@ export default function Announcements({ navigate }: { navigate: (p: Page) => voi
                       : `⚡ 🚀 Publish Live to Screen ${selectedScreen}`}
                   </span>
                 </button>
+
+                <button
+                  type="button"
+                  onClick={handleSaveAsTemplate}
+                  disabled={!form.title.trim()}
+                  className="w-full py-2.5 px-3 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold font-heading text-xs transition-colors flex items-center justify-center gap-1.5"
+                >
+                  <span>💾 Save Current as Reusable Template</span>
+                </button>
+
+                {templateSavedToast && (
+                  <div className="p-2 rounded-xl bg-emerald-100 border border-emerald-300 text-emerald-800 text-xs font-bold text-center animate-fade-in">
+                    ✓ Saved into Template Library!
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -860,6 +1022,55 @@ export default function Announcements({ navigate }: { navigate: (p: Page) => voi
             )}
           </div>
         </div>
+      )}
+
+      {/* ── Add New Template Modal ── */}
+      {showAddTemplateModal && (
+        <Modal
+          isOpen={true}
+          onClose={() => setShowAddTemplateModal(false)}
+          title="✨ Create New Reusable Template"
+        >
+          <div className="space-y-4">
+            <FormField label="Headline Title" required>
+              <TextInput
+                value={newTemplateForm.title}
+                onChange={e => setNewTemplateForm(prev => ({ ...prev, title: e.target.value.toUpperCase() }))}
+                placeholder="e.g. ROUND 3: FINAL SPRINT"
+              />
+            </FormField>
+
+            <FormField label="Message Details" required>
+              <TextArea
+                value={newTemplateForm.message}
+                onChange={e => setNewTemplateForm(prev => ({ ...prev, message: e.target.value }))}
+                placeholder="Enter message for contenders on the digital screens..."
+                rows={3}
+              />
+            </FormField>
+
+            <FormField label="Priority">
+              <Select
+                value={newTemplateForm.priority}
+                onChange={e => setNewTemplateForm(prev => ({ ...prev, priority: e.target.value as any }))}
+                options={[
+                  { value: 'URGENT', label: '🚨 Urgent Alert (Red)' },
+                  { value: 'IMPORTANT', label: '⚠️ Important (Amber)' },
+                  { value: 'NORMAL', label: 'ℹ️ Normal Notice' },
+                ]}
+              />
+            </FormField>
+
+            <div className="pt-3 border-t border-gray-100 flex items-center justify-end gap-2">
+              <Button variant="secondary" onClick={() => setShowAddTemplateModal(false)}>
+                Cancel
+              </Button>
+              <Button variant="primary" onClick={handleCreateNewTemplateModal}>
+                💾 Save & Add to Template Library
+              </Button>
+            </div>
+          </div>
+        </Modal>
       )}
 
       {/* Delete Dialog */}
