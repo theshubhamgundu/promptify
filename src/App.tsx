@@ -8,7 +8,6 @@ import RoundsOverview from './pages/RoundsOverview';
 import GenericRound from './pages/GenericRound';
 import FinalResults from './pages/FinalResults';
 import Leaderboard from './pages/Leaderboard';
-import MyProgress from './pages/MyProgress';
 import Submissions from './pages/Submissions';
 import Team from './pages/Team';
 import HelpRules from './pages/HelpRules';
@@ -21,18 +20,30 @@ import ActivityLogViewer from './pages/admin/ActivityLogViewer';
 import ParticipantManager from './pages/admin/ParticipantManager';
 import VerificationManager from './pages/admin/VerificationManager';
 import SessionManager from './pages/admin/SessionManager';
+import VisionMonitor from './pages/admin/VisionMonitor';
 import TeamDetail from './pages/admin/TeamDetail';
 import SubmissionsReview from './pages/admin/SubmissionsReview';
 import Announcements from './pages/admin/Announcements';
-import ScreenManager from './pages/admin/ScreenManager';
+import LiveMonitor from './pages/admin/LiveMonitor';
+import SnapshotManager from './pages/admin/SnapshotManager';
 import QuizManager from './pages/admin/QuizManager';
 import QuizRoundSimple from './pages/QuizRoundSimple';
 import QuizResults from './pages/QuizResults';
+import QuizRound from './pages/QuizRound';
+import PromptHeist from './pages/PromptHeist';
+import VisionRound from './pages/VisionRound';
+import Round4Engine from './pages/Round4Engine';
+import Round4Monitor from './pages/admin/Round4Monitor';
+import Round5Engine from './pages/Round5Engine';
+import Round5Monitor from './pages/admin/Round5Monitor';
+import TuringHumanConsole from './pages/admin/TuringHumanConsole';
 import PublicDisplay from './pages/PublicDisplay';
 import AdminLayout from './components/AdminLayout';
 import FullscreenEnforcer from './components/FullscreenEnforcer';
+import LandingPage from './pages/LandingPage';
 import { SyncEngine } from './lib/sync-engine';
 import { IntegrityMonitor } from './lib/integrity-monitor';
+import { supabase } from './lib/supabase';
 import { useConnectionStatus } from './hooks/useConnectionStatus';
 import { useSessionHeartbeat } from './hooks/useSessionHeartbeat';
 import { useTeamStore } from './stores/teamStore';
@@ -54,6 +65,11 @@ export default function App() {
     const s = window.location.search.toLowerCase();
     return p === '/display' || p === '/live-board' || h === '#/display' || h === '#display' || s.includes('page=display') || s.includes('page=live-board');
   };
+
+  // Landing page state
+  const [showLanding, setShowLanding] = useState(() => {
+    return localStorage.getItem('hasVisitedLanding') !== 'true';
+  });
 
   // Initialize authState from localStorage
   const [authState, setAuthState] = useState<'login' | 'verification' | 'app'>(() => {
@@ -91,6 +107,45 @@ export default function App() {
   // Initialize heartbeat if in the app
   useSessionHeartbeat();
   
+  // Check Supabase session on mount to restore auth state
+  useEffect(() => {
+    const checkSession = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (session) {
+        // User has active session - keep them logged in
+        const saved = localStorage.getItem('authState');
+        if (saved === 'app' || saved === 'verification') {
+          setAuthState(saved);
+        } else {
+          setAuthState('app');
+          localStorage.setItem('authState', 'app');
+        }
+      } else {
+        // No session - force login
+        setAuthState('login');
+        localStorage.setItem('authState', 'login');
+      }
+    };
+    
+    checkSession();
+    
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_OUT') {
+        setAuthState('login');
+        localStorage.setItem('authState', 'login');
+      } else if (event === 'SIGNED_IN' && session) {
+        // Check if user needs verification or can go straight to app
+        // This logic should match your Login component behavior
+      }
+    });
+    
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, []);
+  
   // Save authState to localStorage whenever it changes
   useEffect(() => {
     localStorage.setItem('authState', authState);
@@ -99,10 +154,31 @@ export default function App() {
   // Initialize sync engine + integrity monitor once
   useEffect(() => {
     SyncEngine.init();
-    IntegrityMonitor.init(currentTeam?.id, (reason) => {
+    IntegrityMonitor.init(currentTeam?.id, undefined, (reason) => {
       setViolation(reason);
     });
-  }, [currentTeam]);
+
+    if (currentTeam?.id) {
+      // Listen for team updates (like being frozen)
+      const teamSub = supabase.channel('team-updates')
+        .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'teams', filter: `id=eq.${currentTeam.id}` }, (payload) => {
+          if (payload.new.is_frozen) {
+            setViolation('TEAM_FROZEN');
+          }
+          useTeamStore.getState().setCurrentTeam(payload.new as any);
+        })
+        .subscribe();
+
+      // Check initial state
+      if (currentTeam.is_frozen) {
+        setViolation('TEAM_FROZEN');
+      }
+
+      return () => {
+        teamSub.unsubscribe();
+      };
+    }
+  }, [currentTeam?.id]);
 
   const navigate = (p: Page) => {
     prevPage.current = page;
@@ -123,23 +199,41 @@ export default function App() {
 
   if (violation) {
     return (
-      <div className="fixed inset-0 z-[99999] bg-red-900 flex items-center justify-center p-6 text-center">
-        <div className="max-w-md w-full p-8 bg-white rounded-3xl shadow-2xl">
-          <div className="w-16 h-16 bg-red-100 text-red-600 rounded-full flex items-center justify-center mx-auto mb-6">
-            <span className="text-3xl">🚫</span>
+      <div className="fixed inset-0 z-[99999] bg-red-950 flex items-center justify-center p-6 text-center">
+        <div className="max-w-md w-full p-8 bg-black/80 border border-red-500 rounded-3xl shadow-[0_0_50px_rgba(220,38,38,0.3)] backdrop-blur-md">
+          <div className="w-20 h-20 bg-red-900/50 text-red-500 rounded-full flex items-center justify-center mx-auto mb-6 border border-red-500/50">
+            <span className="text-4xl animate-pulse">🔒</span>
           </div>
-          <h1 className="text-2xl font-bold font-heading text-gray-900 mb-3">Access Suspended</h1>
-          <p className="text-sm text-gray-600 mb-6 leading-relaxed">
-            {violation}
+          <h1 className="text-3xl font-black font-heading text-red-500 mb-4 tracking-widest uppercase">
+            {violation === 'TEAM_FROZEN' ? 'TEAM FROZEN' : 'Access Suspended'}
+          </h1>
+          <p className="text-sm text-red-200/80 mb-6 leading-relaxed">
+            {violation === 'TEAM_FROZEN' 
+              ? 'Your team has been frozen by the automated integrity system due to excessive security violations. An admin must review your activity.' 
+              : violation}
             <br /><br />
-            To ensure fair competition, you must disable all browser extensions before participating. Please disable them and refresh the page.
+            {violation !== 'TEAM_FROZEN' && 'To ensure fair competition, you must disable all browser extensions before participating. Please disable them and refresh the page.'}
           </p>
+          <button 
+            onClick={() => window.location.reload()}
+            className="w-full px-6 py-3 bg-red-600 hover:bg-red-700 text-white font-bold rounded-lg uppercase tracking-wider"
+          >
+            Refresh Status
+          </button>
         </div>
       </div>
     );
   }
 
   if (authState === 'login') {
+    // Show landing page on first visit or when explicitly requested
+    if (showLanding) {
+      return <LandingPage onEnter={() => {
+        setShowLanding(false);
+        localStorage.setItem('hasVisitedLanding', 'true');
+      }} />;
+    }
+
     return (
       <Login 
         onLogin={(isAdmin) => {
@@ -150,7 +244,11 @@ export default function App() {
           } else {
             setAuthState('verification');
           }
-        }} 
+        }}
+        onBackToHome={() => {
+          setShowLanding(true);
+          localStorage.removeItem('hasVisitedLanding');
+        }}
       />
     );
   }
@@ -160,49 +258,72 @@ export default function App() {
   }
 
   const renderPage = () => {
-    const key = page; // used as key for transition
+    // Ensure page is always a string
+    const currentPage = typeof page === 'string' ? page : 'dashboard';
+    const key = currentPage; // used as key for transition
 
     const content = (() => {
-      if (page === 'dashboard')       return <Dashboard navigate={navigate} />;
-      if (page === 'rounds')          return <RoundsOverview navigate={navigate} />;
-      if (page.startsWith('quiz-'))   {
-        const roundId = page.replace('quiz-', '');
+      if (currentPage === 'dashboard')       return <Dashboard navigate={navigate} />;
+      if (currentPage === 'rounds')          return <RoundsOverview navigate={navigate} />;
+      if (currentPage.startsWith('quiz-'))   {
+        const roundId = currentPage.replace('quiz-', '');
         return <QuizRoundSimple roundId={roundId} navigate={navigate} />;
       }
-      if (page.startsWith('quiz-results-')) {
-        const roundId = page.replace('quiz-results-', '');
+      if (currentPage.startsWith('quiz-results-')) {
+        const roundId = currentPage.replace('quiz-results-', '');
         return <QuizResults roundId={roundId} navigate={navigate} />;
       }
-      if (page.startsWith('round-'))  {
-        const roundId = page.replace('round-', '');
+      if (currentPage.startsWith('prompt-heist-'))  {
+        const roundId = currentPage.replace('prompt-heist-', '');
+        return <PromptHeist roundId={roundId} navigate={navigate} />;
+      }
+      if (currentPage.startsWith('round-'))  {
+        const roundId = currentPage.replace('round-', '');
         return <GenericRound roundId={roundId} navigate={navigate} />;
       }
-      if (page === 'final-results')   return <FinalResults navigate={navigate} />;
-      if (page === 'leaderboard')     return <Leaderboard />;
-      if (page === 'progress')        return <MyProgress />;
-      if (page === 'submissions')     return <Submissions />;
-      if (page === 'team')            return <Team />;
-      if (page === 'help')            return <HelpRules />;
-      if (page === 'admin')           return <AdminDashboard navigate={navigate} />;
-      if (page === 'admin-events')    return <EventManager navigate={navigate} />;
-      if (page === 'admin-teams')     return <TeamManager navigate={navigate} />;
-      if (page.startsWith('admin-team-')) {
-        const teamId = page.replace('admin-team-', '');
+      if (currentPage.startsWith('vision-'))  {
+        const roundId = currentPage.replace('vision-', '');
+        return <VisionRound roundId={roundId} navigate={navigate} />;
+      }
+      if (currentPage.startsWith('round4-'))  {
+        const roundId = currentPage.replace('round4-', '');
+        return <Round4Engine roundId={roundId} navigate={navigate} />;
+      }
+      if (currentPage.startsWith('round5-'))  {
+        const roundId = currentPage.replace('round5-', '');
+        return <Round5Engine roundId={roundId} navigate={navigate} />;
+      }
+      if (currentPage === 'final-results')   return <FinalResults navigate={navigate} />;
+      if (currentPage === 'leaderboard')     return <Leaderboard />;
+      if (currentPage === 'submissions')     return <Submissions />;
+      if (currentPage === 'team')            return <Team />;
+      if (currentPage === 'help')            return <HelpRules />;
+      if (currentPage === 'admin')           return <AdminDashboard navigate={navigate} />;
+      if (currentPage === 'admin-events')    return <EventManager navigate={navigate} />;
+      if (currentPage === 'admin-teams')     return <TeamManager navigate={navigate} />;
+      if (currentPage.startsWith('admin-team-')) {
+        const teamId = currentPage.replace('admin-team-', '');
         return <TeamDetail teamId={teamId} navigate={navigate} />;
       }
-      if (page === 'admin-rounds')    return <RoundManager navigate={navigate} />;
-      if (page === 'admin-leaderboard') return <AdminLeaderboard navigate={navigate} />;
-      if (page === 'admin-logs')      return <ActivityLogViewer navigate={navigate} />;
-      if (page === 'admin-participants') return <ParticipantManager navigate={navigate} />;
-      if (page === 'admin-verification') return <VerificationManager navigate={navigate} />;
-      if (page === 'admin-sessions')     return <SessionManager navigate={navigate} />;
-      if (page === 'admin-submissions')  return <SubmissionsReview navigate={navigate} />;
-      if (page === 'admin-announcements' || page === 'admin-screens') return <Announcements navigate={navigate} />;
-      if (page === 'admin-quiz')         return <QuizManager />;
+      if (currentPage === 'admin-rounds')    return <RoundManager navigate={navigate} />;
+      if (currentPage === 'admin-leaderboard') return <AdminLeaderboard navigate={navigate} />;
+      if (currentPage === 'admin-logs')      return <ActivityLogViewer navigate={navigate} />;
+      if (currentPage === 'admin-participants') return <ParticipantManager navigate={navigate} />;
+      if (currentPage === 'admin-verification') return <VerificationManager navigate={navigate} />;
+      if (currentPage === 'admin-sessions')     return <SessionManager navigate={navigate} />;
+      if (currentPage === 'admin-vision-monitor') return <VisionMonitor navigate={navigate} />;
+      if (currentPage === 'admin-round4-monitor') return <Round4Monitor navigate={navigate} />;
+      if (currentPage === 'admin-round5-monitor') return <Round5Monitor navigate={navigate} />;
+      if (currentPage === 'admin-turing-console') return <TuringHumanConsole navigate={navigate} />;
+      if (currentPage === 'admin-monitor')       return <LiveMonitor navigate={navigate} />;
+      if (currentPage === 'admin-snapshots')     return <SnapshotManager navigate={navigate} />;
+      if (currentPage === 'admin-submissions')  return <SubmissionsReview navigate={navigate} />;
+      if (currentPage === 'admin-announcements' || currentPage === 'admin-screens') return <Announcements navigate={navigate} />;
+      if (currentPage === 'admin-quiz')         return <QuizManager />;
       
       return (
         <div className="flex items-center justify-center h-full text-gray-400 text-sm">
-          Page "{page}" coming soon
+          Page "{currentPage}" coming soon
         </div>
       );
     })();
@@ -210,8 +331,9 @@ export default function App() {
     return <PageView pageKey={key}>{content}</PageView>;
   };
 
-  const isAdminPage = page.startsWith('admin');
-  const isQuizPage = page.startsWith('quiz-') || page.startsWith('quiz-results-');
+  const isAdminPage = typeof page === 'string' && page.startsWith('admin');
+  const isRoundPage = typeof page === 'string' && (page.startsWith('quiz-') || page.startsWith('quiz-results-') || page.startsWith('prompt-heist-') || page.startsWith('round-') || page.startsWith('vision-') || page.startsWith('round4-') || page.startsWith('round5-'));
+  const isQuizPage = typeof page === 'string' && (page.startsWith('quiz-') || page.startsWith('quiz-results-'));
 
   return (
     <>
@@ -219,21 +341,23 @@ export default function App() {
         <AdminLayout page={page} navigate={navigate}>
           {renderPage()}
         </AdminLayout>
-      ) : isQuizPage ? (
-        <FullscreenEnforcer>
-          {renderPage()}
-        </FullscreenEnforcer>
-      ) : (
-        <FullscreenEnforcer>
-          <Layout
-            page={page}
-            navigate={navigate}
-            offline={!isOnline}
-            onSessionAlert={() => setSessionAlert(true)}
-          >
+      ) : isRoundPage ? (
+        isQuizPage ? (
+          <FullscreenEnforcer>
             {renderPage()}
-          </Layout>
-        </FullscreenEnforcer>
+          </FullscreenEnforcer>
+        ) : (
+          renderPage()
+        )
+      ) : (
+        <Layout
+          page={page}
+          navigate={navigate}
+          offline={!isOnline}
+          onSessionAlert={() => setSessionAlert(true)}
+        >
+          {renderPage()}
+        </Layout>
       )}
 
       {/* Session alert overlay */}

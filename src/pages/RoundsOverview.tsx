@@ -19,6 +19,7 @@ const resources = [
 export default function RoundsOverview({ navigate }: { navigate: (p: Page) => void }) {
   const [selected, setSelected] = useState(0);
   const [rounds, setRounds] = useState<any[]>([]);
+  const [roundSessions, setRoundSessions] = useState<Map<string, any>>(new Map());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   
@@ -51,6 +52,19 @@ export default function RoundsOverview({ navigate }: { navigate: (p: Page) => vo
             setError('No rounds have been created for this event yet.');
           }
         }
+
+        // Load round sessions to check completion status
+        if (currentTeam?.id) {
+          const { data: sessions } = await supabase
+            .from('round_sessions')
+            .select('*')
+            .eq('team_id', currentTeam.id);
+          
+          if (sessions) {
+            const sessionsMap = new Map(sessions.map(s => [s.round_id, s]));
+            setRoundSessions(sessionsMap);
+          }
+        }
       } catch (err: any) {
         console.error('Unexpected error loading rounds:', err);
         setError('An unexpected error occurred while loading rounds.');
@@ -60,7 +74,7 @@ export default function RoundsOverview({ navigate }: { navigate: (p: Page) => vo
     }
     
     loadRounds();
-  }, [currentEvent]);
+  }, [currentEvent, currentTeam?.id]);
 
   if (loading) {
     return (
@@ -101,7 +115,8 @@ export default function RoundsOverview({ navigate }: { navigate: (p: Page) => vo
   }
 
   const round = rounds[selected];
-  // In a real app, 'locked' status would depend on round_sessions and event status
+  const roundSession = roundSessions.get(round?.id);
+  const isCompleted = roundSession?.status === 'COMPLETED';
   const locked = !round.is_active; 
 
   const getIcon = (type: string) => {
@@ -111,18 +126,21 @@ export default function RoundsOverview({ navigate }: { navigate: (p: Page) => vo
       case 'ESCAPE_ROOM': return PuzzleIcon;
       case 'AI_BATTLE': return SwordsIcon;
       case 'AI_GRANDMASTER': return CrownIcon;
+      case 'AI_SYSTEMS': return BrainIcon;
       default: return TargetIcon;
     }
   };
 
   return (
     <div className="p-6">
-      <div className="grid grid-cols-[1fr_300px] gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_300px] gap-6">
         {/* ── Round list ─────────────────────────────── */}
         <div className="space-y-3">
           {rounds.map((r, i) => {
             const isActive = selected === i;
             const isLocked = !r.is_active;
+            const session = roundSessions.get(r.id);
+            const isCompleted = session?.status === 'COMPLETED';
             const Icon = getIcon(r.type);
             
             return (
@@ -137,9 +155,9 @@ export default function RoundsOverview({ navigate }: { navigate: (p: Page) => vo
               >
                 {/* Number */}
                 <div className={`w-10 h-10 rounded-full flex items-center justify-center text-base font-bold font-heading flex-shrink-0 ${
-                  isLocked ? 'bg-gray-900 text-white' : 'bg-orange-500 text-white'
+                  isCompleted ? 'bg-green-500 text-white' : isLocked ? 'bg-gray-900 text-white' : 'bg-orange-500 text-white'
                 }`}>
-                  {r.order_index}
+                  {isCompleted ? '✓' : r.order_index}
                 </div>
 
                 {/* Icon */}
@@ -153,7 +171,9 @@ export default function RoundsOverview({ navigate }: { navigate: (p: Page) => vo
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-0.5">
                     <span className="font-bold text-gray-900 font-heading">{r.name}</span>
-                    {isLocked ? (
+                    {isCompleted ? (
+                      <Badge variant="success">COMPLETED ✓</Badge>
+                    ) : isLocked ? (
                       <Badge variant="locked">LOCKED</Badge>
                     ) : (
                       <Badge variant="live">LIVE</Badge>
@@ -193,7 +213,7 @@ export default function RoundsOverview({ navigate }: { navigate: (p: Page) => vo
           <Card className="p-5">
             <div className="flex items-center gap-2 mb-4">
               <span className="text-xs font-bold text-orange-500 uppercase tracking-widest font-heading">
-                ROUND {round.order_index}: {round.name.toUpperCase()}
+                {round.name.toUpperCase()}
               </span>
             </div>
 
@@ -203,7 +223,7 @@ export default function RoundsOverview({ navigate }: { navigate: (p: Page) => vo
                 <BookIcon className="w-4 h-4 text-orange-500" />
               </div>
               <div>
-                <div className="text-sm font-bold text-gray-900 font-heading mb-1">About this Round</div>
+                <div className="text-sm font-bold text-gray-900 font-heading mb-1">About this Stage</div>
                 <p className="text-sm text-gray-500">{round.description}</p>
               </div>
             </div>
@@ -226,27 +246,42 @@ export default function RoundsOverview({ navigate }: { navigate: (p: Page) => vo
           </Card>
 
           {/* Enter Round CTA */}
-          {!locked && (
+          {!locked && !isCompleted && (
             <Button
               onClick={() => {
                 // Navigate to quiz or regular round based on type
-                if (round.type === 'QUIZ') {
+                if (round.type === 'QUIZ' || round.type === 'KNOWLEDGE_TEST') {
                   navigate(`quiz-${round.id}` as Page);
+                } else if (round.type === 'PROMPT' || round.type === 'PROMPT_CHALLENGE') {
+                  navigate(`prompt-heist-${round.id}` as Page);
+                } else if (round.type === 'VISION_CHALLENGE') {
+                  navigate(`vision-${round.id}` as Page);
+                } else if (round.type === 'AI_ADVERSARIAL' || round.type === 'ADVERSARIAL_CHALLENGE') {
+                  navigate(`round4-${round.id}` as Page);
+                } else if (round.type === 'AI_SYSTEMS' || round.type === 'SYSTEMS_CHALLENGE') {
+                  navigate(`round5-${round.id}` as Page);
                 } else {
                   navigate(`round-${round.id}` as Page);
                 }
               }}
               className="w-full py-3"
             >
-              {round.type === 'QUIZ' ? 'Start Quiz' : `Enter Round ${round.order_index}`} →
+              Enter {round.name || `Stage ${round.order_index}`} →
             </Button>
           )}
 
+          {isCompleted && (
+            <div className="w-full py-3 px-4 bg-green-50 border border-green-200 rounded-xl text-center">
+              <div className="text-green-700 font-semibold">✓ Round Completed</div>
+              <div className="text-sm text-green-600 mt-1">Score: {roundSession?.score || 0} points</div>
+            </div>
+          )}
+
           {/* Trophy */}
-          <div className="bg-gradient-to-br from-amber-50 to-orange-50 rounded-xl border border-orange-100 p-4 text-center">
+          <div className="bg-gradient-to-br from-amber-50 to-orange-50 rounded-xl border border-orange-100 p-4 text-center mt-4">
             <div className="text-3xl mb-2">🏆</div>
-            <div className="text-sm text-gray-600">Stay sharp. Stay curious.</div>
-            <div className="text-base font-bold text-orange-600 font-heading">Let the challenge begin!</div>
+            <div className="text-sm text-gray-600 mb-1">Stay sharp. Stay curious.</div>
+            <div className="text-base font-bold text-orange-600 font-heading leading-snug break-words">Let the challenge begin!</div>
           </div>
         </div>
       </div>

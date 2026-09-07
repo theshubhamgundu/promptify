@@ -327,6 +327,45 @@ export function SessionAlert({ onClose }: { onClose: () => void }) {
   );
 }
 
+// ── Alert Dialog (Replaces browser alert()) ──────────────────────────
+export function AlertDialog({ title = 'Alert', message, onClose, variant = 'info' }: {
+  title?: string; message: string; onClose: () => void; variant?: 'success' | 'error' | 'warning' | 'info';
+}) {
+  const icons = {
+    success: <CheckIcon className="w-5 h-5 text-green-600" />,
+    error: <XCircleIcon className="w-5 h-5 text-red-600" />,
+    warning: <AlertTriangleIcon className="w-5 h-5 text-amber-600" />,
+    info: <AlertTriangleIcon className="w-5 h-5 text-blue-600" />,
+  };
+  
+  const colors = {
+    success: 'bg-green-100 border-green-300',
+    error: 'bg-red-100 border-red-300',
+    warning: 'bg-amber-100 border-amber-300',
+    info: 'bg-blue-100 border-blue-300',
+  };
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4" onClick={onClose}>
+      <div className="absolute inset-0 bg-gray-900/20 backdrop-blur-sm animate-fade-in" />
+      <div className="relative bg-white rounded-2xl shadow-2xl border-2 w-full max-w-md animate-scale-in" onClick={(e) => e.stopPropagation()}>
+        <div className="px-6 pt-6 pb-4">
+          <div className="flex items-center gap-3 mb-4">
+            <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${colors[variant]}`}>
+              {icons[variant]}
+            </div>
+            <h3 className="font-black text-gray-900 font-heading text-lg">{title}</h3>
+          </div>
+          <div className="text-sm text-gray-700 whitespace-pre-wrap">{message}</div>
+        </div>
+        <div className="px-6 pb-5">
+          <Button onClick={onClose} variant="primary" className="w-full">OK</Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Confirm Dialog ────────────────────────────────────────────────────
 export function ConfirmDialog({ title, message, confirmLabel = 'Confirm', cancelLabel = 'Cancel', variant = 'danger', onConfirm, onCancel, requireReason = false }: {
   title: string; message: string; confirmLabel?: string; cancelLabel?: string;
@@ -334,32 +373,38 @@ export function ConfirmDialog({ title, message, confirmLabel = 'Confirm', cancel
 }) {
   const [reason, setReason] = useState('');
   return (
-    <Modal title={title} onClose={onCancel} size="sm" footer={
-      <>
-        <Button variant="outline" onClick={onCancel}>{cancelLabel}</Button>
-        <Button
-          variant={variant === 'danger' ? 'danger' : 'primary'}
-          onClick={() => onConfirm(reason || undefined)}
-          disabled={requireReason && !reason.trim()}
-        >
-          {confirmLabel}
-        </Button>
-      </>
-    }>
-      <p className="text-sm text-gray-600 mb-4">{message}</p>
-      {requireReason && (
-        <div className="space-y-1.5">
-          <label className="text-xs font-bold text-gray-500 uppercase tracking-wide font-heading">Reason (required)</label>
-          <textarea
-            value={reason}
-            onChange={(e) => setReason(e.target.value)}
-            className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm focus:border-orange-400 focus:ring-2 focus:ring-orange-100 outline-none transition-all resize-none"
-            rows={2}
-            placeholder="Enter reason..."
-          />
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4" onClick={onCancel}>
+      <div className="absolute inset-0 bg-gray-900/20 backdrop-blur-sm animate-fade-in" />
+      <div className="relative bg-white rounded-2xl shadow-2xl border-2 w-full max-w-md animate-scale-in" onClick={(e) => e.stopPropagation()}>
+        <div className="px-6 pt-6 pb-4">
+          <h3 className="font-black text-gray-900 font-heading text-lg mb-3">{title}</h3>
+          <p className="text-sm text-gray-600 mb-4 whitespace-pre-wrap">{message}</p>
+          {requireReason && (
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-gray-500 uppercase tracking-wide font-heading">Reason (required)</label>
+              <textarea
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+                className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm focus:border-orange-400 focus:ring-2 focus:ring-orange-100 outline-none transition-all resize-none"
+                rows={2}
+                placeholder="Enter reason..."
+              />
+            </div>
+          )}
         </div>
-      )}
-    </Modal>
+        <div className="px-6 pb-5 flex gap-3">
+          <Button variant="outline" onClick={onCancel} className="flex-1">{cancelLabel}</Button>
+          <Button
+            variant={variant === 'danger' ? 'danger' : 'primary'}
+            onClick={() => onConfirm(reason || undefined)}
+            disabled={requireReason && !reason.trim()}
+            className="flex-1"
+          >
+            {confirmLabel}
+          </Button>
+        </div>
+      </div>
+    </div>
   );
 }
 

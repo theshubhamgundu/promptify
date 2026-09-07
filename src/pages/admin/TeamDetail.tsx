@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Button, ConfirmDialog, AnimatedNumber } from '../../components/ui';
 import { supabase } from '../../lib/supabase';
 import type { Page } from '../../components/Layout';
-import { UsersIcon, ShieldIcon, BanIcon, CheckCircleIcon, ArrowRightIcon, TrophyIcon, ClockIcon } from '../../components/icons';
+import { UsersIcon, ShieldIcon, BanIcon, CheckCircleIcon, ArrowRightIcon, TrophyIcon, ClockIcon, AlertTriangleIcon, ZapIcon } from '../../components/icons';
 
 interface TeamDetailProps {
   teamId: string;
@@ -15,22 +15,37 @@ export default function TeamDetail({ teamId, navigate }: TeamDetailProps) {
     participants: any[];
     session: any;
     logs: any[];
+    violations: any[];
     score: number;
     scoreEvents: any[];
+    roundSessions: any[];
   } | null>(null);
   
   const [loading, setLoading] = useState(true);
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [confirmAction, setConfirmAction] = useState<{ type: string; title: string; message: string; roundId?: string } | null>(null);
+  const [toast, setToast] = useState<{ message: string; variant: 'success' | 'error' | 'info' } | null>(null);
+
+  // Auto-dismiss toast after 5 seconds
+  useEffect(() => {
+    if (toast) {
+      const timer = setTimeout(() => setToast(null), 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [toast]);
 
   const loadData = async () => {
     setLoading(true);
     
-    const [teamRes, partsRes, sessRes, logRes, subRes, scoreEventRes] = await Promise.all([
+    const [teamRes, partsRes, sessRes, logRes, subRes, scoreEventRes, violationsRes, roundSessionsRes] = await Promise.all([
       supabase.from('teams').select('*').eq('id', teamId).single(),
       supabase.from('participants').select('*').eq('team_id', teamId).order('created_at', { ascending: false }),
-      supabase.from('team_sessions').select('*').eq('team_id', teamId).single(),
+      supabase.from('team_sessions').select('*').eq('team_id', teamId).maybeSingle(),
       supabase.from('activity_logs').select('*').eq('team_id', teamId).order('created_at', { ascending: false }).limit(50),
-      supabase.from('submissions').select('score').eq('team_id', teamId).eq('status', 'EVALUATED'),
-      supabase.from('score_events').select('points, reason').eq('team_id', teamId)
+      supabase.from('vw_all_submissions').select('score').eq('team_id', teamId).eq('status', 'EVALUATED'),
+      supabase.from('score_events').select('points, reason').eq('team_id', teamId),
+      supabase.from('security_violations').select('*').eq('team_id', teamId).order('created_at', { ascending: false }).limit(30),
+      supabase.from('round_sessions').select('*, rounds(name, type, order_index)').eq('team_id', teamId).order('started_at', { ascending: false })
     ]);
 
     if (teamRes.data) {
@@ -43,8 +58,10 @@ export default function TeamDetail({ teamId, navigate }: TeamDetailProps) {
         participants: partsRes.data || [],
         session: sessRes.data,
         logs: logRes.data || [],
+        violations: violationsRes.data || [],
         score: totalScore,
-        scoreEvents: scoreEventRes.data || []
+        scoreEvents: scoreEventRes.data || [],
+        roundSessions: roundSessionsRes.data || []
       });
     }
     setLoading(false);
@@ -52,7 +69,168 @@ export default function TeamDetail({ teamId, navigate }: TeamDetailProps) {
 
   useEffect(() => {
     loadData();
+
+    // Real-time subscription for team updates
+    const channel = supabase.channel(`team-detail-${teamId}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'teams', filter: `id=eq.${teamId}` }, () => {
+        loadData();
+      })
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'security_violations', filter: `team_id=eq.${teamId}` }, () => {
+        loadData();
+      })
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
   }, [teamId]);
+
+  // ── Admin Actions ──
+  const handleFreeze = async () => {
+    setActionLoading('freeze');
+    const { error } = await supabase.rpc('admin_update_team_status', {
+      p_team_id: teamId,
+      p_action: 'FREEZE',
+      p_reason: 'Admin manually froze team via dashboard'
+    });
+    if (error) {
+      console.error('Failed to freeze team:', error);
+      await supabase.from('teams').update({ is_frozen: true }).eq('id', teamId);
+      await supabase.from('activity_logs').insert({
+        action: 'SCORE_OVERRIDE',
+        team_id: teamId,
+        details: { admin_action: 'MANUAL_FREEZE', reason: 'Admin manually froze team' }
+      });
+    }
+    await loadData();
+    setActionLoading(null);
+    setConfirmAction(null);
+  };
+
+  const handleUnfreeze = async () => {
+    setActionLoading('unfreeze');
+    const { error } = await supabase.rpc('admin_update_team_status', {
+      p_team_id: teamId,
+      p_action: 'UNFREEZE',
+      p_reason: 'Admin manually unfroze team via dashboard'
+    });
+    if (error) {
+      console.error('Failed to unfreeze team:', error);
+      await supabase.from('teams').update({ is_frozen: false }).eq('id', teamId);
+      await supabase.from('activity_logs').insert({
+        action: 'SCORE_OVERRIDE',
+        team_id: teamId,
+        details: { admin_action: 'MANUAL_UNFREEZE', reason: 'Admin manually unfroze team' }
+      });
+    }
+    await loadData();
+    setActionLoading(null);
+    setConfirmAction(null);
+  };
+
+  const handleDisqualify = async () => {
+    setActionLoading('disqualify');
+    const { error } = await supabase.rpc('admin_update_team_status', {
+      p_team_id: teamId,
+      p_action: 'DISQUALIFY',
+      p_reason: 'Admin manually disqualified team via dashboard'
+    });
+    if (error) {
+      console.error('Failed to disqualify team:', error);
+      // Fallback for when RPC is not yet pushed to DB
+      await supabase.from('teams').update({ is_frozen: true }).eq('id', teamId);
+      await supabase.from('team_sessions').update({ state: 'SUSPENDED' }).eq('team_id', teamId);
+      await supabase.from('activity_logs').insert({
+        action: 'SCORE_OVERRIDE',
+        team_id: teamId,
+        details: { admin_action: 'DISQUALIFIED', reason: 'Admin disqualified team' }
+      });
+    }
+    await loadData();
+    setActionLoading(null);
+    setConfirmAction(null);
+  };
+
+  const handleResetAllRounds = async () => {
+    setActionLoading('reset-all');
+    
+    try {
+      console.log('🔥 Starting FULL RESET for team:', teamId);
+      
+      // Use the RPC function with SECURITY DEFINER to bypass RLS
+      const { data, error } = await supabase.rpc('admin_reset_all_rounds', {
+        p_team_id: teamId
+      });
+
+      if (error) {
+        console.error('❌ RPC Error:', error);
+        setToast({ message: `Failed to reset all rounds: ${error.message}`, variant: 'error' });
+        setActionLoading(null);
+        setConfirmAction(null);
+        return;
+      }
+
+      // Check the response from the function
+      if (!data.success) {
+        console.error('❌ Reset failed:', data.error || data.message);
+        setToast({ message: `Failed to reset all rounds: ${data.error || data.message || 'Unknown error'}`, variant: 'error' });
+        setActionLoading(null);
+        setConfirmAction(null);
+        return;
+      }
+
+      console.log('✅ Full reset complete!', data);
+      setToast({ message: `Successfully reset ALL rounds! Deleted ${data.rounds_count} round sessions.`, variant: 'success' });
+
+      await loadData();
+    } catch (error) {
+      console.error('❌ Failed to reset all rounds:', error);
+      setToast({ message: `Error resetting rounds: ${error instanceof Error ? error.message : 'Unknown error'}`, variant: 'error' });
+    }
+    
+    setActionLoading(null);
+    setConfirmAction(null);
+  };
+
+  const handleResetRound = async (roundId: string, roundName: string) => {
+    setActionLoading(`reset-${roundId}`);
+    
+    try {
+      console.log('🔄 Starting reset for round:', roundId, 'team:', teamId);
+      
+      // Use the RPC function with SECURITY DEFINER to bypass RLS
+      const { data, error } = await supabase.rpc('admin_reset_round', {
+        p_team_id: teamId,
+        p_round_id: roundId
+      });
+
+      if (error) {
+        console.error('❌ RPC Error:', error);
+        setToast({ message: `Failed to reset round: ${error.message}`, variant: 'error' });
+        setActionLoading(null);
+        setConfirmAction(null);
+        return;
+      }
+
+      // Check the response from the function
+      if (!data.success) {
+        console.error('❌ Reset failed:', data.error || data.message);
+        setToast({ message: `Failed to reset round: ${data.error || data.message || 'Unknown error'}`, variant: 'error' });
+        setActionLoading(null);
+        setConfirmAction(null);
+        return;
+      }
+
+      console.log('✅ Reset complete!', data);
+      setToast({ message: `Successfully reset ${roundName}!`, variant: 'success' });
+
+      await loadData();
+    } catch (error) {
+      console.error('❌ Failed to reset round:', error);
+      setToast({ message: `Error resetting round: ${error instanceof Error ? error.message : 'Unknown error'}`, variant: 'error' });
+    }
+    
+    setActionLoading(null);
+    setConfirmAction(null);
+  };
 
   if (loading) {
     return <div className="p-8 text-center text-gray-500">Loading team details...</div>;
@@ -62,26 +240,83 @@ export default function TeamDetail({ teamId, navigate }: TeamDetailProps) {
     return <div className="p-8 text-center text-gray-500">Team not found.</div>;
   }
 
-  const { team, participants, session, logs, score } = data;
-
+  const { team, participants, session, logs, violations, score, roundSessions } = data;
+  const isFrozen = team.is_frozen === true;
   const isOnline = session?.last_heartbeat ? (new Date().getTime() - new Date(session.last_heartbeat).getTime() < 90000) : false;
 
   return (
     <div className="p-8 space-y-6 animate-slide-up">
+      {/* Toast Notification */}
+      {toast && (
+        <div className="fixed top-4 right-4 z-50 animate-slide-in-right">
+          <div className={`rounded-lg shadow-lg p-4 flex items-center gap-3 min-w-[300px] ${
+            toast.variant === 'error' ? 'bg-red-50 border-2 border-red-500' : 
+            toast.variant === 'success' ? 'bg-green-50 border-2 border-green-500' : 
+            'bg-blue-50 border-2 border-blue-500'
+          }`}>
+            {toast.variant === 'error' ? (
+              <AlertTriangleIcon className="w-6 h-6 text-red-600 flex-shrink-0" />
+            ) : toast.variant === 'success' ? (
+              <CheckCircleIcon className="w-6 h-6 text-green-600 flex-shrink-0" />
+            ) : (
+              <AlertTriangleIcon className="w-6 h-6 text-blue-600 flex-shrink-0" />
+            )}
+            <span className={`font-medium flex-1 ${
+              toast.variant === 'error' ? 'text-red-900' : 
+              toast.variant === 'success' ? 'text-green-900' : 
+              'text-blue-900'
+            }`}>{toast.message}</span>
+            <button 
+              onClick={() => setToast(null)} 
+              className="text-gray-400 hover:text-gray-600"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Frozen Banner */}
+      {isFrozen && (
+        <div className="bg-red-50 border-2 border-red-200 rounded-2xl p-4 flex items-center gap-4 animate-pulse">
+          <div className="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center flex-shrink-0">
+            <span className="text-xl">🔒</span>
+          </div>
+          <div className="flex-1">
+            <div className="text-sm font-black text-red-800 font-heading">TEAM IS FROZEN</div>
+            <div className="text-xs text-red-600">This team's session is locked. They cannot submit answers or interact with challenges until an admin unfreezes them.</div>
+          </div>
+          <Button 
+            onClick={() => setConfirmAction({ type: 'unfreeze', title: 'Unfreeze Team', message: `Are you sure you want to unfreeze "${team.name}"? They will regain access to the competition.` })}
+            className="bg-green-600 hover:bg-green-700 text-white text-xs px-4 py-2"
+          >
+            🔓 Unfreeze
+          </Button>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex items-start justify-between bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
         <div className="flex gap-6">
-          <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-2xl flex items-center justify-center text-white text-3xl font-black font-heading shadow-md">
+          <div className={`w-16 h-16 rounded-2xl flex items-center justify-center text-white text-3xl font-black font-heading shadow-md ${
+            isFrozen ? 'bg-gradient-to-br from-red-500 to-red-700' : 'bg-gradient-to-br from-blue-500 to-indigo-600'
+          }`}>
             {team.name.charAt(0)}
           </div>
           <div>
             <div className="flex items-center gap-3 mb-1">
               <h1 className="text-3xl font-black text-gray-900 font-heading leading-none">{team.name}</h1>
-              <span className={`px-2 py-0.5 rounded text-[10px] font-black font-heading tracking-wider ${
-                team.status === 'ACTIVE' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
-              }`}>
-                {team.status}
-              </span>
+              {isFrozen ? (
+                <span className="px-2 py-0.5 rounded text-[10px] font-black font-heading tracking-wider bg-red-100 text-red-700 animate-pulse">
+                  🔒 FROZEN
+                </span>
+              ) : (
+                <span className={`px-2 py-0.5 rounded text-[10px] font-black font-heading tracking-wider ${
+                  isOnline ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'
+                }`}>
+                  {isOnline ? '● ONLINE' : '○ OFFLINE'}
+                </span>
+              )}
             </div>
             <div className="flex gap-4 text-xs text-gray-500 font-mono mt-2">
               <div>ID: {team.id.slice(0, 8)}</div>
@@ -99,10 +334,154 @@ export default function TeamDetail({ teamId, navigate }: TeamDetailProps) {
         </div>
       </div>
 
+      {/* Admin Action Bar */}
+      <div className="bg-white border border-gray-100 rounded-2xl shadow-sm p-4">
+        <div className="flex items-center gap-2 mb-3">
+          <ShieldIcon className="w-4 h-4 text-gray-400" />
+          <h2 className="text-sm font-bold text-gray-900 font-heading">Admin Controls</h2>
+        </div>
+        <div className="flex flex-wrap gap-3">
+          {!isFrozen ? (
+            <Button 
+              onClick={() => setConfirmAction({ type: 'freeze', title: 'Freeze Team', message: `Are you sure you want to freeze "${team.name}"? They will immediately lose access to all challenges.` })}
+              className="bg-blue-600 hover:bg-blue-700 text-white text-xs px-4 py-2 flex items-center gap-1.5"
+            >
+              🧊 Freeze Team
+            </Button>
+          ) : (
+            <Button 
+              onClick={() => setConfirmAction({ type: 'unfreeze', title: 'Unfreeze Team', message: `Are you sure you want to unfreeze "${team.name}"?` })}
+              className="bg-green-600 hover:bg-green-700 text-white text-xs px-4 py-2 flex items-center gap-1.5"
+            >
+              🔓 Unfreeze Team
+            </Button>
+          )}
+          <Button 
+            onClick={() => setConfirmAction({ type: 'disqualify', title: 'Disqualify Team', message: `⚠️ This will PERMANENTLY freeze and suspend "${team.name}". Their session will be terminated. This cannot be undone easily. Are you absolutely sure?` })}
+            className="bg-red-600 hover:bg-red-700 text-white text-xs px-4 py-2 flex items-center gap-1.5"
+          >
+            <BanIcon className="w-3.5 h-3.5" /> Disqualify
+          </Button>
+          <Button 
+            onClick={loadData}
+            className="bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs px-4 py-2"
+          >
+            ↻ Refresh
+          </Button>
+        </div>
+      </div>
+
+      {/* Round Progress & Reset */}
+      {roundSessions.length > 0 && (
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+          <div className="px-6 py-4 border-b border-gray-100 flex items-center gap-2 bg-gray-50/50">
+            <TrophyIcon className="w-4 h-4 text-gray-400" />
+            <h2 className="text-sm font-bold text-gray-900 font-heading">Round Progress ({roundSessions.length})</h2>
+            <span className="text-[10px] text-gray-400 ml-2">Admins can reset rounds to allow re-attempts</span>
+            <Button
+              onClick={() => setConfirmAction({ 
+                type: 'resetAll', 
+                title: 'Reset ALL Rounds',
+                message: `⚠️ DANGER: This will delete ALL round progress for "${team.name}" including:\n\n• All ${roundSessions.length} rounds\n• All submissions across all rounds\n• All scores earned\n• All quiz answers, prompt attempts, etc.\n\nThe team will start completely fresh.\n\nAre you ABSOLUTELY sure?`
+              })}
+              disabled={actionLoading !== null}
+              className="ml-auto bg-red-500 hover:bg-red-600 text-white text-xs px-3 py-1.5 flex items-center gap-1.5"
+            >
+              🔥 Reset ALL Rounds
+            </Button>
+          </div>
+          <div className="divide-y divide-gray-50">
+            {roundSessions.map((rs: any) => {
+              const roundName = rs.rounds?.name || 'Unknown Round';
+              const roundType = rs.rounds?.type || '';
+              const orderIndex = rs.rounds?.order_index || 0;
+              const isCompleted = rs.completed_at !== null;
+              const isResetting = actionLoading === `reset-${rs.round_id}`;
+
+              return (
+                <div key={rs.id} className="px-6 py-4 flex items-center justify-between hover:bg-gray-50 transition-colors">
+                  <div className="flex items-center gap-4">
+                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-white font-black font-heading text-sm ${
+                      isCompleted ? 'bg-green-500' : 'bg-blue-500'
+                    }`}>
+                      {orderIndex}
+                    </div>
+                    <div>
+                      <div className="text-sm font-bold text-gray-900 flex items-center gap-2">
+                        {roundName}
+                        <span className={`px-1.5 py-0.5 rounded text-[9px] font-black font-heading tracking-wider ${
+                          isCompleted ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'
+                        }`}>
+                          {isCompleted ? '✓ COMPLETED' : '⏳ IN PROGRESS'}
+                        </span>
+                      </div>
+                      <div className="text-[11px] text-gray-500 mt-0.5 flex items-center gap-3">
+                        <span>Type: {roundType}</span>
+                        <span>•</span>
+                        <span>Score: {rs.score || 0} pts</span>
+                        <span>•</span>
+                        <span>Started: {new Date(rs.started_at).toLocaleString()}</span>
+                        {isCompleted && (
+                          <>
+                            <span>•</span>
+                            <span>Completed: {new Date(rs.completed_at).toLocaleString()}</span>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <Button
+                    onClick={() => setConfirmAction({ 
+                      type: 'reset', 
+                      title: 'Reset Round Progress',
+                      message: `⚠️ This will delete ALL progress for "${roundName}" including:\n\n• All submissions and responses\n• Quiz answers\n• Prompt attempts\n• Scores earned in this round\n• BYOK usage logs\n\nThe team will be able to re-attempt this round from scratch.\n\nAre you sure you want to reset "${team.name}"'s progress in ${roundName}?`,
+                      roundId: rs.round_id
+                    })}
+                    disabled={isResetting}
+                    className="bg-orange-500 hover:bg-orange-600 text-white text-xs px-3 py-1.5 flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {isResetting ? '⏳ Resetting...' : '🔄 Reset Round'}
+                  </Button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       <div className="grid grid-cols-3 gap-6">
         {/* Left Column */}
         <div className="col-span-2 space-y-6">
           
+          {/* Security Violations */}
+          {violations.length > 0 && (
+            <div className="bg-white rounded-2xl border-2 border-red-100 shadow-sm overflow-hidden">
+              <div className="px-6 py-4 border-b border-red-100 flex items-center gap-2 bg-red-50/50">
+                <AlertTriangleIcon className="w-4 h-4 text-red-500" />
+                <h2 className="text-sm font-bold text-red-800 font-heading">Security Violations ({violations.length})</h2>
+              </div>
+              <div className="divide-y divide-red-50 max-h-64 overflow-y-auto">
+                {violations.map((v: any) => (
+                  <div key={v.id} className="px-6 py-3 flex items-center justify-between hover:bg-red-50/30 transition-colors">
+                    <div className="flex items-center gap-3">
+                      <span className={`w-2 h-2 rounded-full flex-shrink-0 ${
+                        v.violation_type === 'UNAUTHORIZED_EXTENSION' ? 'bg-red-600' :
+                        v.violation_type === 'TAB_SWITCH' ? 'bg-orange-500' :
+                        'bg-yellow-500'
+                      }`} />
+                      <div>
+                        <div className="text-xs font-bold text-gray-900">{v.violation_type}</div>
+                        <div className="text-[10px] text-gray-500">{v.description}</div>
+                      </div>
+                    </div>
+                    <div className="text-[10px] text-gray-400 font-mono">{new Date(v.created_at).toLocaleString()}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Participants */}
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
             <div className="px-6 py-4 border-b border-gray-100 flex items-center gap-2 bg-gray-50/50">
@@ -141,7 +520,7 @@ export default function TeamDetail({ teamId, navigate }: TeamDetailProps) {
               {logs.length === 0 ? (
                 <div className="text-center text-gray-400 text-sm">No activity recorded for this team.</div>
               ) : (
-                <div className="relative border-l border-gray-100 ml-3 space-y-6">
+                <div className="relative border-l border-gray-100 ml-3 space-y-6 max-h-96 overflow-y-auto">
                   {logs.map((l, i) => (
                     <div key={l.id} className="relative pl-6">
                       <div className={`absolute -left-[5px] top-1 w-2.5 h-2.5 rounded-full ring-4 ring-white ${
@@ -206,8 +585,55 @@ export default function TeamDetail({ teamId, navigate }: TeamDetailProps) {
             </div>
           </div>
 
+          {/* Quick Stats */}
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+            <div className="px-5 py-4 border-b border-gray-100 flex items-center gap-2 bg-gray-50/50">
+              <ZapIcon className="w-4 h-4 text-gray-400" />
+              <h2 className="text-sm font-bold text-gray-900 font-heading">Quick Stats</h2>
+            </div>
+            <div className="p-5 space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-gray-500">Violations</span>
+                <span className={`text-sm font-black font-heading ${violations.length > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                  {violations.length}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-gray-500">Activity Logs</span>
+                <span className="text-sm font-black font-heading text-gray-900">{logs.length}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-gray-500">Frozen</span>
+                <span className={`text-sm font-black font-heading ${isFrozen ? 'text-red-600' : 'text-green-600'}`}>
+                  {isFrozen ? 'YES' : 'NO'}
+                </span>
+              </div>
+            </div>
+          </div>
+
         </div>
       </div>
+
+      {/* Confirm Dialog */}
+      {confirmAction && (
+        <ConfirmDialog
+          title={confirmAction.title}
+          message={confirmAction.message}
+          onConfirm={() => {
+            if (confirmAction.type === 'freeze') handleFreeze();
+            else if (confirmAction.type === 'unfreeze') handleUnfreeze();
+            else if (confirmAction.type === 'disqualify') handleDisqualify();
+            else if (confirmAction.type === 'resetAll') handleResetAllRounds();
+            else if (confirmAction.type === 'reset' && confirmAction.roundId) {
+              const roundSession = roundSessions.find((rs: any) => rs.round_id === confirmAction.roundId);
+              const roundName = roundSession?.rounds?.name || 'Unknown Round';
+              handleResetRound(confirmAction.roundId, roundName);
+            }
+          }}
+          onCancel={() => setConfirmAction(null)}
+          danger={confirmAction.type === 'disqualify' || confirmAction.type === 'reset' || confirmAction.type === 'resetAll'}
+        />
+      )}
     </div>
   );
 }

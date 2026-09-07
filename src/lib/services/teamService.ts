@@ -52,7 +52,7 @@ export class TeamService {
       .from('team_sessions')
       .select('*')
       .eq('team_id', team.id)
-      .single();
+      .maybeSingle();
 
     return {
       participant,
@@ -68,15 +68,15 @@ export class TeamService {
       .from('team_sessions')
       .select('*')
       .eq('team_id', teamId)
-      .single();
+      .maybeSingle();
     
-    if (error && error.code === 'PGRST116') {
+    if (!data) {
       // Not found, create one
       const { data: newSession } = await supabase
         .from('team_sessions')
         .insert({ team_id: teamId, state: 'CREATED' })
         .select()
-        .single();
+        .maybeSingle();
       return newSession;
     }
     return data;

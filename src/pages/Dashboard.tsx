@@ -3,11 +3,17 @@ import type { Page } from '../components/Layout';
 import {
   BrainIcon, PuzzleIcon, SwordsIcon, CrownIcon, TargetIcon,
   ArrowRightIcon, LockIcon, BellIcon, TrophyIcon, UsersIcon,
-  ZapIcon, CheckIcon, AlertTriangleIcon, ClockIcon,
+  ZapIcon, CheckIcon, AlertTriangleIcon, ClockIcon, EyeIcon, ShieldIcon
 } from '../components/icons';
 import { Badge, Card, Button, SectionHeader, ProgressBar } from '../components/ui';
 import { useTeamStore } from '../stores/teamStore';
 import { useEventStore } from '../stores/eventStore';
+import { BYOKConnect, BYOKConnected } from '../components/BYOKConnect';
+import { AITestChat } from '../components/AITestChat';
+import { byokSession, AIProvider, BYOKConfig } from '../lib/byok-service';
+import { sounds } from '../lib/sound';
+import { useEffect } from 'react';
+import { supabase } from '../lib/supabase';
 
 interface Round {
   id: string | number;
@@ -18,15 +24,21 @@ interface Round {
   status: 'upcoming' | 'live' | 'locked' | 'completed';
   maxScore: number;
   duration: string;
+  type?: string;
+  orderIndex: number;
   Icon: React.ComponentType<{ className?: string }>;
 }
 
 const getIconForType = (type: string) => {
   switch (type) {
+    case 'QUIZ':
     case 'KNOWLEDGE_TEST': return BrainIcon;
+    case 'PROMPT':
     case 'PROMPT_CHALLENGE': return TargetIcon;
-    case 'PUZZLE': return PuzzleIcon;
-    case 'BATTLE_ROYALE': return SwordsIcon;
+    case 'VISION_CHALLENGE': return EyeIcon;
+    case 'AI_ADVERSARIAL': return ShieldIcon;
+    case 'AI_SYSTEMS': return ZapIcon;
+    case 'BATTLE_ROYALE': return ShieldIcon;
     default: return CrownIcon;
   }
 };
@@ -50,25 +62,98 @@ const steps = [
 export default function Dashboard({ navigate }: { navigate: (p: Page) => void }) {
   const [hoveredRound, setHoveredRound] = useState<number | null>(null);
   
+  // BYOK State
+  const [showBYOKConnect, setShowBYOKConnect] = useState(false);
+  const [activeProvider, setActiveProvider] = useState<AIProvider | null>(null);
+  
+  useEffect(() => {
+    // Check if we already have any provider keys configured
+    const providers: AIProvider[] = ['OPENAI', 'ANTHROPIC', 'GOOGLE', 'MISTRAL', 'GROQ', 'COHERE'];
+    const found = providers.find(p => byokSession.hasKey(p));
+    if (found) {
+      setActiveProvider(found);
+    }
+  }, []);
+  
   const currentTeam = useTeamStore(s => s.currentTeam);
   const members = useTeamStore(s => s.members);
+  const currentEvent = useEventStore(s => s.currentEvent);
   const dbRounds = useEventStore(s => s.rounds);
+  const setRounds = useEventStore(s => s.setRounds);
+  
+  // Track completed rounds for current team
+  const [completedRounds, setCompletedRounds] = useState<Set<string>>(new Set());
+  
+  useEffect(() => {
+    async function refreshRounds() {
+      if (currentEvent?.id) {
+        const { data } = await supabase.from('rounds').select('*').eq('event_id', currentEvent.id).order('order_index');
+        if (data) {
+          setRounds(data as any);
+        }
+      }
+    }
+    refreshRounds();
+  }, [currentEvent?.id, setRounds]);
+  
+  // Fetch completed rounds for current team
+  useEffect(() => {
+    async function fetchCompletedRounds() {
+      if (currentTeam?.id) {
+        const { data } = await supabase
+          .from('round_sessions')
+          .select('round_id')
+          .eq('team_id', currentTeam.id)
+          .eq('status', 'COMPLETED');
+        
+        if (data) {
+          setCompletedRounds(new Set(data.map(rs => rs.round_id)));
+        } else {
+          setCompletedRounds(new Set());
+        }
+      }
+    }
+    fetchCompletedRounds();
+    
+    // Set up real-time subscription to round_sessions
+    const channel = supabase
+      .channel(`dashboard-rounds-${currentTeam?.id}`)
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'round_sessions',
+        filter: `team_id=eq.${currentTeam?.id}`
+      }, () => {
+        console.log('Round sessions changed, refreshing...');
+        fetchCompletedRounds();
+      })
+      .subscribe();
+    
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [currentTeam?.id]);
   
   const teamName = currentTeam?.name || 'Your Team';
 
   const mappedRounds: Round[] = useMemo(() => {
-    return dbRounds.map((r, idx) => ({
-      id: r.order_index,
-      key: `round${r.order_index}`,
-      name: r.name,
-      sub: r.type,
-      desc: r.description || '',
-      status: r.is_active ? 'upcoming' : 'locked', // We will update this later when we integrate round sessions
-      maxScore: 100, // Hardcoded max score per round for now
-      duration: `${r.duration_minutes} min`,
-      Icon: getIconForType(r.type),
-    }));
-  }, [dbRounds]);
+    return dbRounds.map((r, idx) => {
+      const isCompleted = completedRounds.has(r.id);
+      return {
+        id: r.id, // Use actual UUID for navigation
+        key: `round${r.order_index}`,
+        name: r.name,
+        sub: r.type,
+        type: r.type, // Added to use in onClick
+        orderIndex: r.order_index,
+        desc: r.description || '',
+        status: isCompleted ? 'completed' : (r.is_active ? 'upcoming' : 'locked'),
+        maxScore: r.challenges?.length > 0 ? r.challenges.reduce((sum: number, c: any) => sum + (c.base_points || 0), 0) : 200, // Sum of challenge base_points; falls back to 200
+        duration: `${r.duration_minutes} min`,
+        Icon: getIconForType(r.type),
+      };
+    });
+  }, [dbRounds, completedRounds]);
 
   return (
     <div className="p-6 space-y-5">
@@ -192,7 +277,7 @@ export default function Dashboard({ navigate }: { navigate: (p: Page) => void })
                 </button>
               }
             />
-            <div className="grid grid-cols-5 gap-2.5">
+            <div className="grid grid-cols-5 gap-4 lg:gap-5">
               {mappedRounds.map((round, i) => (
                 <RoundCard
                   key={round.id}
@@ -200,103 +285,78 @@ export default function Dashboard({ navigate }: { navigate: (p: Page) => void })
                   hovered={hoveredRound === i}
                   onHover={() => setHoveredRound(i)}
                   onLeave={() => setHoveredRound(null)}
-                  onClick={() => { if (round.status !== 'locked') navigate(`generic-round`); }}
+                  onClick={() => { 
+                    if (round.status === 'locked') {
+                      sounds.error();
+                      return;
+                    }
+                    if (round.status === 'completed') {
+                      sounds.error();
+                      setToast({ message: 'You have already completed this round. Contact an admin if you need to reset it.', variant: 'warning' });
+                      return;
+                    }
+                    
+                    sounds.start();
+                    if (round.type === 'QUIZ' || round.type === 'KNOWLEDGE_TEST') {
+                        navigate(`quiz-${round.id}` as any);
+                      } else if (round.type === 'PROMPT' || round.type === 'PROMPT_CHALLENGE') {
+                        navigate(`prompt-heist-${round.id}` as any);
+                      } else if (round.type === 'VISION_CHALLENGE') {
+                        navigate(`vision-${round.id}` as any);
+                      } else if (round.type === 'AI_ADVERSARIAL' || round.type === 'ADVERSARIAL_CHALLENGE') {
+                        navigate(`round4-${round.id}` as any);
+                      } else if (round.type === 'AI_SYSTEMS' || round.type === 'SYSTEMS_CHALLENGE') {
+                        navigate(`round5-${round.id}` as any);
+                      } else {
+                        navigate(`round-${round.id}` as any);
+                      }
+                  }}
                   animDelay={i * 60}
                 />
               ))}
             </div>
           </div>
 
-          {/* ── How it works + Rules ─────────────────────── */}
-          <div className="grid grid-cols-2 gap-4 animate-slide-up stagger-3">
-            {/* How it works */}
-            <Card className="p-5">
-              <SectionHeader title="How It Works" />
-              <div className="space-y-2.5">
-                {steps.map((step, i) => (
-                  <div
-                    key={i}
-                    className="flex items-center gap-3 p-2.5 rounded-xl hover:bg-orange-50 transition-colors duration-150 group"
-                    style={{ animationDelay: `${i * 80}ms` }}
-                  >
-                    <div className="w-8 h-8 rounded-xl bg-orange-50 border border-orange-100 flex items-center justify-center flex-shrink-0 group-hover:bg-orange-100 transition-colors">
-                      <span className="text-base">{step.emoji}</span>
-                    </div>
-                    <div>
-                      <div className="text-[10px] text-orange-400 font-black uppercase tracking-widest font-heading">{step.num}</div>
-                      <div className="text-xs font-semibold text-gray-700 leading-tight">{step.label}</div>
-                    </div>
-                    {i < steps.length - 1 && (
-                      <ArrowRightIcon className="w-3.5 h-3.5 text-gray-200 ml-auto flex-shrink-0" />
-                    )}
-                  </div>
-                ))}
-              </div>
-            </Card>
 
-            {/* Important rules */}
-            <Card className="p-5">
-              <SectionHeader title="Important" />
-              <div className="space-y-3">
-                {importantRules.map((rule, i) => (
-                  <div key={i} className="flex items-start gap-3 p-2.5 rounded-xl hover:bg-gray-50 transition-colors">
-                    <div className="w-7 h-7 rounded-lg bg-gray-50 border border-gray-100 flex items-center justify-center flex-shrink-0 mt-0.5">
-                      {rule.icon}
-                    </div>
-                    <span className="text-sm text-gray-600 leading-snug">{rule.text}</span>
-                  </div>
-                ))}
-              </div>
-            </Card>
-          </div>
         </div>
 
         {/* ── Right sidebar ─────────────────────────────── */}
         <div className="space-y-4">
-          {/* Team Members */}
-          <Card className="p-4 animate-slide-left stagger-1">
-            <SectionHeader icon={<UsersIcon className="w-4 h-4" />} title="Team Roster" />
-            <div className="text-sm font-black text-gray-900 font-heading mb-3">{teamName}</div>
-            <div className="space-y-3">
-              {members.map((m) => (
-                <div key={m.id} className="flex items-center gap-3 p-2.5 rounded-xl hover:bg-gray-50 transition-colors group">
-                  <div className={`w-9 h-9 ${m.role === 'CAPTAIN' ? 'bg-orange-500' : 'bg-violet-500'} rounded-xl flex items-center justify-center flex-shrink-0 shadow-sm group-hover:scale-105 transition-transform`}>
-                    <span className="text-white text-sm font-black font-heading">{m.name[0]?.toUpperCase()}</span>
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm font-bold text-gray-900 leading-tight truncate">{m.name}</div>
-                  </div>
-                  <Badge variant={m.role === 'CAPTAIN' ? 'orange' : 'info'}>{m.role}</Badge>
-                </div>
-              ))}
-            </div>
-            <div className="mt-3 pt-3 border-t border-gray-50 space-y-1">
-              <div className="text-[11px] text-green-600 font-semibold">✓ Device Verified</div>
-              <div className="text-[11px] text-green-600 font-semibold">✓ Secure Session Active</div>
-            </div>
-          </Card>
-
-
-
-          {/* Current Rank */}
-          <Card className="p-4 animate-slide-left stagger-3">
-            <SectionHeader icon={<TrophyIcon className="w-4 h-4" />} title="Your Current Rank" />
-            <div className="flex items-center gap-3 py-2">
-              <div className="w-14 h-14 rounded-2xl bg-gray-50 border border-gray-100 flex items-center justify-center flex-shrink-0">
-                <span className="text-2xl font-black text-gray-200 font-heading">—</span>
+          {/* BYOK Configuration Card */}
+          <Card className="p-4 animate-slide-left stagger-1 bg-gradient-to-br from-indigo-50 to-purple-50 border-indigo-100">
+            <SectionHeader icon={<ZapIcon className="w-4 h-4 text-indigo-600" />} title="AI Tools Config" />
+            
+            {activeProvider ? (
+              <div className="mt-3 space-y-3">
+                <BYOKConnected 
+                  provider={activeProvider} 
+                  onDisconnect={() => {
+                    byokSession.clearKey(activeProvider);
+                    setActiveProvider(null);
+                  }} 
+                />
+                
+                {/* Test Chat */}
+                <AITestChat provider={activeProvider} />
               </div>
-              <div>
-                <div className="font-bold text-gray-700 font-heading">Not Yet Ranked</div>
-                <div className="text-xs text-gray-400 mt-0.5">Complete a round to appear on the leaderboard.</div>
+            ) : (
+              <div className="mt-3">
+                <p className="text-xs text-gray-600 mb-3 leading-relaxed">
+                  Some stages require your own API key to use LLMs. Configure it now to save time later.
+                </p>
+                <Button 
+                  onClick={() => setShowBYOKConnect(true)} 
+                  variant="outline" 
+                  className="w-full text-xs py-2 border-indigo-200 text-indigo-700 hover:bg-indigo-100"
+                >
+                  Connect API Key →
+                </Button>
               </div>
-            </div>
-            <Button onClick={() => navigate('leaderboard')} variant="outline" className="w-full mt-2 text-xs py-2">
-              View Leaderboard →
-            </Button>
+            )}
           </Card>
 
           {/* Trophy motivational */}
-          <Card className="p-4 overflow-hidden relative animate-slide-left stagger-4 bg-gradient-to-br from-amber-50 to-orange-50 border-orange-100">
+          <Card className="p-5 overflow-hidden relative animate-slide-left stagger-2 bg-gradient-to-br from-amber-50 to-orange-50 border-orange-100">
             <div className="relative z-10 text-center">
               <div className="text-3xl mb-2">🏆</div>
               <div className="text-sm text-gray-600 mb-0.5">Every prompt is a move.</div>
@@ -308,6 +368,22 @@ export default function Dashboard({ navigate }: { navigate: (p: Page) => void })
           </Card>
         </div>
       </div>
+      
+      {showBYOKConnect && (
+        <BYOKConnect 
+          config={{ 
+            enabled: true, 
+            required_providers: ['OPENAI', 'ANTHROPIC', 'GOOGLE', 'GROQ', 'MISTRAL', 'COHERE'],
+            allowed_models: [], max_requests: 50, max_tokens_per_request: 1000, 
+            max_total_tokens: 50000, allowed_tools: false, allowed_web_access: false, timeout_seconds: 30
+          }}
+          onConnected={(provider) => {
+            setActiveProvider(provider);
+            setShowBYOKConnect(false);
+          }}
+          onCancel={() => setShowBYOKConnect(false)}
+        />
+      )}
     </div>
   );
 }
@@ -318,6 +394,7 @@ function RoundCard({ round, hovered, onClick, onHover, onLeave, animDelay }: {
   onHover: () => void; onLeave: () => void; animDelay: number;
 }) {
   const locked = round.status === 'locked';
+  const completed = round.status === 'completed';
 
   return (
     <div
@@ -325,62 +402,69 @@ function RoundCard({ round, hovered, onClick, onHover, onLeave, animDelay }: {
       onMouseEnter={onHover}
       onMouseLeave={onLeave}
       className={`
-        rounded-2xl border p-3 cursor-pointer transition-all duration-200 animate-slide-up
-        ${hovered && !locked
-          ? 'border-orange-300 bg-orange-50 shadow-md shadow-orange-100 -translate-y-0.5'
+        rounded-2xl border p-4 sm:p-5 cursor-pointer transition-all duration-200 animate-slide-up min-h-[240px] flex flex-col
+        ${completed
+          ? 'border-green-300 bg-green-50 opacity-90'
+          : hovered && !locked
+          ? 'border-orange-300 bg-orange-50 shadow-lg shadow-orange-100/50 -translate-y-1'
           : locked
           ? 'border-gray-100 bg-white opacity-75'
-          : 'border-gray-100 bg-white hover:border-orange-200'}
+          : 'border-gray-100 bg-white shadow-sm hover:border-orange-200'}
       `}
       style={{ animationDelay: `${animDelay}ms` }}
     >
       {/* Round badge + status */}
-      <div className="flex items-center justify-between mb-2">
-        <div className={`w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-black font-heading transition-all ${
+      <div className="flex items-center justify-between mb-3">
+        <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-black font-heading transition-all ${
+          completed ? 'bg-green-500 text-white' :
           locked ? 'bg-gray-800 text-white' : hovered ? 'bg-orange-500 text-white scale-110' : 'bg-orange-500 text-white'
         }`}>
-          {round.id}
+          {completed ? '✓' : round.orderIndex}
         </div>
         {locked
-          ? <LockIcon className="w-3.5 h-3.5 text-gray-300" />
+          ? <LockIcon className="w-4 h-4 text-gray-300" />
+          : completed
+          ? <span className="text-xs font-bold text-green-600">COMPLETED</span>
           : round.status === 'live'
-          ? <span className="w-2 h-2 rounded-full bg-green-500 live-dot" />
+          ? <span className="w-2.5 h-2.5 rounded-full bg-green-500 live-dot" />
           : null
         }
       </div>
 
       {/* Icon */}
-      <div className={`flex justify-center mb-2 transition-all duration-200 ${locked ? 'opacity-30' : hovered ? 'scale-110 text-orange-500' : 'text-orange-400'}`}>
-        <round.Icon className="w-7 h-7" />
+      <div className={`flex justify-center mb-4 transition-all duration-200 ${locked ? 'opacity-30' : hovered ? 'scale-110 text-orange-500' : 'text-orange-400'}`}>
+        <round.Icon className="w-10 h-10" />
       </div>
 
       {/* Name */}
-      <div className="text-center mb-2">
-        <div className="text-sm font-black text-gray-900 font-heading leading-tight">{round.name}</div>
-        <div className="text-[10px] text-gray-400 mt-0.5">{round.sub}</div>
+      <div className="text-center mb-3">
+        <div className="text-base font-black text-gray-900 font-heading leading-tight">{round.name}</div>
+        <div className="text-[11px] text-gray-400 mt-1">{round.sub}</div>
       </div>
 
       {/* Status pill */}
-      <div className="flex justify-center mb-2">
-        {locked
+      <div className="flex justify-center mb-3">
+        {completed
+          ? <Badge variant="live" className="bg-green-100 text-green-700">COMPLETED ✓</Badge>
+          : locked
           ? <Badge variant="locked">LOCKED</Badge>
           : <Badge variant={round.status === 'live' ? 'live' : 'upcoming'}>{round.status.toUpperCase()}</Badge>
         }
       </div>
 
-      <div className="text-[10px] text-gray-400 text-center leading-tight mb-2.5 line-clamp-2">
+      <div className="text-xs text-gray-500 text-center leading-relaxed mb-4 flex-grow line-clamp-3">
         {round.desc}
       </div>
 
       {/* Meta */}
-      <div className="border-t border-gray-50 pt-2 grid grid-cols-2 gap-1 text-center">
+      <div className="border-t border-gray-100 pt-3 grid grid-cols-2 gap-2 text-center mt-auto">
         <div>
-          <div className="text-[9px] text-gray-400 font-heading">Duration</div>
-          <div className="text-[10px] font-bold text-gray-600">{round.duration}</div>
+          <div className="text-[10px] text-gray-400 font-heading mb-0.5">Duration</div>
+          <div className="text-sm font-bold text-gray-700">{round.duration}</div>
         </div>
         <div>
-          <div className="text-[9px] text-gray-400 font-heading">Max Score</div>
-          <div className="text-sm font-black text-orange-500 font-heading">{round.maxScore}</div>
+          <div className="text-[10px] text-gray-400 font-heading mb-0.5">Max Score</div>
+          <div className="text-lg font-black text-orange-500 font-heading leading-none">{round.maxScore}</div>
         </div>
       </div>
     </div>

@@ -9,9 +9,10 @@ import { Toast } from '../components/ui';
 
 interface LoginProps {
   onLogin: (isAdmin: boolean) => void;
+  onBackToHome?: () => void;
 }
 
-export default function Login({ onLogin }: LoginProps) {
+export default function Login({ onLogin, onBackToHome }: LoginProps) {
   const [teamCode, setTeamCode] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -81,12 +82,15 @@ export default function Login({ onLogin }: LoginProps) {
 
       {/* Top Navigation / Logo Bar */}
       <header className="relative z-30 px-6 sm:px-10 pt-3.5 sm:pt-5 flex items-center justify-between flex-shrink-0">
-        <div className="flex items-center gap-3.5 group cursor-pointer">
+        <div 
+          onClick={onBackToHome}
+          className="flex items-center gap-3.5 group cursor-pointer"
+        >
           <div className="relative">
             <img 
               src="/assets/logo.png" 
               alt="Prompt Championship" 
-              className="w-10 h-10 sm:w-11 sm:h-11 rounded-xl object-contain border border-white/20 p-1 bg-black/40 shadow-sm transition-transform duration-300 group-hover:scale-105"
+              className="w-10 h-10 sm:w-11 sm:h-11 rounded-xl object-contain border border-white/20 p-1 bg-black/40 shadow-sm transition-transform duration-300 group-hover:scale-105" 
             />
           </div>
           <div className="leading-tight">

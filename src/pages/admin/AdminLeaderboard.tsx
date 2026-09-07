@@ -44,7 +44,7 @@ export default function AdminLeaderboard({ navigate }: { navigate: (p: Page) => 
 
     // 2. Get evaluated submissions (Base score)
     const { data: submissions } = await supabase
-      .from('submissions')
+      .from('vw_all_submissions')
       .select('team_id, score, status, round_id')
       .eq('status', 'EVALUATED')
       .in('team_id', teamIds);

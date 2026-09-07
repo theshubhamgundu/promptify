@@ -42,6 +42,7 @@ export class IntegrityMonitor {
   private static lastSubmissionTime = 0;
   private static idleTimeout: ReturnType<typeof setTimeout> | null = null;
   private static initialized = false;
+  private static roundSessionId?: string;
 
   private static violationCallback: ((reason: string) => void) | null = null;
 
@@ -49,11 +50,13 @@ export class IntegrityMonitor {
    * Initialize the integrity monitor. Call once from App.tsx.
    * Sets up passive listeners for tab switches, copy/paste, idle detection.
    */
-  static init(teamId?: string, onViolation?: (reason: string) => void) {
+  static init(teamId?: string, roundSessionId?: string, onViolation?: (reason: string) => void) {
+    this.roundSessionId = roundSessionId; // store for later
+    
     // TEMPORARILY DISABLED - Database timeouts causing app to fail
-    console.log('[IntegrityMonitor] Temporarily disabled due to database timeout issues');
-    this.initialized = true;
-    return;
+    // console.log('[IntegrityMonitor] Temporarily disabled due to database timeout issues');
+    // this.initialized = true;
+    // return;
     
     if (this.initialized) {
       if (onViolation) this.violationCallback = onViolation;
@@ -71,6 +74,10 @@ export class IntegrityMonitor {
           teamId,
           details: { count: this.tabSwitchCount, timestamp: Date.now() }
         });
+        
+        if (teamId) {
+          this.logSevereViolation(teamId, 'TAB_SWITCH', `Tab switch detected. Count: ${this.tabSwitchCount}`);
+        }
       }
     });
 
@@ -126,13 +133,9 @@ export class IntegrityMonitor {
 
     // ── Prevent Inspect Element / Dev Tools ──
     this.setupAntiInspect();
-
-    console.log('[IntegrityMonitor] Initialized');
   }
 
   private static setupAntiInspect() {
-    // TEMPORARILY DISABLED FOR DEBUGGING
-    console.log('[IntegrityMonitor] Anti-inspect temporarily disabled for debugging');
     return;
     
     // Disable right click
@@ -178,6 +181,10 @@ export class IntegrityMonitor {
                 teamId,
                 details: { detectedNode: tagName, id: node.id }
               });
+              
+              if (teamId) {
+                this.logSevereViolation(teamId, 'UNAUTHORIZED_EXTENSION', `Extension tag detected: ${tagName}`);
+              }
               
               // Trigger strict blocking
               if (this.violationCallback) {
@@ -270,6 +277,23 @@ export class IntegrityMonitor {
     } catch (err) {
       console.error('[IntegrityMonitor] Flush exception', err);
       logBuffer = [...toFlush, ...logBuffer];
+    }
+  }
+
+  /**
+   * Directly log a high-severity violation to the security_violations table
+   * bypassing the batching system, as these can trigger automated penalties.
+   */
+  static async logSevereViolation(teamId: string, violationType: string, description: string) {
+    try {
+      await supabase.from('security_violations').insert([{
+        team_id: teamId,
+        round_session_id: this.roundSessionId || null,
+        violation_type: violationType,
+        description: description
+      }]);
+    } catch (e) {
+      console.error('[IntegrityMonitor] Failed to log severe violation:', e);
     }
   }
 

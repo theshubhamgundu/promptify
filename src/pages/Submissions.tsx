@@ -29,19 +29,8 @@ export default function Submissions() {
       setLoading(true);
       try {
         const { data, error } = await supabase
-          .from('submissions')
-          .select(`
-            id,
-            challenge_id,
-            attempt_number,
-            score,
-            status,
-            submitted_at,
-            challenges (
-              round_id,
-              title
-            )
-          `)
+          .from('vw_all_submissions')
+          .select('*')
           .eq('team_id', currentTeam.id)
           .order('submitted_at', { ascending: false });
 
@@ -104,7 +93,7 @@ export default function Submissions() {
               ) : (
                 submissions.map((sub) => (
                   <tr key={sub.id} className="border-t border-gray-50">
-                    <td className="px-4 py-3 text-sm font-medium text-gray-900">{sub.challenges?.title || 'Unknown Challenge'}</td>
+                    <td className="px-4 py-3 text-sm font-medium text-gray-900">{sub.challenge_title || 'Unknown Challenge'}</td>
                     <td className="px-4 py-3 text-sm text-gray-500">{sub.attempt_number}</td>
                     <td className="px-4 py-3">
                       <span className="font-bold text-gray-900 font-heading">{sub.score}</span>
@@ -113,7 +102,7 @@ export default function Submissions() {
                       {new Date(sub.submitted_at).toLocaleString()}
                     </td>
                     <td className="px-4 py-3">
-                      <Badge variant={sub.status === 'EVALUATED' ? 'green' : 'gray'}>
+                      <Badge variant={sub.status === 'EVALUATED' ? 'success' : 'locked'}>
                         {sub.status}
                       </Badge>
                     </td>

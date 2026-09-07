@@ -15,6 +15,7 @@ interface Submission {
   score: number | null;
   evaluation_result: any;
   submitted_at: string;
+  source_table: string;
   team: { name: string };
   challenge: { title: string; type: string; base_points: number };
 }
@@ -52,7 +53,7 @@ export default function SubmissionsReview({ navigate }: { navigate: (p: Page) =>
 
     // Get submissions that are EVALUATED or SUBMITTED
     const { data: subs } = await supabase
-      .from('submissions')
+      .from('vw_all_submissions')
       .select('*')
       .in('team_id', teamIds)
       .in('status', ['SUBMITTED', 'EVALUATED'])
@@ -84,12 +85,18 @@ export default function SubmissionsReview({ navigate }: { navigate: (p: Page) =>
 
     const newTotalScore = (reviewModal.score || 0) + pointsDelta;
 
-    // 1. Update submission
-    await supabase.from('submissions').update({
-      status: 'EVALUATED',
-      score: reviewModal.status === 'SUBMITTED' ? pointsDelta : newTotalScore,
-      evaluation_result: { ...reviewModal.evaluation_result, admin_reviewed: true, review_reason: reviewReason }
-    }).eq('id', reviewModal.id);
+    // 1. Update submission via RPC
+    const { error: rpcError } = await supabase.rpc('admin_review_submission', {
+      p_submission_id: reviewModal.id,
+      p_source_table: reviewModal.source_table,
+      p_score: reviewModal.status === 'SUBMITTED' ? pointsDelta : newTotalScore,
+      p_review_reason: reviewReason || 'Manual Admin Review',
+      p_admin_id: (await supabase.auth.getUser()).data.user?.id
+    });
+    
+    if (rpcError) {
+      console.error('Failed to update submission score:', rpcError);
+    }
 
     // 2. Insert Score Event
     await supabase.from('score_events').insert({
