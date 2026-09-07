@@ -366,7 +366,7 @@ export default function ScreenManager({ navigate }: { navigate: (p: Page) => voi
             <FormField label="Announcement Headline / Title">
               <TextInput
                 value={editForm.title}
-                onChange={e => setEditForm(prev => ({ ...prev, title: e.target.value.toUpperCase() }))}
+                onChange={val => setEditForm(prev => ({ ...prev, title: val.toUpperCase() }))}
                 placeholder="e.g. STARTS IN 10 MINS"
               />
             </FormField>
@@ -374,7 +374,7 @@ export default function ScreenManager({ navigate }: { navigate: (p: Page) => voi
             <FormField label="Detailed Message">
               <TextArea
                 value={editForm.message}
-                onChange={e => setEditForm(prev => ({ ...prev, message: e.target.value }))}
+                onChange={val => setEditForm(prev => ({ ...prev, message: val }))}
                 placeholder="Message instructions for contenders..."
                 rows={3}
               />
@@ -383,7 +383,7 @@ export default function ScreenManager({ navigate }: { navigate: (p: Page) => voi
             <FormField label="Priority / Urgency">
               <Select
                 value={editForm.priority}
-                onChange={e => setEditForm(prev => ({ ...prev, priority: e.target.value as any }))}
+                onChange={val => setEditForm(prev => ({ ...prev, priority: val as any }))}
                 options={[
                   { value: 'URGENT', label: '🚨 URGENT (Plays sound alert on projector)' },
                   { value: 'IMPORTANT', label: '⚠️ IMPORTANT' },

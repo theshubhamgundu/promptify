@@ -759,7 +759,7 @@ export default function Announcements({ navigate }: { navigate: (p: Page) => voi
                 <FormField label="Headline on Template" required>
                   <TextInput
                     value={form.title}
-                    onChange={e => setForm({ ...form, title: e.target.value.toUpperCase() })}
+                    onChange={val => setForm(prev => ({ ...prev, title: val.toUpperCase() }))}
                     placeholder="e.g. STARTS IN 10 MINS"
                   />
                 </FormField>
@@ -767,7 +767,7 @@ export default function Announcements({ navigate }: { navigate: (p: Page) => voi
                 <FormField label="Message Details" required>
                   <TextArea
                     value={form.message}
-                    onChange={e => setForm({ ...form, message: e.target.value })}
+                    onChange={val => setForm(prev => ({ ...prev, message: val }))}
                     rows={4}
                     placeholder="Please take your seats and prepare your workstations..."
                   />
@@ -777,7 +777,7 @@ export default function Announcements({ navigate }: { navigate: (p: Page) => voi
                   <FormField label="Priority" required>
                     <Select
                       value={form.priority}
-                      onChange={v => setForm({ ...form, priority: v as any })}
+                      onChange={val => setForm(prev => ({ ...prev, priority: val as any }))}
                       options={[
                         { value: 'URGENT', label: 'Urgent Alert (Red)' },
                         { value: 'IMPORTANT', label: 'Important (Amber)' },
@@ -789,10 +789,10 @@ export default function Announcements({ navigate }: { navigate: (p: Page) => voi
                   <FormField label="Target Screen Scope">
                     <Select
                       value={form.scope || (selectedScreen === 0 ? 'GLOBAL' : `SCREEN_${selectedScreen}`)}
-                      onChange={v => {
-                        setForm({ ...form, scope: v });
-                        if (v.startsWith('SCREEN_')) {
-                          setSelectedScreen(parseInt(v.replace('SCREEN_', ''), 10));
+                      onChange={val => {
+                        setForm(prev => ({ ...prev, scope: val }));
+                        if (val.startsWith('SCREEN_')) {
+                          setSelectedScreen(parseInt(val.replace('SCREEN_', ''), 10));
                         } else {
                           setSelectedScreen(0);
                         }
@@ -1035,7 +1035,7 @@ export default function Announcements({ navigate }: { navigate: (p: Page) => voi
             <FormField label="Headline Title" required>
               <TextInput
                 value={newTemplateForm.title}
-                onChange={e => setNewTemplateForm(prev => ({ ...prev, title: e.target.value.toUpperCase() }))}
+                onChange={val => setNewTemplateForm(prev => ({ ...prev, title: val.toUpperCase() }))}
                 placeholder="e.g. ROUND 3: FINAL SPRINT"
               />
             </FormField>
@@ -1043,7 +1043,7 @@ export default function Announcements({ navigate }: { navigate: (p: Page) => voi
             <FormField label="Message Details" required>
               <TextArea
                 value={newTemplateForm.message}
-                onChange={e => setNewTemplateForm(prev => ({ ...prev, message: e.target.value }))}
+                onChange={val => setNewTemplateForm(prev => ({ ...prev, message: val }))}
                 placeholder="Enter message for contenders on the digital screens..."
                 rows={3}
               />
@@ -1052,7 +1052,7 @@ export default function Announcements({ navigate }: { navigate: (p: Page) => voi
             <FormField label="Priority">
               <Select
                 value={newTemplateForm.priority}
-                onChange={e => setNewTemplateForm(prev => ({ ...prev, priority: e.target.value as any }))}
+                onChange={val => setNewTemplateForm(prev => ({ ...prev, priority: val as any }))}
                 options={[
                   { value: 'URGENT', label: '🚨 Urgent Alert (Red)' },
                   { value: 'IMPORTANT', label: '⚠️ Important (Amber)' },
