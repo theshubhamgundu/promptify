@@ -299,6 +299,8 @@ export default function Dashboard({ navigate }: { navigate: (p: Page) => void })
                     sounds.start();
                     if (round.type === 'QUIZ' || round.type === 'KNOWLEDGE_TEST') {
                         navigate(`quiz-${round.id}` as any);
+                      } else if (round.type === 'ROUND2_HEIST' || round.title?.includes('Round 2') || round.title?.includes('Prompt Heist')) {
+                        navigate(`round2-heist-${round.id}` as any);
                       } else if (round.type === 'PROMPT' || round.type === 'PROMPT_CHALLENGE') {
                         navigate(`prompt-heist-${round.id}` as any);
                       } else if (round.type === 'VISION_CHALLENGE') {

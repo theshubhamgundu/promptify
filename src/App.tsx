@@ -41,6 +41,8 @@ import AdminLayout from './components/AdminLayout';
 import FullscreenEnforcer from './components/FullscreenEnforcer';
 import LandingPage from './pages/LandingPage';
 import Registration from './pages/Registration';
+import Round2Heist from './pages/Round2Heist';
+import Round2Results from './pages/Round2Results';
 import { SyncEngine } from './lib/sync-engine';
 import { IntegrityMonitor } from './lib/integrity-monitor';
 import { supabase } from './lib/supabase';
@@ -260,6 +262,14 @@ export default function App() {
         const roundId = currentPage.replace('prompt-heist-', '');
         return <PromptHeist roundId={roundId} navigate={navigate} />;
       }
+      if (currentPage.startsWith('round2-heist-'))  {
+        const roundId = currentPage.replace('round2-heist-', '');
+        return <Round2Heist roundId={roundId} navigate={navigate} />;
+      }
+      if (currentPage.startsWith('round2-results-'))  {
+        const roundId = currentPage.replace('round2-results-', '');
+        return <Round2Results roundId={roundId} navigate={navigate} />;
+      }
       if (currentPage.startsWith('round-'))  {
         const roundId = currentPage.replace('round-', '');
         return <GenericRound roundId={roundId} navigate={navigate} />;
@@ -315,7 +325,7 @@ export default function App() {
   };
 
   const isAdminPage = typeof page === 'string' && page.startsWith('admin');
-  const isRoundPage = typeof page === 'string' && (page.startsWith('quiz-') || page.startsWith('quiz-results-') || page.startsWith('prompt-heist-') || page.startsWith('round-') || page.startsWith('vision-') || page.startsWith('round4-') || page.startsWith('round5-'));
+  const isRoundPage = typeof page === 'string' && (page.startsWith('quiz-') || page.startsWith('quiz-results-') || page.startsWith('prompt-heist-') || page.startsWith('round2-heist-') || page.startsWith('round2-results-') || page.startsWith('round-') || page.startsWith('vision-') || page.startsWith('round4-') || page.startsWith('round5-'));
   const isQuizPage = typeof page === 'string' && (page.startsWith('quiz-') || page.startsWith('quiz-results-'));
 
   return (
