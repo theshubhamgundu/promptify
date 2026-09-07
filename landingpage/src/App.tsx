@@ -371,9 +371,9 @@ function MobilePromptTerminal() {
 /* ── Mobile info cards ──────────────────────────────────────── */
 function MobileInfoCards() {
   const cards = [
-    { icon: "📅", label: "DATE", value: "Oct 24, 2026", bg: "#2FE69A" },
-    { icon: "📍", label: "VENUE", value: "Campus Auditorium", bg: "#B57CFF" },
-    { icon: "🏆", label: "PRIZES", value: "$1,500 Pool", bg: "#FFD027" },
+    { icon: "📅", label: "DATE", value: "TBA", bg: "#2FE69A" },
+    { icon: "📍", label: "VENUE", value: "VITS ,HYDERABAD", bg: "#B57CFF" },
+    { icon: "🏆", label: "PRIZES", value: "TBA", bg: "#FFD027" },
   ];
   return (
     <div style={{ padding: "24px 20px 8px", display: "flex", flexDirection: "column", gap: 12, position: "relative", zIndex: 10 }}>
@@ -838,9 +838,9 @@ function PromptTerminal() {
 /* ── Bottom bar ─────────────────────────────────────────────── */
 function BottomBar() {
   const cards = [
-    { icon: "📅", label: "DATE", value: "Oct 24, 2026", bg: "#2FE69A" },
-    { icon: "📍", label: "VENUE", value: "Campus Auditorium", bg: "#B57CFF" },
-    { icon: "🏆", label: "PRIZES", value: "$1,500 Pool", bg: "#FFD027" },
+    { icon: "📅", label: "DATE", value: "TBA", bg: "#2FE69A" },
+    { icon: "📍", label: "VENUE", value: "VITS ,HYDERABAD", bg: "#B57CFF" },
+    { icon: "🏆", label: "PRIZES", value: "TBA", bg: "#FFD027" },
   ];
   return (
     <div className="absolute bottom-5 inset-x-0 flex justify-center px-10" style={{ zIndex: 30 }}>

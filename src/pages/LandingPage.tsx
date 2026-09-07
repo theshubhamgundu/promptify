@@ -378,9 +378,9 @@ function MobilePromptTerminal() {
 /* ── Mobile info cards ──────────────────────────────────────── */
 function MobileInfoCards() {
   const cards = [
-    { icon: "📅", label: "DATE", value: "Oct 24, 2026", bg: "#2FE69A" },
-    { icon: "📍", label: "VENUE", value: "Campus Auditorium", bg: "#B57CFF" },
-    { icon: "🏆", label: "PRIZES", value: "$1,500 Pool", bg: "#FFD027" },
+    { icon: "📅", label: "DATE", value: "TBA", bg: "#2FE69A" },
+    { icon: "📍", label: "VENUE", value: "VITS ,HYDERABAD", bg: "#B57CFF" },
+    { icon: "🏆", label: "PRIZES", value: "TBA", bg: "#FFD027" },
   ];
   return (
     <div style={{ padding: "24px 20px 8px", display: "flex", flexDirection: "column", gap: 12, position: "relative", zIndex: 10 }}>
@@ -613,15 +613,18 @@ function Stage({ onEnter }: { onEnter: () => void }) {
     <div
       className="absolute inset-0 grid"
       style={{
-        gridTemplateColumns: "1fr 620px 1fr",
+        gridTemplateColumns: "280px 1fr 280px",
         paddingTop: 90,
         paddingBottom: 90,
+        paddingLeft: 40,
+        paddingRight: 40,
         zIndex: 10,
+        gap: 40,
       }}
     >
       {/* Left mascot column */}
-      <div className="relative flex flex-col items-center justify-center gap-5">
-        <div className="anim-bob" style={{ transform: "scale(1.25)", transformOrigin: "center center" }}>
+      <div className="relative flex flex-col items-center justify-center gap-5" style={{ zIndex: 5, maxWidth: "280px", overflow: "hidden" }}>
+        <div className="anim-bob" style={{ transform: "scale(1.1)", transformOrigin: "center center" }}>
           <RetroTerminal />
         </div>
         <PromptChip text="[SYSTEM PROMPT]" bg="#FF5C00" fg="#FAF7F2" rot="-5deg" delay="0.4s" size="lg" />
@@ -634,7 +637,7 @@ function Stage({ onEnter }: { onEnter: () => void }) {
       <HeroCenter onEnter={onEnter} />
 
       {/* Right mascot column */}
-      <div className="relative flex flex-col items-center justify-center gap-4">
+      <div className="relative flex flex-col items-center justify-center gap-4" style={{ zIndex: 5, maxWidth: "280px", overflow: "hidden" }}>
         <div className="anim-bob-alt">
           <MagicWand />
         </div>
@@ -650,10 +653,10 @@ function Stage({ onEnter }: { onEnter: () => void }) {
 /* ── Hero centre ────────────────────────────────────────────── */
 function HeroCenter({ onEnter }: { onEnter: () => void }) {
   return (
-    <div className="flex flex-col items-center justify-center text-center px-4">
+    <div className="flex flex-col items-center justify-center text-center px-4" style={{ position: "relative", zIndex: 20 }}>
 
       {/* Technique tags row */}
-      <div className="flex items-center gap-2 mb-4">
+      <div className="flex items-center gap-2 mb-4" style={{ position: "relative", zIndex: 20 }}>
         {[
           { label: "zero-shot", color: "#2FE69A" },
           { label: "few-shot", color: "#B57CFF" },
@@ -673,6 +676,8 @@ function HeroCenter({ onEnter }: { onEnter: () => void }) {
               padding: "3px 10px",
               letterSpacing: "0.04em",
               boxShadow: "2px 2px 0 #11111130",
+              position: "relative",
+              zIndex: 20,
             }}
           >
             {label}
@@ -693,6 +698,8 @@ function HeroCenter({ onEnter }: { onEnter: () => void }) {
           fontSize: 12,
           color: "#111111",
           letterSpacing: "0.06em",
+          position: "relative",
+          zIndex: 20,
         }}
       >
         <span style={{ fontSize: 14 }}>⚡</span>
@@ -700,9 +707,9 @@ function HeroCenter({ onEnter }: { onEnter: () => void }) {
       </div>
 
       {/* Headline */}
-      <div className="mb-5 select-none">
-        <div className="headline-orange" style={{ fontSize: 134 }}>PROMPT TO</div>
-        <div className="headline-black" style={{ fontSize: 134 }}>REALITY</div>
+      <div className="mb-5 select-none" style={{ position: "relative", zIndex: 20 }}>
+        <div className="headline-orange" style={{ fontSize: 134, position: "relative", zIndex: 20 }}>PROMPT TO</div>
+        <div className="headline-black" style={{ fontSize: 134, position: "relative", zIndex: 20 }}>REALITY</div>
       </div>
 
       {/* Subtitle */}
@@ -716,6 +723,8 @@ function HeroCenter({ onEnter }: { onEnter: () => void }) {
           lineHeight: 1.65,
           maxWidth: 460,
           opacity: 0.82,
+          position: "relative",
+          zIndex: 20,
         }}
       >
         Master AI communication. Turn prompts into code, art, and logic
@@ -723,7 +732,7 @@ function HeroCenter({ onEnter }: { onEnter: () => void }) {
       </p>
 
       {/* CTAs */}
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-4" style={{ position: "relative", zIndex: 20 }}>
         <button onClick={onEnter} className="btn-orange">
           <span>REGISTER SQUAD</span>
           <span style={{ fontSize: 16 }}>→</span>
@@ -734,7 +743,7 @@ function HeroCenter({ onEnter }: { onEnter: () => void }) {
       </div>
 
       {/* Phase strip */}
-      <div className="flex items-center gap-2 mt-5">
+      <div className="flex items-center gap-2 mt-5" style={{ position: "relative", zIndex: 20 }}>
         {["Design", "Engineer", "Deploy"].map((phase, i) => (
           <span key={phase} style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <span
@@ -845,9 +854,9 @@ function PromptTerminal() {
 /* ── Bottom bar ─────────────────────────────────────────────── */
 function BottomBar() {
   const cards = [
-    { icon: "📅", label: "DATE", value: "Oct 24, 2026", bg: "#2FE69A" },
-    { icon: "📍", label: "VENUE", value: "Campus Auditorium", bg: "#B57CFF" },
-    { icon: "🏆", label: "PRIZES", value: "$1,500 Pool", bg: "#FFD027" },
+    { icon: "📅", label: "DATE", value: "TBA", bg: "#2FE69A" },
+    { icon: "📍", label: "VENUE", value: "VITS ,HYDERABAD", bg: "#B57CFF" },
+    { icon: "🏆", label: "PRIZES", value: "TBA", bg: "#FFD027" },
   ];
   return (
     <div className="absolute bottom-5 inset-x-0 flex justify-center px-10" style={{ zIndex: 30 }}>
