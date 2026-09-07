@@ -5,6 +5,8 @@ import { Button, Card, ProgressBar, AnimatedNumber } from '../components/ui';
 import { useTeamStore } from '../stores/teamStore';
 import { useEventStore } from '../stores/eventStore';
 import { LeaderboardEngine } from '../lib/leaderboard-engine';
+import { CertificateService } from '../lib/services/certificateService';
+import type { CertificateRecord } from '../lib/types';
 import { supabase } from '../lib/supabase';
 
 const categories = [
@@ -27,6 +29,7 @@ export default function FinalResults({ navigate }: { navigate: (p: Page) => void
   const [top3, setTop3] = useState<any[]>([]);
   const [total, setTotal] = useState(0);
   const [maxTotal, setMaxTotal] = useState(0);
+  const [teamCert, setTeamCert] = useState<CertificateRecord | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -37,6 +40,9 @@ export default function FinalResults({ navigate }: { navigate: (p: Page) => void
       setTotalParticipants(lb.length);
       const myRank = lb.find(e => e.teamId === currentTeam.id)?.rank || 0;
       setRank(myRank);
+
+      const cert = await CertificateService.getCertificateForTeam(currentEvent.id, currentTeam.id);
+      setTeamCert(cert);
       
       const top3Teams = lb.slice(0, 3).map(l => ({
         rank: l.rank,
@@ -256,11 +262,39 @@ export default function FinalResults({ navigate }: { navigate: (p: Page) => void
             </Button>
           </div>
 
-          {/* Certificate note */}
-          <div className="bg-green-50 border border-green-100 rounded-xl p-4 text-center">
-            <CheckCircleIcon className="w-5 h-5 text-green-500 mx-auto mb-1.5" />
-            <div className="text-xs font-bold text-green-800 font-heading">Participation certificate will be emailed to all teams within 48 hours.</div>
-          </div>
+          {/* Dynamic Certificate Status */}
+          {rank <= 5 ? (
+            <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 text-center">
+              <div className="text-2xl mb-1">🏆</div>
+              <div className="text-xs font-black text-amber-900 font-heading uppercase tracking-wider">Top 5 Finish — Physical Certificate</div>
+              <p className="text-[11px] text-amber-800 mt-1">
+                Congratulations! As a Top 5 team, your official physical certificate will be awarded at the ceremony.
+              </p>
+            </div>
+          ) : teamCert ? (
+            <div className="bg-green-50 border border-green-100 rounded-2xl p-4 text-center space-y-2">
+              <CheckCircleIcon className="w-5 h-5 text-green-500 mx-auto" />
+              <div className="text-xs font-black text-green-900 font-heading">
+                {teamCert.certificate_type.replace('_', ' ')} E-Certificate Ready
+              </div>
+              <div className="text-[10px] text-green-700 font-mono">ID: {teamCert.certificate_id}</div>
+              <a
+                href={teamCert.verification_url}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-block px-4 py-2 bg-green-600 hover:bg-green-700 text-white font-bold rounded-xl text-xs transition-colors shadow-sm font-heading"
+              >
+                Verify & View Certificate QR →
+              </a>
+            </div>
+          ) : (
+            <div className="bg-green-50 border border-green-100 rounded-xl p-4 text-center">
+              <CheckCircleIcon className="w-5 h-5 text-green-500 mx-auto mb-1.5" />
+              <div className="text-xs font-bold text-green-800 font-heading">
+                E-Certificate will be automatically issued once scores are finalized.
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>

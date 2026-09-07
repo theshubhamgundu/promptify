@@ -53,6 +53,7 @@ const navSections: NavSection[] = [
     title: 'Live',
     items: [
       { id: 'admin-leaderboard', label: 'Leaderboard', Icon: TrophyIcon },
+      { id: 'admin-certificates', label: 'E-Certificates', Icon: TrophyIcon },
       { id: 'admin-announcements', label: 'Announcements', Icon: ZapIcon },
     ],
   },

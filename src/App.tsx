@@ -24,6 +24,8 @@ import SessionManager from './pages/admin/SessionManager';
 import TeamDetail from './pages/admin/TeamDetail';
 import SubmissionsReview from './pages/admin/SubmissionsReview';
 import Announcements from './pages/admin/Announcements';
+import CertificateManager from './pages/admin/CertificateManager';
+import PublicVerification from './pages/PublicVerification';
 import AdminLayout from './components/AdminLayout';
 import FullscreenEnforcer from './components/FullscreenEnforcer';
 import { SyncEngine } from './lib/sync-engine';
@@ -46,6 +48,7 @@ export default function App() {
   const [page, setPage]           = useState<Page>('dashboard');
   const [toast, setToast]         = useState<{ msg: string; type: 'success' | 'error' | 'warning' } | null>(null);
   const [sessionAlert, setSessionAlert] = useState(false);
+  const [verifyCertId, setVerifyCertId] = useState<string | null>(null);
   const prevPage = useRef<string>('');
   const currentTeam = useTeamStore(s => s.currentTeam);
   
@@ -58,6 +61,19 @@ export default function App() {
   // Initialize heartbeat if in the app
   useSessionHeartbeat();
   
+  // Detect public QR code verification URL on load (e.g. ?verify=CERT-ID or #verify-CERT-ID)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    let certId = params.get('verify') || params.get('certificate_id') || params.get('cert');
+    if (!certId && window.location.hash.includes('verify')) {
+      const parts = window.location.hash.split('verify=');
+      if (parts[1]) certId = parts[1].split('&')[0];
+    }
+    if (certId) {
+      setVerifyCertId(certId);
+    }
+  }, []);
+
   // Initialize sync engine + integrity monitor once
   useEffect(() => {
     SyncEngine.init();
@@ -74,6 +90,20 @@ export default function App() {
   const showToast = (msg: string, type: 'success' | 'error' | 'warning' = 'success') => {
     setToast({ msg, type });
   };
+
+  // Standalone public QR verification view
+  if (verifyCertId) {
+    return (
+      <PublicVerification
+        certificateId={verifyCertId}
+        onGoHome={() => {
+          setVerifyCertId(null);
+          // Remove query params from address bar smoothly
+          window.history.replaceState({}, document.title, window.location.pathname);
+        }}
+      />
+    );
+  }
 
   if (violation) {
     return (
@@ -117,33 +147,34 @@ export default function App() {
     const key = page; // used as key for transition
 
     const content = (() => {
-      if (page === 'dashboard')       return <Dashboard navigate={navigate} />;
-      if (page === 'rounds')          return <RoundsOverview navigate={navigate} />;
+      if (page === 'dashboard')          return <Dashboard navigate={navigate} />;
+      if (page === 'rounds')             return <RoundsOverview navigate={navigate} />;
       if (page.startsWith('round-'))  {
         const roundId = page.replace('round-', '');
         return <GenericRound roundId={roundId} navigate={navigate} />;
       }
-      if (page === 'final-results')   return <FinalResults navigate={navigate} />;
-      if (page === 'leaderboard')     return <Leaderboard />;
-      if (page === 'progress')        return <MyProgress />;
-      if (page === 'submissions')     return <Submissions />;
-      if (page === 'team')            return <Team />;
-      if (page === 'help')            return <HelpRules />;
-      if (page === 'admin')           return <AdminDashboard navigate={navigate} />;
-      if (page === 'admin-events')    return <EventManager navigate={navigate} />;
-      if (page === 'admin-teams')     return <TeamManager navigate={navigate} />;
+      if (page === 'final-results')      return <FinalResults navigate={navigate} />;
+      if (page === 'leaderboard')        return <Leaderboard />;
+      if (page === 'progress')           return <MyProgress />;
+      if (page === 'submissions')        return <Submissions />;
+      if (page === 'team')               return <Team />;
+      if (page === 'help')               return <HelpRules />;
+      if (page === 'admin')              return <AdminDashboard navigate={navigate} />;
+      if (page === 'admin-events')       return <EventManager navigate={navigate} />;
+      if (page === 'admin-teams')        return <TeamManager navigate={navigate} />;
       if (page.startsWith('admin-team-')) {
         const teamId = page.replace('admin-team-', '');
         return <TeamDetail teamId={teamId} navigate={navigate} />;
       }
-      if (page === 'admin-rounds')    return <RoundManager navigate={navigate} />;
-      if (page === 'admin-leaderboard') return <AdminLeaderboard navigate={navigate} />;
-      if (page === 'admin-logs')      return <ActivityLogViewer navigate={navigate} />;
+      if (page === 'admin-rounds')       return <RoundManager navigate={navigate} />;
+      if (page === 'admin-leaderboard')    return <AdminLeaderboard navigate={navigate} />;
+      if (page === 'admin-logs')         return <ActivityLogViewer navigate={navigate} />;
       if (page === 'admin-participants') return <ParticipantManager navigate={navigate} />;
       if (page === 'admin-verification') return <VerificationManager navigate={navigate} />;
       if (page === 'admin-sessions')     return <SessionManager navigate={navigate} />;
       if (page === 'admin-submissions')  return <SubmissionsReview navigate={navigate} />;
       if (page === 'admin-announcements') return <Announcements navigate={navigate} />;
+      if (page === 'admin-certificates') return <CertificateManager navigate={navigate} />;
       
       return (
         <div className="flex items-center justify-center h-full text-gray-400 text-sm">

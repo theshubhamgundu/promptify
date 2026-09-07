@@ -77,3 +77,10 @@ export const StarIcon = ic('M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-
 export const FlaskIcon = ic('M9 3h6|M10 3v4.5L6 13v5a2 2 0 002 2h8a2 2 0 002-2v-5l-4-5.5V3');
 export const TerminalIcon = ic('M4 17l6-6-6-6|M12 19h8');
 export const MaximizeIcon = ic('M8 3H5a2 2 0 00-2 2v3m18 0V5a2 2 0 00-2-2h-3m0 18h3a2 2 0 002-2v-3M3 16v3a2 2 0 002 2h3');
+export const GripVerticalIcon = ic('M9 12a1 1 0 100-2 1 1 0 000 2z|M9 5a1 1 0 100-2 1 1 0 000 2z|M9 19a1 1 0 100-2 1 1 0 000 2z|M15 12a1 1 0 100-2 1 1 0 000 2z|M15 5a1 1 0 100-2 1 1 0 000 2z|M15 19a1 1 0 100-2 1 1 0 000 2z');
+export const PlusIcon = ic('M12 5v14|M5 12h14');
+export const PencilIcon = ic('M17 3a2.828 2.828 0 114 4L7.5 20.5 2 22l1.5-5.5L17 3z');
+export const TrashIcon = ic('M3 6h18|M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2');
+export const SearchIcon = ic('M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z');
+export const BanIcon = ic('M12 22a10 10 0 100-20 10 10 0 000 20z|M4.93 4.93l14.14 14.14');
+
