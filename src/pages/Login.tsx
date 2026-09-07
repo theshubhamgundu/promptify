@@ -8,7 +8,7 @@ import { useEventStore } from '../stores/eventStore';
 import { TeamService } from '../lib/services/teamService';
 import { EventService } from '../lib/services/eventService';
 
-export default function Login({ onLogin }: { onLogin: (isAdmin: boolean) => void }) {
+export default function Login({ onLogin, onBackToHome }: { onLogin: (isAdmin: boolean) => void; onBackToHome?: () => void }) {
   const [teamCode, setTeamCode] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -108,6 +108,19 @@ export default function Login({ onLogin }: { onLogin: (isAdmin: boolean) => void
 
       {/* Right — form */}
       <div className="flex-1 lg:max-w-md flex flex-col justify-center px-8 lg:px-12">
+        {/* Back to Home Button */}
+        {onBackToHome && (
+          <button
+            onClick={onBackToHome}
+            className="mb-6 flex items-center gap-2 text-gray-500 hover:text-orange-500 transition-colors group"
+          >
+            <svg className="w-5 h-5 transform group-hover:-translate-x-1 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+            </svg>
+            <span className="font-semibold text-sm">Back to Homepage</span>
+          </button>
+        )}
+
         {/* Mobile logo */}
         <div className="flex lg:hidden items-center gap-2.5 mb-8">
           <div className="w-9 h-9 bg-orange-500 rounded-xl flex items-center justify-center">

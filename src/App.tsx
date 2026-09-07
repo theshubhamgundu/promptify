@@ -39,6 +39,7 @@ import Round5Monitor from './pages/admin/Round5Monitor';
 import TuringHumanConsole from './pages/admin/TuringHumanConsole';
 import AdminLayout from './components/AdminLayout';
 import FullscreenEnforcer from './components/FullscreenEnforcer';
+import LandingPage from './pages/LandingPage';
 import { SyncEngine } from './lib/sync-engine';
 import { IntegrityMonitor } from './lib/integrity-monitor';
 import { supabase } from './lib/supabase';
@@ -56,6 +57,11 @@ function PageView({ pageKey, children }: { pageKey: string; children: React.Reac
 }
 
 export default function App() {
+  // Landing page state
+  const [showLanding, setShowLanding] = useState(() => {
+    return localStorage.getItem('hasVisitedLanding') !== 'true';
+  });
+
   // Initialize authState from localStorage
   const [authState, setAuthState] = useState<'login' | 'verification' | 'app'>(() => {
     const saved = localStorage.getItem('authState');
@@ -187,6 +193,14 @@ export default function App() {
   }
 
   if (authState === 'login') {
+    // Show landing page on first visit or when explicitly requested
+    if (showLanding) {
+      return <LandingPage onEnter={() => {
+        setShowLanding(false);
+        localStorage.setItem('hasVisitedLanding', 'true');
+      }} />;
+    }
+
     return (
       <Login 
         onLogin={(isAdmin) => {
@@ -197,7 +211,11 @@ export default function App() {
           } else {
             setAuthState('verification');
           }
-        }} 
+        }}
+        onBackToHome={() => {
+          setShowLanding(true);
+          localStorage.removeItem('hasVisitedLanding');
+        }}
       />
     );
   }
