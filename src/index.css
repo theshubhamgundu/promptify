@@ -1,7 +1,6 @@
-@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&display=swap');
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
-@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Archivo+Black&family=Outfit:wght@300;400;500;600;700;800;900&family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
 @import 'tailwindcss';
+
 
 /* ── Global reset & base ───────────────────────── */
 html, body, #root {
@@ -16,9 +15,33 @@ body {
   text-rendering: optimizeLegibility;
 }
 
+.font-display {
+  font-family: 'Archivo Black', 'Outfit', sans-serif;
+  letter-spacing: -0.02em;
+}
+
+.font-space {
+  font-family: 'Space Grotesk', sans-serif;
+}
+
+.bg-grid-pattern {
+  background-size: 32px 32px;
+  background-image: 
+    linear-gradient(to right, rgba(255, 255, 255, 0.05) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+}
+
+.bg-paper-grid {
+  background-size: 24px 24px;
+  background-image: 
+    linear-gradient(to right, rgba(0, 0, 0, 0.04) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(0, 0, 0, 0.04) 1px, transparent 1px);
+}
+
 h1, h2, h3, h4, h5, h6, .font-heading {
   font-family: 'Outfit', sans-serif;
 }
+
 
 .font-mono, code, pre, kbd {
   font-family: 'JetBrains Mono', monospace;
@@ -89,8 +112,54 @@ h1, h2, h3, h4, h5, h6, .font-heading {
   from { opacity: 1; transform: scale(1); }
   to   { opacity: 0; transform: scale(0.94); }
 }
-.animate-scale-in  { animation: scaleIn  0.2s cubic-bezier(0.16,1,0.3,1) both; }
+.animate-scale-in  { animation: scaleIn  0.35s cubic-bezier(0.16,1,0.3,1) both; }
 .animate-scale-out { animation: scaleOut 0.15s ease-in both; }
+
+/* ── Card Looping & Stagger Utilities ──────────── */
+@keyframes progressFill {
+  from { width: 0%; }
+  to   { width: 100%; }
+}
+.progress-fill {
+  animation: progressFill 3.8s linear forwards;
+}
+
+.stagger-1 { animation-delay: 0.1s; }
+.stagger-2 { animation-delay: 0.25s; }
+.stagger-3 { animation-delay: 0.4s; }
+
+/* ── Floating & Parallax animations ────────────── */
+@keyframes floatSlow {
+  0%, 100% { transform: translateY(0px) rotate(-6deg); }
+  50% { transform: translateY(-8px) rotate(-4deg); }
+}
+@keyframes floatReverse {
+  0%, 100% { transform: translateY(0px) rotate(3deg); }
+  50% { transform: translateY(6px) rotate(5deg); }
+}
+@keyframes floatGentle {
+  0%, 100% { transform: translateY(0px) rotate(-3deg); }
+  50% { transform: translateY(-6px) rotate(-1deg); }
+}
+@keyframes mascotBreathe {
+  0%, 100% { transform: scale(1) translateY(0); }
+  50% { transform: scale(1.02) translateY(-4px); }
+}
+@keyframes glowPulse {
+  0%, 100% { opacity: 0.3; transform: scale(1); }
+  50% { opacity: 0.6; transform: scale(1.08); }
+}
+@keyframes tapeShimmer {
+  0% { opacity: 0.7; }
+  50% { opacity: 0.95; }
+  100% { opacity: 0.7; }
+}
+
+.animate-float-slow { animation: floatSlow 6s ease-in-out infinite; }
+.animate-float-reverse { animation: floatReverse 5s ease-in-out infinite; }
+.animate-float-gentle { animation: floatGentle 7s ease-in-out infinite; }
+.animate-mascot { animation: mascotBreathe 4s ease-in-out infinite; }
+.animate-ambient-glow { animation: glowPulse 8s ease-in-out infinite; }
 
 /* ── Bounce/pop ────────────────────────────────── */
 @keyframes popIn {
@@ -279,4 +348,46 @@ button:active:not(:disabled) {
 /* ── Progress fill on mount ────────────────────── */
 .progress-fill {
   animation: fillBar 1s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* ── Live Display Marquee Ticker ───────────────── */
+@keyframes marquee {
+  0% { transform: translateX(0%); }
+  100% { transform: translateX(-50%); }
+}
+
+.animate-marquee {
+  display: inline-flex;
+  width: max-content;
+  animation: marquee 40s linear infinite;
+  will-change: transform;
+}
+
+.animate-marquee:hover {
+  animation-play-state: paused;
+}
+
+/* ── Glowing Badges & Display Shadows ──────────── */
+.glow-urgent {
+  box-shadow: 0 0 25px rgba(239, 68, 68, 0.45), inset 0 0 15px rgba(239, 68, 68, 0.2);
+}
+
+.glow-important {
+  box-shadow: 0 0 25px rgba(245, 158, 11, 0.35), inset 0 0 15px rgba(245, 158, 11, 0.15);
+}
+
+.glow-normal {
+  box-shadow: 0 0 25px rgba(59, 130, 246, 0.3), inset 0 0 15px rgba(59, 130, 246, 0.1);
+}
+
+.glow-gold {
+  box-shadow: 0 0 30px rgba(234, 179, 8, 0.35);
+}
+
+.glow-silver {
+  box-shadow: 0 0 20px rgba(148, 163, 184, 0.25);
+}
+
+.glow-bronze {
+  box-shadow: 0 0 20px rgba(249, 115, 22, 0.25);
 }

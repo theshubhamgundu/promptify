@@ -24,9 +24,11 @@ import SessionManager from './pages/admin/SessionManager';
 import TeamDetail from './pages/admin/TeamDetail';
 import SubmissionsReview from './pages/admin/SubmissionsReview';
 import Announcements from './pages/admin/Announcements';
+import ScreenManager from './pages/admin/ScreenManager';
 import QuizManager from './pages/admin/QuizManager';
 import QuizRoundSimple from './pages/QuizRoundSimple';
 import QuizResults from './pages/QuizResults';
+import PublicDisplay from './pages/PublicDisplay';
 import AdminLayout from './components/AdminLayout';
 import FullscreenEnforcer from './components/FullscreenEnforcer';
 import { SyncEngine } from './lib/sync-engine';
@@ -45,17 +47,41 @@ function PageView({ pageKey, children }: { pageKey: string; children: React.Reac
 }
 
 export default function App() {
+  // Check if initial route is /display or /live-board
+  const isDisplayPath = () => {
+    const p = window.location.pathname.toLowerCase();
+    const h = window.location.hash.toLowerCase();
+    const s = window.location.search.toLowerCase();
+    return p === '/display' || p === '/live-board' || h === '#/display' || h === '#display' || s.includes('page=display') || s.includes('page=live-board');
+  };
+
   // Initialize authState from localStorage
   const [authState, setAuthState] = useState<'login' | 'verification' | 'app'>(() => {
     const saved = localStorage.getItem('authState');
     return (saved === 'app' || saved === 'verification') ? saved : 'login';
   });
-  const [page, setPage]           = useState<Page>('dashboard');
+  
+  const [page, setPage] = useState<Page>(() => {
+    if (isDisplayPath()) return 'display';
+    return 'dashboard';
+  });
+
   const [toast, setToast]         = useState<{ msg: string; type: 'success' | 'error' | 'warning' } | null>(null);
   const [sessionAlert, setSessionAlert] = useState(false);
   const prevPage = useRef<string>('');
   const currentTeam = useTeamStore(s => s.currentTeam);
   
+  // Listen for browser popstate
+  useEffect(() => {
+    const handlePop = () => {
+      if (isDisplayPath()) {
+        setPage('display');
+      }
+    };
+    window.addEventListener('popstate', handlePop);
+    return () => window.removeEventListener('popstate', handlePop);
+  }, []);
+
   // Strict violation blocking
   const [violation, setViolation] = useState<string | null>(null);
   
@@ -81,11 +107,19 @@ export default function App() {
   const navigate = (p: Page) => {
     prevPage.current = page;
     setPage(p);
+    if (p === 'display' || p === 'live-board') {
+      window.history.pushState({}, '', '/display');
+    }
   };
 
   const showToast = (msg: string, type: 'success' | 'error' | 'warning' = 'success') => {
     setToast({ msg, type });
   };
+
+  // ── Unauthenticated Public Display Screen Route ────────────────────────
+  if (page === 'display' || page === 'live-board' || isDisplayPath()) {
+    return <PublicDisplay />;
+  }
 
   if (violation) {
     return (
@@ -163,7 +197,7 @@ export default function App() {
       if (page === 'admin-verification') return <VerificationManager navigate={navigate} />;
       if (page === 'admin-sessions')     return <SessionManager navigate={navigate} />;
       if (page === 'admin-submissions')  return <SubmissionsReview navigate={navigate} />;
-      if (page === 'admin-announcements') return <Announcements navigate={navigate} />;
+      if (page === 'admin-announcements' || page === 'admin-screens') return <Announcements navigate={navigate} />;
       if (page === 'admin-quiz')         return <QuizManager />;
       
       return (

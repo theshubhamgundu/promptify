@@ -159,9 +159,11 @@ export default function Layout({ page, navigate, children, offline, onSessionAle
             onClick={() => navigate('dashboard')}
             className="flex items-center gap-2.5 group"
           >
-            <div className="w-9 h-9 bg-orange-500 rounded-xl flex items-center justify-center shadow-md shadow-orange-200/60 flex-shrink-0 group-hover:scale-105 transition-transform duration-200">
-              <BrainIcon />
-            </div>
+            <img 
+              src="/assets/logo.png" 
+              alt="Logo" 
+              className="w-10 h-10 object-contain drop-shadow-sm flex-shrink-0 group-hover:scale-105 transition-transform duration-200" 
+            />
             <div className="leading-none">
               <div className="text-[13px] font-black text-gray-900 font-heading tracking-wide">PROMPT</div>
               <div className="text-[11px] font-black text-orange-500 font-heading tracking-wider">CHAMPIONSHIP</div>
