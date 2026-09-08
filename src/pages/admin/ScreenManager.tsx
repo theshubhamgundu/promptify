@@ -10,8 +10,15 @@ import {
   getScreenAnnouncement,
   setScreenAnnouncement,
   subscribeToScreenChanges,
+  getTimerState,
+  startTimer,
+  pauseTimer,
+  resumeTimer,
+  resetTimer,
+  subscribeToTimerChanges,
   type DisplayPageType,
   type ScreenAnnouncement,
+  type TimerState,
 } from '../../lib/screen-sync';
 
 export default function ScreenManager({ navigate }: { navigate: (p: Page) => void }) {
@@ -56,6 +63,40 @@ export default function ScreenManager({ navigate }: { navigate: (p: Page) => voi
     );
     return unsubscribe;
   }, []);
+
+  // Timer state
+  const [timerState, setLocalTimerState] = useState<TimerState>(() => getTimerState());
+  const [timerRemaining, setTimerRemaining] = useState<number>(2400);
+
+  useEffect(() => {
+    setLocalTimerState(getTimerState());
+    const unsubscribe = subscribeToTimerChanges((newState) => {
+      setLocalTimerState(newState);
+    });
+    return unsubscribe;
+  }, []);
+
+  // Live countdown tick for the admin panel
+  useEffect(() => {
+    const tick = () => {
+      if (timerState.status === 'running' && timerState.startedAt) {
+        const elapsed = (Date.now() - new Date(timerState.startedAt).getTime()) / 1000;
+        setTimerRemaining(Math.max(0, timerState.duration - elapsed));
+      } else if (timerState.status === 'paused' && timerState.pausedRemaining != null) {
+        setTimerRemaining(timerState.pausedRemaining);
+      } else if (timerState.status === 'idle') {
+        setTimerRemaining(timerState.duration);
+      } else {
+        setTimerRemaining(0);
+      }
+    };
+    tick();
+    const interval = setInterval(tick, 250);
+    return () => clearInterval(interval);
+  }, [timerState]);
+
+  const timerMins = Math.floor(Math.ceil(timerRemaining) / 60);
+  const timerSecs = Math.ceil(timerRemaining) % 60;
 
   const handlePageChange = (screenId: number, page: DisplayPageType) => {
     setScreenPage(screenId, page);
@@ -180,6 +221,144 @@ export default function ScreenManager({ navigate }: { navigate: (p: Page) => voi
           >
             🎖️ Championship Awards Mode
           </button>
+        </div>
+      </div>
+
+      {/* ── Timer Control Panel ── */}
+      <div className="bg-gradient-to-r from-slate-900 to-slate-800 border border-slate-700 rounded-2xl p-5 shadow-lg">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2">
+              <span className="text-2xl">⏳</span>
+              <div>
+                <h3 className="text-sm font-black text-white font-heading uppercase tracking-wider">Round Timer Control</h3>
+                <p className="text-[11px] text-slate-400 font-medium">40 min per round · Syncs to all display screens</p>
+              </div>
+            </div>
+
+            {/* Live Timer Preview */}
+            <div className={`font-mono font-black text-3xl tracking-wider px-4 py-1.5 rounded-xl border-2 ${
+              timerState.status === 'running'
+                ? timerRemaining <= timerState.duration * 0.05 ? 'text-red-400 border-red-500/50 bg-red-950/40 animate-pulse'
+                  : timerRemaining <= timerState.duration * 0.25 ? 'text-orange-400 border-orange-500/50 bg-orange-950/40'
+                  : 'text-emerald-400 border-emerald-500/50 bg-emerald-950/40'
+                : timerState.status === 'paused'
+                ? 'text-amber-400 border-amber-500/50 bg-amber-950/40'
+                : 'text-slate-400 border-slate-600 bg-slate-800'
+            }`}>
+              {String(timerMins).padStart(2, '0')}:{String(timerSecs).padStart(2, '0')}
+            </div>
+
+            {/* Status Badge */}
+            <span className={`text-[10px] font-black uppercase px-2.5 py-1 rounded-lg ${
+              timerState.status === 'running' ? 'bg-emerald-500 text-white' :
+              timerState.status === 'paused' ? 'bg-amber-500 text-black' :
+              timerState.status === 'finished' ? 'bg-red-500 text-white' :
+              'bg-slate-600 text-slate-300'
+            }`}>
+              {timerState.status === 'running' ? '● LIVE' :
+               timerState.status === 'paused' ? '⏸ PAUSED' :
+               timerState.status === 'finished' ? '✓ DONE' :
+               '○ IDLE'}
+            </span>
+          </div>
+
+          {/* Timer Action Buttons */}
+          <div className="flex items-center gap-2">
+            {timerState.status === 'idle' && (
+              <button
+                onClick={() => startTimer(2400)}
+                className="px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-white text-xs font-black uppercase tracking-wider transition-all shadow-lg shadow-emerald-500/30 flex items-center gap-1.5"
+              >
+                ▶ Start 40 Min
+              </button>
+            )}
+            {timerState.status === 'running' && (
+              <button
+                onClick={() => pauseTimer()}
+                className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-black text-xs font-black uppercase tracking-wider transition-all shadow-lg shadow-amber-500/30 flex items-center gap-1.5"
+              >
+                ⏸ Pause
+              </button>
+            )}
+            {timerState.status === 'paused' && (
+              <button
+                onClick={() => resumeTimer()}
+                className="px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-white text-xs font-black uppercase tracking-wider transition-all shadow-lg shadow-emerald-500/30 flex items-center gap-1.5"
+              >
+                ▶ Resume
+              </button>
+            )}
+            <button
+              onClick={() => resetTimer(2400)}
+              className="px-4 py-2 rounded-xl bg-slate-700 hover:bg-slate-600 text-white text-xs font-black uppercase tracking-wider transition-all flex items-center gap-1.5"
+            >
+              ↺ Reset
+            </button>
+          </div>
+        </div>
+
+        {/* Multi-Screen Selector Bar */}
+        <div className="pt-3 mt-3 border-t border-slate-700/80 flex flex-wrap items-center justify-between gap-2.5">
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-black text-amber-400 uppercase tracking-wider font-heading flex items-center gap-1">
+              <span>📺 Display Timer On Screen(s):</span>
+            </span>
+            <span className="text-[11px] text-slate-400 font-medium">
+              (Click any screen button to toggle timer on/off)
+            </span>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            {/* All Screens Toggle */}
+            <button
+              type="button"
+              onClick={() => {
+                const allActive = ALL_SCREENS.every(s => (screenPages[s.id] || s.defaultPage) === 'timer');
+                ALL_SCREENS.forEach(s => {
+                  handlePageChange(s.id, allActive ? s.defaultPage : 'timer');
+                });
+              }}
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-black uppercase tracking-wide transition-all shadow-sm flex items-center gap-2 cursor-pointer ${
+                ALL_SCREENS.every(s => (screenPages[s.id] || s.defaultPage) === 'timer')
+                  ? 'bg-purple-600 text-white shadow-purple-500/40 ring-2 ring-purple-300'
+                  : 'bg-slate-700 hover:bg-slate-600 text-slate-200'
+              }`}
+            >
+              <span>🌐 All Screens</span>
+              <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${
+                ALL_SCREENS.every(s => (screenPages[s.id] || s.defaultPage) === 'timer') ? 'bg-purple-900 text-white' : 'bg-black/40 text-slate-300'
+              }`}>
+                {ALL_SCREENS.every(s => (screenPages[s.id] || s.defaultPage) === 'timer') ? 'ON' : 'OFF'}
+              </span>
+            </button>
+
+            {/* Individual Screen Buttons */}
+            {ALL_SCREENS.map(s => {
+              const isTimer = (screenPages[s.id] || s.defaultPage) === 'timer';
+              return (
+                <button
+                  key={s.id}
+                  type="button"
+                  onClick={() => {
+                    handlePageChange(s.id, isTimer ? s.defaultPage : 'timer');
+                  }}
+                  className={`px-3.5 py-1.5 rounded-xl text-xs font-black uppercase tracking-wide transition-all shadow-sm flex items-center gap-2 cursor-pointer ${
+                    isTimer
+                      ? 'bg-emerald-500 text-white shadow-emerald-500/30 ring-2 ring-emerald-300'
+                      : 'bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-600'
+                  }`}
+                >
+                  <span>🖥️ Screen {s.id}</span>
+                  <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${
+                    isTimer ? 'bg-emerald-950 text-emerald-200 font-bold' : 'bg-slate-900 text-slate-400'
+                  }`}>
+                    {isTimer ? 'ON' : 'OFF'}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
         </div>
       </div>
 

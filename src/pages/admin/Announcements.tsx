@@ -5,6 +5,7 @@ import type { Page } from '../../components/Layout';
 import { useAdminStore } from '../../stores/adminStore';
 import { useAuthStore } from '../../stores/authStore';
 import { ZapIcon, TrashIcon, CheckCircleIcon, BrainIcon } from '../../components/icons';
+import { BlurAnimatedTimer } from '../../components/BlurAnimatedTimer';
 import {
   ALL_SCREENS,
   DISPLAY_PAGES,
@@ -17,8 +18,15 @@ import {
   saveCustomTemplate,
   deleteCustomTemplate,
   subscribeToScreenChanges,
+  startTimer,
+  pauseTimer,
+  resumeTimer,
+  resetTimer,
+  getTimerState,
+  subscribeToTimerChanges,
   type DisplayPageType,
   type ScreenAnnouncement,
+  type TimerState,
 } from '../../lib/screen-sync';
 
 interface AnnouncementItem {
@@ -84,6 +92,12 @@ export default function Announcements({ navigate }: { navigate: (p: Page) => voi
   const [deleteTarget, setDeleteTarget] = useState<AnnouncementItem | null>(null);
   const [copiedScreen, setCopiedScreen] = useState<number | null>(null);
   const [templateSavedToast, setTemplateSavedToast] = useState(false);
+
+  // Timer mode: when true, canvas shows timer preview instead of announcement
+  const [timerMode, setTimerMode] = useState(false);
+  const [timerState, setLocalTimerState] = useState<TimerState>(() => getTimerState());
+  const [timerRemaining, setTimerRemaining] = useState<number>(2400);
+  const [timerDurationInput, setTimerDurationInput] = useState<number>(40); // minutes
 
   const [form, setForm] = useState({
     title: 'STARTS IN 10 MINS',
@@ -162,11 +176,37 @@ export default function Announcements({ navigate }: { navigate: (p: Page) => voi
       }
     );
 
+    const unsubscribeTimer = subscribeToTimerChanges((newState) => {
+      setLocalTimerState(newState);
+    });
+
     return () => {
       supabase.removeChannel(channel);
       unsubscribeScreens();
+      unsubscribeTimer();
     };
   }, [activeEvent]);
+
+  // Live countdown tick
+  useEffect(() => {
+    const tick = () => {
+      const ts = getTimerState();
+      setLocalTimerState(ts);
+      if (ts.status === 'running' && ts.startedAt) {
+        const elapsed = (Date.now() - new Date(ts.startedAt).getTime()) / 1000;
+        setTimerRemaining(Math.max(0, ts.duration - elapsed));
+      } else if (ts.status === 'paused' && ts.pausedRemaining != null) {
+        setTimerRemaining(ts.pausedRemaining);
+      } else if (ts.status === 'idle') {
+        setTimerRemaining(ts.duration);
+      } else {
+        setTimerRemaining(0);
+      }
+    };
+    tick();
+    const interval = setInterval(tick, 500);
+    return () => clearInterval(interval);
+  }, []);
 
   // When selectedScreen changes, load that screen's announcement into the form
   const handleSelectScreen = (screenId: number) => {
@@ -191,6 +231,24 @@ export default function Announcements({ navigate }: { navigate: (p: Page) => voi
       });
       setEditingId(null);
     }
+  };
+
+  // Screen Page & Timer Helpers
+  const handlePageChangeForScreen = (screenId: number, page: DisplayPageType) => {
+    setScreenPage(screenId, page);
+    setScreenPages(prev => ({ ...prev, [screenId]: page }));
+  };
+
+  const toggleScreenTimer = (screenId: number) => {
+    const currentPage = screenPages[screenId] || getScreenPage(screenId);
+    const newPage: DisplayPageType = currentPage === 'timer' ? 'announcements' : 'timer';
+    handlePageChangeForScreen(screenId, newPage);
+  };
+
+  const setAllScreensTimer = (enable: boolean) => {
+    ALL_SCREENS.forEach(s => {
+      handlePageChangeForScreen(s.id, enable ? 'timer' : 'announcements');
+    });
   };
 
   // 1-Click apply template to currently selected screen
@@ -276,11 +334,6 @@ export default function Announcements({ navigate }: { navigate: (p: Page) => voi
     e.stopPropagation();
     deleteCustomTemplate(title);
     setTemplateList(getAllTemplates());
-  };
-
-  const handlePageChangeForScreen = (screenId: number, page: DisplayPageType) => {
-    setScreenPage(screenId, page);
-    setScreenPages(prev => ({ ...prev, [screenId]: page }));
   };
 
   const launchScreen = (screenId: number) => {
@@ -602,55 +655,265 @@ export default function Announcements({ navigate }: { navigate: (p: Page) => voi
               {/* Pop-Art Template Container Preview */}
               <div
                 className="w-full aspect-[16/9] rounded-3xl border-2 border-black overflow-hidden flex flex-col justify-between p-6 sm:p-8 bg-[#faf7f2] bg-no-repeat bg-cover bg-center select-none shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] relative"
-                style={{ backgroundImage: "url('/assets/announcement_template.png')" }}
+                style={{ backgroundImage: timerMode ? "url('/assets/timer_template.png')" : "url('/assets/announcement_template.png')" }}
               >
-                {/* Top Status Badges inside Canvas */}
-                <div className="w-full flex items-center justify-between z-10">
-                  <div className="flex items-center gap-2">
-                    <span
-                      className={`text-[10px] font-black uppercase px-2.5 py-1 rounded-full text-white font-heading shadow-sm ${
-                        form.priority === 'URGENT'
-                          ? 'bg-red-600'
-                          : form.priority === 'IMPORTANT'
-                          ? 'bg-amber-600'
-                          : 'bg-blue-600'
-                      }`}
-                    >
-                      {form.priority}
-                    </span>
-                    {form.pinned && (
-                      <span className="text-[10px] font-black uppercase px-2.5 py-1 rounded-full bg-purple-600 text-white font-heading shadow-sm">
-                        📌 PINNED
+                {timerMode ? (
+                  /* ── Timer Preview in Canvas ── */
+                  <>
+                    <div className="w-full flex items-center justify-between z-10">
+                      <span className="text-[10px] font-black uppercase px-2.5 py-1 rounded-full bg-purple-600 text-white font-heading shadow-sm flex items-center gap-1">
+                        <span>⏳ TIMER MODE</span>
                       </span>
-                    )}
-                  </div>
-                  <span className="text-[10px] font-bold bg-white/90 backdrop-blur-md px-2.5 py-1 rounded-full border border-black/20 text-slate-800">
-                    Just now
-                  </span>
-                </div>
+                      <span className={`text-[10px] font-black uppercase px-2.5 py-1 rounded-full ${
+                        timerState.status === 'running' ? 'bg-emerald-500 text-white' :
+                        timerState.status === 'paused' ? 'bg-amber-500 text-black' :
+                        'bg-slate-300 text-slate-700'
+                      }`}>
+                        {timerState.status === 'running' ? '● LIVE' :
+                         timerState.status === 'paused' ? '⏸ PAUSED' :
+                         '○ IDLE'}
+                      </span>
+                    </div>
 
-                {/* Center Headline & Message */}
-                <div className="flex-1 flex flex-col items-center justify-center text-center px-4 py-2 z-10">
-                  <div className="space-y-2 max-w-full">
-                    <h2 className="text-2xl sm:text-4xl lg:text-5xl font-black font-display tracking-tight text-slate-950 uppercase leading-none drop-shadow-[0_2px_4px_rgba(0,0,0,0.12)]">
-                      {form.title || 'HEADLINE ON TEMPLATE'}
-                    </h2>
-                    {form.message && (
-                      <p className="text-xs sm:text-base lg:text-lg text-slate-900 font-extrabold font-heading leading-tight whitespace-pre-wrap max-w-xl mx-auto drop-shadow-[0_1px_2px_rgba(255,255,255,0.8)]">
-                        {form.message}
-                      </p>
-                    )}
-                  </div>
-                </div>
+                    <div className="flex-1 flex flex-col items-center justify-end text-center pb-2 z-10">
+                      <div className="mb-1">
+                        <BlurAnimatedTimer
+                          minutes={Math.floor(Math.ceil(timerRemaining) / 60)}
+                          seconds={Math.ceil(timerRemaining) % 60}
+                          isUrgent={timerState.status === 'running' && timerRemaining <= timerState.duration * 0.25}
+                          isCritical={timerState.status === 'running' && timerRemaining <= timerState.duration * 0.05}
+                          isFinished={timerRemaining <= 0 && (timerState.status === 'running' || timerState.status === 'finished')}
+                          sizeClass="text-[3rem] sm:text-[4rem] lg:text-[4.5rem]"
+                        />
+                      </div>
+                      <div className="w-48 h-1.5 bg-slate-300/50 rounded-full overflow-hidden mt-2">
+                        <div
+                          className={`h-full rounded-full transition-all ${
+                            timerState.status === 'running' && timerRemaining <= timerState.duration * 0.05 ? 'bg-red-500' :
+                            timerState.status === 'running' && timerRemaining <= timerState.duration * 0.25 ? 'bg-orange-500' :
+                            'bg-emerald-500'
+                          }`}
+                          style={{ width: `${timerState.duration > 0 ? (timerRemaining / timerState.duration) * 100 : 100}%` }}
+                        />
+                      </div>
+                      <div className="text-[10px] font-bold text-slate-500 mt-1">
+                        {timerState.status === 'idle' ? 'Waiting for admin to start timer' :
+                         timerRemaining <= 0 ? 'TIME\'S UP!' :
+                         `${Math.floor(Math.ceil(timerRemaining) / 60)} min ${Math.ceil(timerRemaining) % 60} sec remaining`}
+                      </div>
+                    </div>
 
-                {/* Footer Canvas Pill */}
-                <div className="w-full flex items-center justify-between text-[10px] font-bold text-slate-600 z-10">
-                  <span className="bg-white/80 backdrop-blur-md px-2 py-0.5 rounded-full border border-black/10 uppercase tracking-wider">
-                    {selectedScreen === 0 ? 'All Screens Broadcast' : `Screen ${selectedScreen} Display`}
-                  </span>
-                  <span className="text-orange-600 font-black">● Broadcasts in Real-Time</span>
-                </div>
+                    <div className="w-full flex items-center justify-between text-[10px] font-bold text-slate-600 z-10">
+                      <span className="bg-white/80 backdrop-blur-md px-2 py-0.5 rounded-full border border-black/10 uppercase tracking-wider">
+                        {selectedScreen === 0 ? 'All Screens' : `Screen ${selectedScreen}`} · ⏳ Timer
+                      </span>
+                      <button
+                        onClick={() => setTimerMode(false)}
+                        className="text-purple-600 font-black hover:underline cursor-pointer"
+                      >
+                        ← Back to Announcements
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  /* ── Normal Announcement Preview in Canvas ── */
+                  <>
+                    {/* Top Status Badges inside Canvas */}
+                    <div className="w-full flex items-center justify-between z-10">
+                      <div className="flex items-center gap-2">
+                        <span
+                          className={`text-[10px] font-black uppercase px-2.5 py-1 rounded-full text-white font-heading shadow-sm ${
+                            form.priority === 'URGENT'
+                              ? 'bg-red-600'
+                              : form.priority === 'IMPORTANT'
+                              ? 'bg-amber-600'
+                              : 'bg-blue-600'
+                          }`}
+                        >
+                          {form.priority}
+                        </span>
+                        {form.pinned && (
+                          <span className="text-[10px] font-black uppercase px-2.5 py-1 rounded-full bg-purple-600 text-white font-heading shadow-sm">
+                            📌 PINNED
+                          </span>
+                        )}
+                      </div>
+                      <span className="text-[10px] font-bold bg-white/90 backdrop-blur-md px-2.5 py-1 rounded-full border border-black/20 text-slate-800">
+                        Just now
+                      </span>
+                    </div>
+
+                    {/* Center Headline & Message */}
+                    <div className="flex-1 flex flex-col items-center justify-center text-center px-4 py-2 z-10">
+                      <div className="space-y-2 max-w-full">
+                        <h2 className="text-2xl sm:text-4xl lg:text-5xl font-black font-display tracking-tight text-slate-950 uppercase leading-none drop-shadow-[0_2px_4px_rgba(0,0,0,0.12)]">
+                          {form.title || 'HEADLINE ON TEMPLATE'}
+                        </h2>
+                        {form.message && (
+                          <p className="text-xs sm:text-base lg:text-lg text-slate-900 font-extrabold font-heading leading-tight whitespace-pre-wrap max-w-xl mx-auto drop-shadow-[0_1px_2px_rgba(255,255,255,0.8)]">
+                            {form.message}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Footer Canvas Pill */}
+                    <div className="w-full flex items-center justify-between text-[10px] font-bold text-slate-600 z-10">
+                      <span className="bg-white/80 backdrop-blur-md px-2 py-0.5 rounded-full border border-black/10 uppercase tracking-wider">
+                        {selectedScreen === 0 ? 'All Screens Broadcast' : `Screen ${selectedScreen} Display`}
+                      </span>
+                      <span className="text-orange-600 font-black">● Broadcasts in Real-Time</span>
+                    </div>
+                  </>
+                )}
               </div>
+
+              {/* ── Timer Controls (shown when timer mode is active) ── */}
+              {timerMode && (
+                <div className="bg-gradient-to-r from-slate-900 to-slate-800 rounded-2xl p-4 mt-3 shadow-lg space-y-3">
+                  {/* Top Row: Duration input + Start / Pause / Resume / Reset */}
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      <span className="text-lg">⏳</span>
+                      <div>
+                        <h4 className="text-xs font-black text-white font-heading uppercase tracking-wider">Timer Controls</h4>
+                        <p className="text-[10px] text-slate-400">Set duration & control countdown</p>
+                      </div>
+
+                      {/* Live Timer Display */}
+                      <div className={`font-mono font-black text-2xl tracking-wider px-3 py-1 rounded-lg border-2 ${
+                        timerState.status === 'running'
+                          ? timerRemaining <= timerState.duration * 0.05 ? 'text-red-400 border-red-500/50 bg-red-950/40 animate-pulse'
+                            : timerRemaining <= timerState.duration * 0.25 ? 'text-orange-400 border-orange-500/50 bg-orange-950/40'
+                            : 'text-emerald-400 border-emerald-500/50 bg-emerald-950/40'
+                          : timerState.status === 'paused'
+                          ? 'text-amber-400 border-amber-500/50 bg-amber-950/40'
+                          : 'text-slate-400 border-slate-600 bg-slate-800'
+                      }`}>
+                        {String(Math.floor(Math.ceil(timerRemaining) / 60)).padStart(2, '0')}:{String(Math.ceil(timerRemaining) % 60).padStart(2, '0')}
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      {/* Set Duration Input */}
+                      <div className="flex items-center gap-1 bg-slate-800 rounded-lg px-2 py-1 border border-slate-600">
+                        <input
+                          type="number"
+                          value={timerDurationInput}
+                          onChange={(e) => setTimerDurationInput(Math.max(1, Math.min(120, parseInt(e.target.value) || 1)))}
+                          className="w-12 bg-transparent text-white text-xs font-mono font-bold text-center outline-none"
+                          min={1}
+                          max={120}
+                        />
+                        <span className="text-[10px] text-slate-400 font-bold">min</span>
+                      </div>
+
+                      {/* Set Timer Button */}
+                      <button
+                        onClick={() => resetTimer(timerDurationInput * 60)}
+                        className="px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-white text-[10px] font-black uppercase transition-all"
+                      >
+                        Set Timer
+                      </button>
+
+                      {/* Start / Pause / Resume */}
+                      {timerState.status === 'idle' && (
+                        <button
+                          onClick={() => {
+                            startTimer(timerDurationInput * 60);
+                          }}
+                          className="px-4 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-white text-[10px] font-black uppercase transition-all shadow-lg shadow-emerald-500/30"
+                        >
+                          ▶ Start
+                        </button>
+                      )}
+                      {timerState.status === 'running' && (
+                        <button
+                          onClick={() => pauseTimer()}
+                          className="px-4 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-black text-[10px] font-black uppercase transition-all shadow-lg shadow-amber-500/30"
+                        >
+                          ⏸ Pause
+                        </button>
+                      )}
+                      {timerState.status === 'paused' && (
+                        <button
+                          onClick={() => resumeTimer()}
+                          className="px-4 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-white text-[10px] font-black uppercase transition-all shadow-lg shadow-emerald-500/30"
+                        >
+                          ▶ Resume
+                        </button>
+                      )}
+
+                      {/* Reset */}
+                      <button
+                        onClick={() => resetTimer(timerDurationInput * 60)}
+                        className="px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-white text-[10px] font-black uppercase transition-all"
+                      >
+                        ↺ Reset
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Bottom Row: Choose Which Screen(s) to Display the Timer */}
+                  <div className="pt-3 border-t border-slate-700/80 flex flex-wrap items-center justify-between gap-2.5">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[11px] font-black text-amber-400 uppercase tracking-wider font-heading flex items-center gap-1">
+                        <span>📺 Display Timer On Screen(s):</span>
+                      </span>
+                      <span className="text-[10px] text-slate-400">
+                        (Click to toggle live display on/off)
+                      </span>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      {/* Toggle All Screens */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const allActive = ALL_SCREENS.every(s => (screenPages[s.id] || getScreenPage(s.id)) === 'timer');
+                          setAllScreensTimer(!allActive);
+                        }}
+                        className={`px-3 py-1.5 rounded-xl text-[10px] font-black uppercase transition-all shadow-sm flex items-center gap-1.5 cursor-pointer ${
+                          ALL_SCREENS.every(s => (screenPages[s.id] || getScreenPage(s.id)) === 'timer')
+                            ? 'bg-purple-600 text-white shadow-purple-500/40 ring-2 ring-purple-300'
+                            : 'bg-slate-700 hover:bg-slate-600 text-slate-200'
+                        }`}
+                      >
+                        <span>🌐 All Screens</span>
+                        <span className={`text-[9px] px-1.5 py-0.2 rounded-full font-mono ${
+                          ALL_SCREENS.every(s => (screenPages[s.id] || getScreenPage(s.id)) === 'timer') ? 'bg-purple-900 text-white' : 'bg-black/30 text-slate-300'
+                        }`}>
+                          {ALL_SCREENS.every(s => (screenPages[s.id] || getScreenPage(s.id)) === 'timer') ? 'ON' : 'OFF'}
+                        </span>
+                      </button>
+
+                      {/* Individual Screen Buttons */}
+                      {ALL_SCREENS.map(s => {
+                        const isTimer = (screenPages[s.id] || getScreenPage(s.id)) === 'timer';
+                        return (
+                          <button
+                            key={s.id}
+                            type="button"
+                            onClick={() => toggleScreenTimer(s.id)}
+                            className={`px-3 py-1.5 rounded-xl text-[10px] font-black uppercase transition-all shadow-sm flex items-center gap-1.5 cursor-pointer ${
+                              isTimer
+                                ? 'bg-emerald-500 text-white shadow-emerald-500/30 ring-2 ring-emerald-300'
+                                : 'bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-600'
+                            }`}
+                          >
+                            <span>🖥️ Screen {s.id}</span>
+                            <span className={`text-[9px] px-1.5 py-0.2 rounded-full font-mono ${
+                              isTimer ? 'bg-emerald-950 text-emerald-200 font-bold' : 'bg-slate-900 text-slate-400'
+                            }`}>
+                              {isTimer ? 'ON' : 'OFF'}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* ── Reusable Templates Library (Click to apply / + Add New Template) ── */}
@@ -675,6 +938,64 @@ export default function Announcements({ navigate }: { navigate: (p: Page) => voi
 
               {/* Template Cards Grid */}
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5 max-h-80 overflow-y-auto pr-1">
+                {/* ── Special Timer Template Card ── */}
+                <div
+                  onClick={() => {
+                    setTimerMode(true);
+                    // Switch target screen(s) to timer page (but don't start yet)
+                    if (selectedScreen > 0) {
+                      handlePageChangeForScreen(selectedScreen, 'timer');
+                    } else {
+                      ALL_SCREENS.forEach(s => handlePageChangeForScreen(s.id, 'timer'));
+                    }
+                  }}
+                  className={`text-left p-3 rounded-2xl border-2 transition-all cursor-pointer relative group flex flex-col justify-between shadow-sm ${
+                    timerMode
+                      ? 'border-purple-500 bg-purple-100 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]'
+                      : 'border-dashed border-purple-400 bg-gradient-to-br from-purple-50 to-indigo-50 hover:from-purple-100 hover:to-indigo-100 hover:border-purple-500'
+                  }`}
+                >
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-[9px] font-black uppercase px-1.5 py-0.5 rounded-md bg-purple-600 text-white">
+                        ⏳ TIMER
+                      </span>
+                      <span className={`text-[9px] font-bold ${
+                        timerState.status === 'running' ? 'text-emerald-600' :
+                        timerState.status === 'paused' ? 'text-amber-600' :
+                        'text-purple-500 opacity-0 group-hover:opacity-100'
+                      } transition-opacity`}>
+                        {timerState.status === 'running' ? '● LIVE' :
+                         timerState.status === 'paused' ? '⏸ PAUSED' :
+                         'Click to configure'}
+                      </span>
+                    </div>
+                    <div className="text-xs font-black font-heading text-purple-900 group-hover:text-purple-700">
+                      ⏳ 40-MIN ROUND TIMER
+                    </div>
+                    <div className="text-[11px] text-purple-700 font-medium mt-0.5">
+                      Full-screen countdown. Use controls above to set & start.
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setTimerMode(true);
+                      if (selectedScreen > 0) {
+                        handlePageChangeForScreen(selectedScreen, 'timer');
+                      } else {
+                        ALL_SCREENS.forEach(s => handlePageChangeForScreen(s.id, 'timer'));
+                      }
+                    }}
+                    className="mt-2.5 w-full py-1.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-[10px] font-black uppercase tracking-wider flex items-center justify-center gap-1 transition-transform active:scale-95 shadow-sm"
+                    title={`Show timer on Screen ${selectedScreen === 0 ? 'All' : selectedScreen}`}
+                  >
+                    <span>⚡ Apply to Screen {selectedScreen === 0 ? 'All' : selectedScreen}</span>
+                  </button>
+                </div>
+
                 {templateList.map((tpl, idx) => {
                   const isSelected = form.title === tpl.title;
                   const isCustom = idx < templateList.length - ANNOUNCEMENT_PRESETS.length;

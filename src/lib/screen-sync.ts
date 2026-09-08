@@ -1,4 +1,4 @@
-export type DisplayPageType = 'announcements' | 'leaderboard' | 'rounds' | 'results' | 'rules';
+export type DisplayPageType = 'announcements' | 'leaderboard' | 'rounds' | 'results' | 'rules' | 'timer';
 
 export interface ScreenInfo {
   id: number;
@@ -28,6 +28,7 @@ export const DISPLAY_PAGES: { id: DisplayPageType; label: string; icon: string; 
   { id: 'rounds', label: 'Rounds & Timers', icon: '⏱️', desc: 'Active competition phases & countdown timers', preview: 'Displays round timeline, active challenge indicators, and time limits.' },
   { id: 'results', label: 'Final Awards & Podium', icon: '🎖️', desc: 'Championship reveal and winner showcase', preview: 'Grand celebration podium revealing 1st, 2nd, and 3rd place winners.' },
   { id: 'rules', label: 'Rules & Guidelines', icon: '📋', desc: 'Event regulations & submission rules', preview: 'Displays workstation rules, allowed AI policies, and code of conduct.' },
+  { id: 'timer', label: '40-Min Round Timer', icon: '⏳', desc: 'Full-screen 40-minute countdown timer', preview: 'Displays a large animated 40-minute countdown timer for each competition round.' },
 ];
 
 export const DEFAULT_SCREEN_ANNOUNCEMENTS: Record<number, ScreenAnnouncement> = {
@@ -235,6 +236,120 @@ export function subscribeToScreenChanges(
           } catch {}
         }
       }
+    }
+  };
+
+  window.addEventListener('storage', handleStorage);
+
+  return () => {
+    if (bc) bc.close();
+    window.removeEventListener('storage', handleStorage);
+  };
+}
+
+// ── Timer State Sync ─────────────────────────────────────────────────────
+export interface TimerState {
+  /** Total duration in seconds (default 2400 = 40 mins) */
+  duration: number;
+  /** ISO timestamp when the timer was started (null if not started) */
+  startedAt: string | null;
+  /** 'idle' | 'running' | 'paused' | 'finished' */
+  status: 'idle' | 'running' | 'paused' | 'finished';
+  /** Seconds remaining when paused */
+  pausedRemaining: number | null;
+}
+
+const TIMER_KEY = 'promptify_timer_state';
+const DEFAULT_TIMER: TimerState = {
+  duration: 2400,
+  startedAt: null,
+  status: 'idle',
+  pausedRemaining: null,
+};
+
+export function getTimerState(): TimerState {
+  try {
+    const saved = localStorage.getItem(TIMER_KEY);
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      if (parsed && parsed.duration) return parsed;
+    }
+  } catch {}
+  return { ...DEFAULT_TIMER };
+}
+
+export function setTimerState(state: TimerState) {
+  try {
+    localStorage.setItem(TIMER_KEY, JSON.stringify(state));
+    if (typeof BroadcastChannel !== 'undefined') {
+      const bc = new BroadcastChannel(BROADCAST_CHANNEL_NAME);
+      bc.postMessage({ type: 'TIMER_STATE_CHANGE', state });
+      bc.close();
+    }
+  } catch (e) {
+    console.warn('Error saving timer state:', e);
+  }
+}
+
+export function startTimer(durationSeconds: number = 2400) {
+  setTimerState({
+    duration: durationSeconds,
+    startedAt: new Date().toISOString(),
+    status: 'running',
+    pausedRemaining: null,
+  });
+}
+
+export function pauseTimer() {
+  const current = getTimerState();
+  if (current.status !== 'running' || !current.startedAt) return;
+  const elapsed = (Date.now() - new Date(current.startedAt).getTime()) / 1000;
+  const remaining = Math.max(0, current.duration - elapsed);
+  setTimerState({
+    ...current,
+    status: 'paused',
+    pausedRemaining: remaining,
+  });
+}
+
+export function resumeTimer() {
+  const current = getTimerState();
+  if (current.status !== 'paused' || current.pausedRemaining == null) return;
+  const newStartedAt = new Date(Date.now() - (current.duration - current.pausedRemaining) * 1000).toISOString();
+  setTimerState({
+    ...current,
+    status: 'running',
+    startedAt: newStartedAt,
+    pausedRemaining: null,
+  });
+}
+
+export function resetTimer(durationSeconds: number = 2400) {
+  setTimerState({
+    duration: durationSeconds,
+    startedAt: null,
+    status: 'idle',
+    pausedRemaining: null,
+  });
+}
+
+export function subscribeToTimerChanges(onTimerChange: (state: TimerState) => void) {
+  let bc: BroadcastChannel | null = null;
+  if (typeof BroadcastChannel !== 'undefined') {
+    bc = new BroadcastChannel(BROADCAST_CHANNEL_NAME);
+    bc.onmessage = (event) => {
+      if (event.data?.type === 'TIMER_STATE_CHANGE') {
+        onTimerChange(event.data.state);
+      }
+    };
+  }
+
+  const handleStorage = (e: StorageEvent) => {
+    if (e.key === TIMER_KEY && e.newValue) {
+      try {
+        const parsed = JSON.parse(e.newValue);
+        if (parsed) onTimerChange(parsed);
+      } catch {}
     }
   };
 

@@ -2,7 +2,8 @@ import { useState, useEffect, useRef } from 'react';
 import { useLiveDisplay, type DisplayAnnouncement } from '../hooks/useLiveDisplay';
 import { supabase } from '../lib/supabase';
 import { LeaderboardEngine, type LeaderboardEntry } from '../lib/leaderboard-engine';
-import { getScreenPage, subscribeToScreenChanges, type DisplayPageType } from '../lib/screen-sync';
+import { getScreenPage, subscribeToScreenChanges, getTimerState, subscribeToTimerChanges, type DisplayPageType, type TimerState } from '../lib/screen-sync';
+import { BlurAnimatedTimer } from '../components/BlurAnimatedTimer';
 
 export default function PublicDisplay() {
   // Screen ID parsed from URL query: ?screen=1 (default: 1)
@@ -36,7 +37,18 @@ export default function PublicDisplay() {
         setActivePage(newPage);
       }
     });
-    return unsubscribe;
+
+    // Polling fallback: localStorage events don't fire in the same tab,
+    // so poll every second to catch changes from the same browser context
+    const pollInterval = setInterval(() => {
+      const current = getScreenPage(screenId);
+      setActivePage(prev => prev !== current ? current : prev);
+    }, 1000);
+
+    return () => {
+      unsubscribe();
+      clearInterval(pollInterval);
+    };
   }, [screenId]);
 
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -112,7 +124,7 @@ export default function PublicDisplay() {
   return (
     <div
       className="fixed inset-0 w-screen h-screen bg-[#faf7f2] bg-no-repeat bg-cover bg-center flex flex-col justify-between overflow-hidden select-none font-sans cursor-pointer"
-      style={{ backgroundImage: "url('/assets/announcement_template.png')" }}
+      style={{ backgroundImage: activePage === 'timer' ? "url('/assets/timer_template.png')" : "url('/assets/announcement_template.png')" }}
       onClick={() => {
         if (!document.fullscreenElement) {
           toggleFullscreen();
@@ -151,6 +163,7 @@ export default function PublicDisplay() {
         {activePage === 'rounds' && <DisplayRoundsView />}
         {activePage === 'results' && <DisplayResultsView />}
         {activePage === 'rules' && <DisplayRulesView />}
+        {activePage === 'timer' && <DisplayTimerView />}
       </main>
     </div>
   );
@@ -497,6 +510,108 @@ function DisplayRulesView() {
             <p className="text-sm text-slate-700 font-medium leading-relaxed">{g.text}</p>
           </div>
         ))}
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 6. 40-MINUTE ROUND TIMER VIEW (Animated Countdown on Template Background)
+// ─────────────────────────────────────────────────────────────────────────────
+function DisplayTimerView() {
+  const [timerState, setTimerState] = useState<TimerState>(() => getTimerState());
+  const [remaining, setRemaining] = useState<number>(2400);
+
+  // Subscribe to timer state changes from admin
+  useEffect(() => {
+    setTimerState(getTimerState());
+    const unsubscribe = subscribeToTimerChanges((newState) => {
+      setTimerState(newState);
+    });
+    return unsubscribe;
+  }, []);
+
+  // Tick the countdown every 100ms for smooth updates + poll localStorage
+  useEffect(() => {
+    const tick = () => {
+      // Also poll localStorage directly as a fallback
+      const latest = getTimerState();
+      if (JSON.stringify(latest) !== JSON.stringify(timerState)) {
+        setTimerState(latest);
+      }
+
+      if (latest.status === 'running' && latest.startedAt) {
+        const elapsed = (Date.now() - new Date(latest.startedAt).getTime()) / 1000;
+        setRemaining(Math.max(0, latest.duration - elapsed));
+      } else if (latest.status === 'paused' && latest.pausedRemaining != null) {
+        setRemaining(latest.pausedRemaining);
+      } else if (latest.status === 'idle') {
+        setRemaining(latest.duration);
+      } else if (latest.status === 'finished') {
+        setRemaining(0);
+      }
+    };
+
+    tick();
+    const interval = setInterval(tick, 100);
+    return () => clearInterval(interval);
+  }, [timerState]);
+
+  const totalSeconds = Math.ceil(remaining);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  const progress = timerState.duration > 0 ? (remaining / timerState.duration) * 100 : 100;
+  const isFinished = remaining <= 0 && (timerState.status === 'running' || timerState.status === 'finished');
+  const isUrgent = remaining > 0 && remaining <= timerState.duration * 0.25; // Last 25% of time → red (10 min for 40-min timer)
+  const isCritical = remaining > 0 && remaining <= timerState.duration * 0.05; // Last 5% → pulsing red
+
+  return (
+    <div className="flex-1 flex flex-col items-center justify-end w-full h-full relative" style={{ paddingBottom: '12%' }}>
+      {/* Timer content positioned in the lower-center area, below the template header */}
+      <div className="flex flex-col items-center justify-center gap-3 animate-fade-in">
+        {/* Status Label */}
+        <div className={`text-base sm:text-xl font-black font-heading uppercase tracking-[0.3em] ${
+          isFinished ? 'text-red-600' :
+          timerState.status === 'paused' ? 'text-amber-600' :
+          timerState.status === 'idle' ? 'text-slate-500' :
+          isUrgent ? 'text-red-600' : 'text-slate-700'
+        }`}>
+          {isFinished ? '🚨 TIME\'S UP!' :
+           timerState.status === 'paused' ? '⏸️ PAUSED' :
+           timerState.status === 'idle' ? '⏳ READY TO START' :
+           isCritical ? '🚨 FINAL SECONDS!' :
+           isUrgent ? '⚠️ HURRY UP!' : '⏱️ ROUND IN PROGRESS'}
+        </div>
+
+        {/* Blur Animated Countdown Digits (SwiftUI-inspired blur spring transition) */}
+        <BlurAnimatedTimer
+          minutes={minutes}
+          seconds={seconds}
+          isUrgent={isUrgent}
+          isCritical={isCritical}
+          isFinished={isFinished}
+          sizeClass="text-[6rem] sm:text-[8rem] md:text-[10rem] lg:text-[12rem]"
+        />
+
+        {/* Progress Bar */}
+        <div className="w-64 sm:w-80 md:w-[28rem] h-2.5 bg-slate-300/50 rounded-full overflow-hidden backdrop-blur-sm" style={{ boxShadow: '0 2px 8px rgba(0,0,0,0.1)' }}>
+          <div
+            className={`h-full rounded-full transition-all duration-200 ease-linear ${
+              isFinished ? 'bg-red-500' :
+              isCritical ? 'bg-red-500 animate-pulse' :
+              isUrgent ? 'bg-gradient-to-r from-orange-500 to-red-500' :
+              'bg-gradient-to-r from-emerald-500 to-teal-500'
+            }`}
+            style={{ width: `${progress}%` }}
+          />
+        </div>
+
+        {/* Subtext */}
+        <div className="text-sm sm:text-lg font-bold text-slate-600 font-heading tracking-wide">
+          {isFinished ? 'Please submit your work now!' :
+           timerState.status === 'idle' ? `${minutes} min round · Waiting for admin to start` :
+           `${minutes} min ${seconds} sec remaining`}
+        </div>
       </div>
     </div>
   );

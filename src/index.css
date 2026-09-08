@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Archivo+Black&family=Outfit:wght@300;400;500;600;700;800;900&family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Archivo+Black&family=Bebas+Neue&family=Outfit:wght@300;400;500;600;700;800;900&family=Space+Grotesk:wght@400;500;600;700;800&family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700;800&display=swap');
 @import 'tailwindcss';
 
 
@@ -18,6 +18,13 @@ body {
 .font-display {
   font-family: 'Archivo Black', 'Outfit', sans-serif;
   letter-spacing: -0.02em;
+}
+
+.font-timer {
+  font-family: 'Archivo Black', 'Outfit', sans-serif;
+  font-weight: 900;
+  font-feature-settings: "tnum";
+  font-variant-numeric: tabular-nums;
 }
 
 .font-space {
@@ -396,3 +403,41 @@ button:active:not(:disabled) {
 .glow-bronze {
   box-shadow: 0 0 20px rgba(249, 115, 22, 0.25);
 }
+
+/* ── Timer Specific Animations & Effects ──────────────── */
+@keyframes timerColonBlink {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.25; transform: scale(0.92); }
+}
+
+@keyframes urgentHeartbeat {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.02); }
+}
+
+@keyframes criticalAlarmFlash {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.04); }
+}
+
+@keyframes shimmerSweep {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(200%); }
+}
+
+.animate-timer-colon {
+  animation: timerColonBlink 1s ease-in-out infinite;
+}
+
+.animate-urgent-heartbeat {
+  animation: urgentHeartbeat 1.5s ease-in-out infinite;
+}
+
+.animate-critical-alarm {
+  animation: criticalAlarmFlash 0.7s ease-in-out infinite;
+}
+
+.animate-shimmer-sweep {
+  animation: shimmerSweep 2.5s infinite linear;
+}
+
