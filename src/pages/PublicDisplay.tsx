@@ -3,6 +3,7 @@ import { useLiveDisplay, type DisplayAnnouncement } from '../hooks/useLiveDispla
 import { supabase } from '../lib/supabase';
 import { LeaderboardEngine, type LeaderboardEntry } from '../lib/leaderboard-engine';
 import { getScreenPage, subscribeToScreenChanges, getTimerState, subscribeToTimerChanges, type DisplayPageType, type TimerState } from '../lib/screen-sync';
+import { getBackgroundById, getScreenBackground, subscribeToBackgroundChanges } from '../lib/backgrounds-store';
 import { BlurAnimatedTimer } from '../components/BlurAnimatedTimer';
 
 export default function PublicDisplay() {
@@ -26,16 +27,23 @@ export default function PublicDisplay() {
 
   // Active page assigned to this screen (synced from Admin Portal)
   const [activePage, setActivePage] = useState<DisplayPageType>(() => getScreenPage(screenId));
+  const [screenBg, setScreenBg] = useState<string>(() => getScreenBackground(screenId));
 
   const prevAnnouncementsCount = useRef(announcements.length);
 
   // Listen to remote changes from Admin Portal in real time
   useEffect(() => {
     setActivePage(getScreenPage(screenId));
-    const unsubscribe = subscribeToScreenChanges((changedScreenId, newPage) => {
+    setScreenBg(getScreenBackground(screenId));
+
+    const unsubscribeScreens = subscribeToScreenChanges((changedScreenId, newPage) => {
       if (changedScreenId === screenId) {
         setActivePage(newPage);
       }
+    });
+
+    const unsubscribeBackgrounds = subscribeToBackgroundChanges((event) => {
+      setScreenBg(getScreenBackground(screenId));
     });
 
     // Polling fallback: localStorage events don't fire in the same tab,
@@ -43,10 +51,13 @@ export default function PublicDisplay() {
     const pollInterval = setInterval(() => {
       const current = getScreenPage(screenId);
       setActivePage(prev => prev !== current ? current : prev);
+      const currentBg = getScreenBackground(screenId);
+      setScreenBg(prev => prev !== currentBg ? currentBg : prev);
     }, 1000);
 
     return () => {
-      unsubscribe();
+      unsubscribeScreens();
+      unsubscribeBackgrounds();
       clearInterval(pollInterval);
     };
   }, [screenId]);
@@ -121,10 +132,17 @@ export default function PublicDisplay() {
       created_at: new Date().toISOString()
     };
 
+  // Resolve background for active display
+  const currentBgObj = getBackgroundById(
+    activePage === 'timer'
+      ? 'timer-retro'
+      : (activeAnnouncement.bg_url || screenBg)
+  );
+
   return (
     <div
-      className="fixed inset-0 w-screen h-screen bg-[#faf7f2] bg-no-repeat bg-cover bg-center flex flex-col justify-between overflow-hidden select-none font-sans cursor-pointer"
-      style={{ backgroundImage: activePage === 'timer' ? "url('/assets/timer_template.png')" : "url('/assets/announcement_template.png')" }}
+      className="fixed inset-0 w-screen h-screen bg-[#faf7f2] bg-no-repeat bg-cover bg-center flex flex-col justify-between overflow-hidden select-none font-sans cursor-pointer transition-all duration-300"
+      style={{ backgroundImage: `url("${currentBgObj.url}")` }}
       onClick={() => {
         if (!document.fullscreenElement) {
           toggleFullscreen();
@@ -157,6 +175,7 @@ export default function PublicDisplay() {
             activeAnnouncement={activeAnnouncement}
             announcementsCount={announcements.length}
             rotationProgress={rotationProgress}
+            isLightText={currentBgObj.textColor === 'light'}
           />
         )}
         {activePage === 'leaderboard' && <DisplayLeaderboardView />}
@@ -176,21 +195,31 @@ function DisplayAnnouncementsView({
   activeAnnouncement,
   announcementsCount,
   rotationProgress,
+  isLightText = false,
 }: {
   activeAnnouncement: DisplayAnnouncement;
   announcementsCount: number;
   rotationProgress: number;
+  isLightText?: boolean;
 }) {
   return (
     <div className="flex-1 flex flex-col justify-between w-full h-full max-w-7xl mx-auto px-6 sm:px-12 py-8">
       <div className="flex-1 flex flex-col items-center justify-center text-center px-4">
         <div className="space-y-4 lg:space-y-6 animate-fade-in w-full max-w-5xl" key={activeAnnouncement.id}>
-          <h1 className="text-4xl sm:text-6xl md:text-7xl lg:text-8xl font-black font-display tracking-tight text-slate-950 uppercase leading-none drop-shadow-[0_4px_8px_rgba(0,0,0,0.12)] mx-auto">
+          <h1 className={`text-4xl sm:text-6xl md:text-7xl lg:text-8xl font-black font-display tracking-tight uppercase leading-none mx-auto ${
+            isLightText
+              ? 'text-white drop-shadow-[0_4px_16px_rgba(0,0,0,0.8)]'
+              : 'text-slate-950 drop-shadow-[0_4px_8px_rgba(0,0,0,0.12)]'
+          }`}>
             {activeAnnouncement.title}
           </h1>
 
           {activeAnnouncement.message && (
-            <div className="text-xl sm:text-2xl md:text-3xl lg:text-4xl text-slate-900 font-extrabold font-heading leading-tight whitespace-pre-wrap max-w-4xl mx-auto px-4 drop-shadow-[0_1px_2px_rgba(255,255,255,0.8)]">
+            <div className={`text-xl sm:text-2xl md:text-3xl lg:text-4xl font-extrabold font-heading leading-tight whitespace-pre-wrap max-w-4xl mx-auto px-4 ${
+              isLightText
+                ? 'text-slate-100 drop-shadow-[0_2px_8px_rgba(0,0,0,0.9)]'
+                : 'text-slate-900 drop-shadow-[0_1px_2px_rgba(255,255,255,0.8)]'
+            }`}>
               {activeAnnouncement.message}
             </div>
           )}

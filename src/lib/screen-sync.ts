@@ -12,6 +12,7 @@ export interface ScreenAnnouncement {
   message: string;
   priority: 'NORMAL' | 'IMPORTANT' | 'URGENT';
   pinned?: boolean;
+  bg_url?: string;
 }
 
 export const ALL_SCREENS: ScreenInfo[] = [
@@ -38,6 +39,7 @@ export const DEFAULT_SCREEN_ANNOUNCEMENTS: Record<number, ScreenAnnouncement> = 
     message: 'Please take your seats and prepare your workstations. Contest Round 1 is starting shortly!',
     priority: 'URGENT',
     pinned: true,
+    bg_url: '/assets/announcement_template.png',
   },
   2: {
     id: 'def-ann-2',
@@ -45,6 +47,7 @@ export const DEFAULT_SCREEN_ANNOUNCEMENTS: Record<number, ScreenAnnouncement> = 
     message: 'AI + Tech Challenge is now live. 30 minutes remaining. Good luck contenders!',
     priority: 'IMPORTANT',
     pinned: true,
+    bg_url: '/assets/announcement_template.png',
   },
   3: {
     id: 'def-ann-3',
@@ -52,6 +55,7 @@ export const DEFAULT_SCREEN_ANNOUNCEMENTS: Record<number, ScreenAnnouncement> = 
     message: 'Final countdown! Please review and submit your work before the timer reaches zero.',
     priority: 'URGENT',
     pinned: true,
+    bg_url: '/assets/announcement_template.png',
   },
   4: {
     id: 'def-ann-4',
@@ -59,6 +63,7 @@ export const DEFAULT_SCREEN_ANNOUNCEMENTS: Record<number, ScreenAnnouncement> = 
     message: 'Round complete! Next challenge briefing will start in 15 minutes. Refreshments in foyer.',
     priority: 'NORMAL',
     pinned: false,
+    bg_url: '/assets/announcement_template.png',
   },
   5: {
     id: 'def-ann-5',
@@ -66,6 +71,7 @@ export const DEFAULT_SCREEN_ANNOUNCEMENTS: Record<number, ScreenAnnouncement> = 
     message: 'All submissions evaluated by the jury. Prepare for the grand championship awards ceremony!',
     priority: 'IMPORTANT',
     pinned: true,
+    bg_url: '/assets/announcement_template.png',
   },
 };
 
@@ -75,42 +81,49 @@ export const ANNOUNCEMENT_PRESETS: ScreenAnnouncement[] = [
     message: 'Please take your seats and prepare your workstations. Contest Round 1 is starting shortly!',
     priority: 'URGENT',
     pinned: true,
+    bg_url: '/assets/announcement_template.png',
   },
   {
     title: 'ROUND 1 IN PROGRESS',
     message: 'AI + Tech Challenge is now live. 30 minutes remaining. Good luck contenders!',
     priority: 'IMPORTANT',
     pinned: true,
+    bg_url: '/assets/announcement_template.png',
   },
   {
     title: 'ROUND 2: PROMPT HEIST',
     message: 'Prompt Heist is active. Precision and token efficiency are being measured!',
     priority: 'IMPORTANT',
     pinned: true,
+    bg_url: '/assets/announcement_template.png',
   },
   {
     title: '5 MINUTES REMAINING',
     message: 'Final countdown! Please review and submit your work before the timer reaches zero.',
     priority: 'URGENT',
     pinned: true,
+    bg_url: '/assets/announcement_template.png',
   },
   {
     title: 'INTERMISSION / BREAK',
     message: 'Round complete! Next challenge briefing will start in 15 minutes.',
     priority: 'NORMAL',
     pinned: false,
+    bg_url: '/assets/announcement_template.png',
   },
   {
     title: 'SUBMISSION DEADLINE CLOSED',
     message: 'Time has expired. All submissions are now undergoing automated judge evaluation.',
     priority: 'URGENT',
     pinned: true,
+    bg_url: '/assets/announcement_template.png',
   },
   {
     title: 'FINAL AWARDS CEREMONY',
     message: 'Prepare for the grand champion reveal and trophy distribution!',
     priority: 'IMPORTANT',
     pinned: true,
+    bg_url: '/assets/announcement_template.png',
   },
 ];
 

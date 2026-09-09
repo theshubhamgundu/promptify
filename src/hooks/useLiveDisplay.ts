@@ -17,6 +17,9 @@ export interface DisplayAnnouncement {
   created_at: string;
   updated_at?: string;
   created_by?: string;
+  scope?: string;
+  bg_url?: string;
+  background_url?: string;
 }
 
 export interface LiveEventInfo {
@@ -106,6 +109,7 @@ export function useLiveDisplay(screenId: number = 1) {
             updated_at: a.updated_at,
             created_by: a.created_by,
             scope: a.scope,
+            bg_url: a.bg_url || a.background_url,
           };
         });
 
@@ -131,6 +135,7 @@ export function useLiveDisplay(screenId: number = 1) {
             pinned: Boolean(screenAnn.pinned),
             is_active: true,
             created_at: new Date().toISOString(),
+            bg_url: screenAnn.bg_url,
           };
           const merged = [primaryScreenAnn, ...activeOnly.filter(a => a.title !== screenAnn.title)];
           setAnnouncements(merged);
@@ -149,6 +154,7 @@ export function useLiveDisplay(screenId: number = 1) {
           pinned: Boolean(screenAnn.pinned),
           is_active: true,
           created_at: new Date().toISOString(),
+          bg_url: screenAnn.bg_url,
         }
       ]);
     } catch (err) {

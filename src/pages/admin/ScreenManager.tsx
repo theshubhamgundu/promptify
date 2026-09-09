@@ -20,6 +20,13 @@ import {
   type ScreenAnnouncement,
   type TimerState,
 } from '../../lib/screen-sync';
+import {
+  getAllBackgrounds,
+  getBackgroundById,
+  getScreenBackground,
+  setScreenBackground,
+  type TemplateBackground,
+} from '../../lib/backgrounds-store';
 
 export default function ScreenManager({ navigate }: { navigate: (p: Page) => void }) {
   // Current mapping of screen -> page
@@ -571,21 +578,50 @@ export default function ScreenManager({ navigate }: { navigate: (p: Page) => voi
               />
             </FormField>
 
+            <FormField label="Template Background Style">
+              <Select
+                value={editForm.bg_url || (editingScreenId ? getScreenBackground(editingScreenId) : '/assets/announcement_template.png')}
+                onChange={val => {
+                  setEditForm(prev => ({ ...prev, bg_url: val }));
+                  if (editingScreenId) {
+                    setScreenBackground(editingScreenId, val);
+                  }
+                }}
+                options={getAllBackgrounds().map(b => ({
+                  value: b.id || b.url,
+                  label: `${b.name} (${b.category})`,
+                }))}
+              />
+            </FormField>
+
             {/* Live Pop-Art Preview inside Modal */}
             <div>
               <label className="text-xs font-black uppercase text-gray-600 font-heading mb-1 block">
                 Live Template Preview for Screen {editingScreenId}:
               </label>
-              <div className="bg-[#faf7f2] border-2 border-black rounded-2xl p-4 text-center shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
-                <h4 className="font-display font-black text-slate-950 text-xl uppercase leading-tight">
-                  {editForm.title || 'HEADLINE TITLE'}
-                </h4>
-                {editForm.message && (
-                  <p className="text-xs text-slate-900 font-extrabold mt-1">
-                    {editForm.message}
-                  </p>
-                )}
-              </div>
+              {(() => {
+                const modalBg = getBackgroundById(editForm.bg_url || (editingScreenId ? getScreenBackground(editingScreenId) : undefined));
+                const isLightText = modalBg.textColor === 'light';
+                return (
+                  <div
+                    className="border-2 border-black rounded-2xl p-5 text-center shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] bg-cover bg-center transition-all"
+                    style={{ backgroundImage: `url("${modalBg.url}")` }}
+                  >
+                    <h4 className={`font-display font-black text-xl uppercase leading-tight ${
+                      isLightText ? 'text-white drop-shadow-[0_2px_8px_rgba(0,0,0,0.9)]' : 'text-slate-950'
+                    }`}>
+                      {editForm.title || 'HEADLINE TITLE'}
+                    </h4>
+                    {editForm.message && (
+                      <p className={`text-xs font-extrabold mt-1.5 ${
+                        isLightText ? 'text-slate-200' : 'text-slate-900'
+                      }`}>
+                        {editForm.message}
+                      </p>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
 
             <div className="flex items-center justify-end gap-2 pt-4 border-t border-gray-100">

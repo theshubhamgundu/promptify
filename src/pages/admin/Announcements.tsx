@@ -28,6 +28,18 @@ import {
   type ScreenAnnouncement,
   type TimerState,
 } from '../../lib/screen-sync';
+import {
+  getAllBackgrounds,
+  getBackgroundById,
+  saveCustomBackground,
+  deleteCustomBackground,
+  getScreenBackground,
+  setScreenBackground,
+  getGlobalDefaultBackground,
+  setGlobalDefaultBackground,
+  subscribeToBackgroundChanges,
+  type TemplateBackground,
+} from '../../lib/backgrounds-store';
 
 interface AnnouncementItem {
   id: string;
@@ -44,6 +56,7 @@ interface AnnouncementItem {
   created_at: string;
   updated_at?: string;
   created_by?: string;
+  bg_url?: string;
 }
 
 export default function Announcements({ navigate }: { navigate: (p: Page) => void }) {
@@ -52,11 +65,31 @@ export default function Announcements({ navigate }: { navigate: (p: Page) => voi
   const [announcements, setAnnouncements] = useState<AnnouncementItem[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Active View Tab: 'studio' (visual template editor) | 'overview' (all 5 screens) | 'gallery' (all templates history)
-  const [activeTab, setActiveTab] = useState<'studio' | 'overview' | 'gallery'>('studio');
+  // Active View Tab: 'studio' | 'overview' | 'gallery' | 'backgrounds'
+  const [activeTab, setActiveTab] = useState<'studio' | 'overview' | 'gallery' | 'backgrounds'>('studio');
 
   // Active Selected Screen: 0 means 'GLOBAL' (All Screens), 1-5 means Screen 1 to 5
   const [selectedScreen, setSelectedScreen] = useState<number>(1);
+
+  // Backgrounds Library State
+  const [backgroundsList, setBackgroundsList] = useState<TemplateBackground[]>(() => getAllBackgrounds());
+  const [bgCategoryFilter, setBgCategoryFilter] = useState<string>('ALL');
+  const [showAddBackgroundModal, setShowAddBackgroundModal] = useState(false);
+  const [bgActionToast, setBgActionToast] = useState<string | null>(null);
+
+  const [newBgForm, setNewBgForm] = useState<{
+    name: string;
+    description: string;
+    url: string;
+    category: TemplateBackground['category'];
+    textColor: 'dark' | 'light';
+  }>({
+    name: '',
+    description: '',
+    url: '',
+    category: 'custom',
+    textColor: 'dark',
+  });
 
   // Template Library list (combining built-in and user-created custom templates)
   const [templateList, setTemplateList] = useState<ScreenAnnouncement[]>(() => getAllTemplates());
@@ -66,6 +99,7 @@ export default function Announcements({ navigate }: { navigate: (p: Page) => voi
     message: '',
     priority: 'IMPORTANT',
     pinned: true,
+    bg_url: '/assets/announcement_template.png',
   });
 
   // Screen to Page mapping
@@ -82,6 +116,15 @@ export default function Announcements({ navigate }: { navigate: (p: Page) => voi
     const initial: Record<number, ScreenAnnouncement> = {};
     ALL_SCREENS.forEach(s => {
       initial[s.id] = getScreenAnnouncement(s.id);
+    });
+    return initial;
+  });
+
+  // Screen to Background mapping
+  const [screenBackgrounds, setScreenBackgrounds] = useState<Record<number, string>>(() => {
+    const initial: Record<number, string> = {};
+    ALL_SCREENS.forEach(s => {
+      initial[s.id] = getScreenBackground(s.id);
     });
     return initial;
   });
@@ -108,7 +151,13 @@ export default function Announcements({ navigate }: { navigate: (p: Page) => voi
     scheduled_at: '',
     expires_at: '',
     is_active: true,
+    bg_url: '/assets/announcement_template.png',
   });
+
+  const showToast = (msg: string) => {
+    setBgActionToast(msg);
+    setTimeout(() => setBgActionToast(null), 3000);
+  };
 
   const loadData = async () => {
     if (!activeEvent) return;
@@ -145,6 +194,7 @@ export default function Announcements({ navigate }: { navigate: (p: Page) => voi
             created_at: a.created_at,
             updated_at: a.updated_at,
             created_by: a.created_by,
+            bg_url: a.bg_url || a.background_url,
           };
         });
         setAnnouncements(normalized);
@@ -176,6 +226,15 @@ export default function Announcements({ navigate }: { navigate: (p: Page) => voi
       }
     );
 
+    const unsubscribeBackgrounds = subscribeToBackgroundChanges(() => {
+      setBackgroundsList(getAllBackgrounds());
+      const updatedScreenBgs: Record<number, string> = {};
+      ALL_SCREENS.forEach(s => {
+        updatedScreenBgs[s.id] = getScreenBackground(s.id);
+      });
+      setScreenBackgrounds(updatedScreenBgs);
+    });
+
     const unsubscribeTimer = subscribeToTimerChanges((newState) => {
       setLocalTimerState(newState);
     });
@@ -183,6 +242,7 @@ export default function Announcements({ navigate }: { navigate: (p: Page) => voi
     return () => {
       supabase.removeChannel(channel);
       unsubscribeScreens();
+      unsubscribeBackgrounds();
       unsubscribeTimer();
     };
   }, [activeEvent]);
@@ -219,6 +279,7 @@ export default function Announcements({ navigate }: { navigate: (p: Page) => voi
       }));
     } else {
       const ann = screenAnnouncements[screenId] || getScreenAnnouncement(screenId);
+      const scrBg = screenBackgrounds[screenId] || getScreenBackground(screenId);
       setForm({
         title: ann.title,
         message: ann.message,
@@ -228,6 +289,7 @@ export default function Announcements({ navigate }: { navigate: (p: Page) => voi
         scheduled_at: '',
         expires_at: '',
         is_active: true,
+        bg_url: ann.bg_url || scrBg || '/assets/announcement_template.png',
       });
       setEditingId(null);
     }
@@ -259,11 +321,18 @@ export default function Announcements({ navigate }: { navigate: (p: Page) => voi
       message: preset.message,
       priority: preset.priority,
       pinned: preset.pinned ?? true,
+      bg_url: preset.bg_url || prev.bg_url,
     }));
   };
 
   // 1-Click Instant Apply & Publish template directly to target screen
   const handleDirectApplyAndPublish = (preset: ScreenAnnouncement, targetScreenId: number) => {
+    const bgUrlToUse = preset.bg_url || form.bg_url || '/assets/announcement_template.png';
+    const payloadWithBg: ScreenAnnouncement = {
+      ...preset,
+      bg_url: bgUrlToUse,
+    };
+
     // Update local form state
     setForm(prev => ({
       ...prev,
@@ -271,17 +340,18 @@ export default function Announcements({ navigate }: { navigate: (p: Page) => voi
       message: preset.message,
       priority: preset.priority,
       pinned: preset.pinned ?? true,
+      bg_url: bgUrlToUse,
       scope: targetScreenId === 0 ? 'GLOBAL' : `SCREEN_${targetScreenId}`,
     }));
 
     if (targetScreenId > 0) {
-      setScreenAnnouncement(targetScreenId, preset);
-      setScreenAnnouncements(prev => ({ ...prev, [targetScreenId]: preset }));
+      setScreenAnnouncement(targetScreenId, payloadWithBg);
+      setScreenAnnouncements(prev => ({ ...prev, [targetScreenId]: payloadWithBg }));
       handlePageChangeForScreen(targetScreenId, 'announcements');
     } else {
       ALL_SCREENS.forEach(s => {
-        setScreenAnnouncement(s.id, preset);
-        setScreenAnnouncements(prev => ({ ...prev, [s.id]: preset }));
+        setScreenAnnouncement(s.id, payloadWithBg);
+        setScreenAnnouncements(prev => ({ ...prev, [s.id]: payloadWithBg }));
         handlePageChangeForScreen(s.id, 'announcements');
       });
     }
@@ -293,6 +363,7 @@ export default function Announcements({ navigate }: { navigate: (p: Page) => voi
         message: preset.message,
         priority: preset.priority,
         pinned: preset.pinned ?? true,
+        bg_url: bgUrlToUse,
         is_active: true,
         scope: targetScreenId === 0 ? 'GLOBAL' : `SCREEN_${targetScreenId}`,
         created_at: new Date().toISOString(),
@@ -309,6 +380,7 @@ export default function Announcements({ navigate }: { navigate: (p: Page) => voi
       message: form.message,
       priority: form.priority,
       pinned: form.pinned,
+      bg_url: form.bg_url,
     };
     saveCustomTemplate(newTpl);
     setTemplateList(getAllTemplates());
@@ -324,7 +396,13 @@ export default function Announcements({ navigate }: { navigate: (p: Page) => voi
     // Also apply it to active form
     applyPreset(newTemplateForm);
     setShowAddTemplateModal(false);
-    setNewTemplateForm({ title: '', message: '', priority: 'IMPORTANT', pinned: true });
+    setNewTemplateForm({
+      title: '',
+      message: '',
+      priority: 'IMPORTANT',
+      pinned: true,
+      bg_url: '/assets/announcement_template.png',
+    });
     setTemplateSavedToast(true);
     setTimeout(() => setTemplateSavedToast(false), 2500);
   };
@@ -334,6 +412,81 @@ export default function Announcements({ navigate }: { navigate: (p: Page) => voi
     e.stopPropagation();
     deleteCustomTemplate(title);
     setTemplateList(getAllTemplates());
+  };
+
+  // ── Background Management Handlers ─────────────────────────────────────────
+  const handleSelectBackgroundForCurrentAnnouncement = (bg: TemplateBackground) => {
+    setForm(prev => ({ ...prev, bg_url: bg.id || bg.url }));
+    showToast(`✓ Background "${bg.name}" applied to current announcement!`);
+    setActiveTab('studio');
+  };
+
+  const handleApplyBackgroundToScreen = (screenId: number, bg: TemplateBackground) => {
+    if (screenId === 0) {
+      ALL_SCREENS.forEach(s => setScreenBackground(s.id, bg.id || bg.url));
+      setGlobalDefaultBackground(bg.id || bg.url);
+      showToast(`✓ Background "${bg.name}" set for All Screens!`);
+    } else {
+      setScreenBackground(screenId, bg.id || bg.url);
+      showToast(`✓ Background "${bg.name}" assigned to Screen ${screenId}!`);
+    }
+    const updated: Record<number, string> = {};
+    ALL_SCREENS.forEach(s => {
+      updated[s.id] = getScreenBackground(s.id);
+    });
+    setScreenBackgrounds(updated);
+  };
+
+  const handleSaveCustomBackgroundModal = () => {
+    if (!newBgForm.name.trim() || !newBgForm.url.trim()) return;
+    const saved = saveCustomBackground({
+      name: newBgForm.name.trim(),
+      description: newBgForm.description.trim() || 'Custom user-uploaded background',
+      url: newBgForm.url.trim(),
+      category: newBgForm.category,
+      textColor: newBgForm.textColor,
+    });
+    setBackgroundsList(getAllBackgrounds());
+    setShowAddBackgroundModal(false);
+    setNewBgForm({
+      name: '',
+      description: '',
+      url: '',
+      category: 'custom',
+      textColor: 'dark',
+    });
+    showToast(`✓ New background "${saved.name}" added to library!`);
+  };
+
+  const handleDeleteBackground = (bgId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    deleteCustomBackground(bgId);
+    setBackgroundsList(getAllBackgrounds());
+    showToast('✓ Background deleted');
+  };
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Check size limit (under 4MB)
+    if (file.size > 4 * 1024 * 1024) {
+      alert('File is too large. Please select an image under 4MB.');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const dataUrl = event.target?.result as string;
+      if (dataUrl) {
+        setNewBgForm(prev => ({
+          ...prev,
+          url: dataUrl,
+          name: prev.name || file.name.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' ').toUpperCase(),
+        }));
+      }
+    };
+    reader.readAsDataURL(file);
   };
 
   const launchScreen = (screenId: number) => {
@@ -354,31 +507,24 @@ export default function Announcements({ navigate }: { navigate: (p: Page) => voi
 
   // Multi-layered Real-Time Broadcast Dispatcher
   const dispatchRealtimeSync = (announcementPayload: any, targetScreenId: number) => {
+    const annData = {
+      title: announcementPayload.title,
+      message: announcementPayload.message,
+      priority: announcementPayload.priority,
+      pinned: announcementPayload.pinned,
+      bg_url: announcementPayload.bg_url || form.bg_url,
+    };
+
     if (targetScreenId > 0) {
-      setScreenAnnouncement(targetScreenId, {
-        title: announcementPayload.title,
-        message: announcementPayload.message,
-        priority: announcementPayload.priority,
-        pinned: announcementPayload.pinned,
-      });
+      setScreenAnnouncement(targetScreenId, annData);
       setScreenAnnouncements(prev => ({
         ...prev,
-        [targetScreenId]: {
-          title: announcementPayload.title,
-          message: announcementPayload.message,
-          priority: announcementPayload.priority,
-          pinned: announcementPayload.pinned,
-        }
+        [targetScreenId]: annData,
       }));
     } else {
       // Global: update all screens
       ALL_SCREENS.forEach(s => {
-        setScreenAnnouncement(s.id, {
-          title: announcementPayload.title,
-          message: announcementPayload.message,
-          priority: announcementPayload.priority,
-          pinned: announcementPayload.pinned,
-        });
+        setScreenAnnouncement(s.id, annData);
       });
     }
 
@@ -387,14 +533,14 @@ export default function Announcements({ navigate }: { navigate: (p: Page) => voi
       const bc = new BroadcastChannel('promptify_realtime_sync');
       bc.postMessage({
         type: 'ANNOUNCEMENT_UPDATE',
-        announcement: announcementPayload,
+        announcement: { ...announcementPayload, bg_url: annData.bg_url },
         timestamp: Date.now(),
       });
       setTimeout(() => bc.close(), 100);
     } catch (e) {}
 
     try {
-      localStorage.setItem('promptify_active_announcement', JSON.stringify(announcementPayload));
+      localStorage.setItem('promptify_active_announcement', JSON.stringify({ ...announcementPayload, bg_url: annData.bg_url }));
       localStorage.setItem('promptify_realtime_trigger', Date.now().toString());
     } catch (e) {}
 
@@ -406,7 +552,7 @@ export default function Announcements({ navigate }: { navigate: (p: Page) => voi
           channel.send({
             type: 'broadcast',
             event: 'announcement_push',
-            payload: { announcement: announcementPayload, timestamp: Date.now() }
+            payload: { announcement: { ...announcementPayload, bg_url: annData.bg_url }, timestamp: Date.now() }
           });
         }
       });
@@ -437,6 +583,7 @@ export default function Announcements({ navigate }: { navigate: (p: Page) => voi
       scheduled_at: form.scheduled_at ? new Date(form.scheduled_at).toISOString() : null,
       expires_at: form.expires_at ? new Date(form.expires_at).toISOString() : null,
       is_active: shouldBeActive,
+      bg_url: form.bg_url || '/assets/announcement_template.png',
     };
 
     try {
@@ -469,6 +616,7 @@ export default function Announcements({ navigate }: { navigate: (p: Page) => voi
       }
 
       loadData();
+      showToast('⚡ Broadcasted live to screens!');
     } catch (err) {
       console.error('Error saving announcement:', err);
     } finally {
@@ -478,8 +626,27 @@ export default function Announcements({ navigate }: { navigate: (p: Page) => voi
 
   const activeScreenPage = selectedScreen > 0 ? (screenPages[selectedScreen] || 'announcements') : 'announcements';
 
+  // Compute active background for Live Canvas Preview
+  const activeBgObj = getBackgroundById(form.bg_url);
+  const isDarkBg = activeBgObj.textColor === 'light';
+
+  // Filtered backgrounds for gallery tab
+  const filteredBackgrounds = backgroundsList.filter(b => {
+    if (bgCategoryFilter === 'ALL') return true;
+    if (bgCategoryFilter === 'builtin') return b.isBuiltIn;
+    if (bgCategoryFilter === 'custom') return !b.isBuiltIn;
+    return b.category === bgCategoryFilter;
+  });
+
   return (
     <div className="p-4 sm:p-6 space-y-6 max-w-7xl mx-auto">
+      {/* Toast Notification Alert */}
+      {bgActionToast && (
+        <div className="fixed top-5 right-5 z-50 animate-bounce bg-black text-white px-4 py-2.5 rounded-2xl border-2 border-orange-400 shadow-2xl text-xs font-black font-heading flex items-center gap-2">
+          <span>{bgActionToast}</span>
+        </div>
+      )}
+
       {/* ── 1. Top Screen Selector & Control Bar ── */}
       <div className="bg-white p-5 rounded-3xl border border-gray-200 shadow-sm space-y-4">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -491,7 +658,7 @@ export default function Announcements({ navigate }: { navigate: (p: Page) => voi
               </h1>
             </div>
             <p className="text-xs sm:text-sm text-gray-600 font-medium">
-              Select any screen (1 to 5) to edit its distinct template and publish live to projectors.
+              Customize announcement templates, manage template backgrounds, and broadcast to projectors in real time.
             </p>
           </div>
 
@@ -515,11 +682,11 @@ export default function Announcements({ navigate }: { navigate: (p: Page) => voi
           </div>
         </div>
 
-        {/* Screen Selector Tabs */}
+        {/* Screen Selector Tabs & View Switcher */}
         <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-gray-100">
           <div className="flex flex-wrap items-center gap-1.5">
             <span className="text-xs font-black uppercase text-gray-500 font-heading tracking-wider mr-1">
-              Select Screen:
+              Target Screen:
             </span>
 
             {/* Global / All Screens */}
@@ -560,19 +727,32 @@ export default function Announcements({ navigate }: { navigate: (p: Page) => voi
             })}
           </div>
 
-          {/* Tab View Switcher (Studio / All Screens Overview / History) */}
-          <div className="flex items-center gap-1 bg-gray-100 p-1 rounded-xl border border-gray-200">
+          {/* Tab View Switcher (Studio / Backgrounds Hub / Overview / History) */}
+          <div className="flex items-center gap-1 bg-gray-100 p-1 rounded-2xl border border-gray-200">
             <button
               onClick={() => setActiveTab('studio')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all font-heading ${
+              className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all font-heading ${
                 activeTab === 'studio' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600 hover:text-gray-900'
               }`}
             >
               🎨 Template Studio
             </button>
             <button
+              onClick={() => setActiveTab('backgrounds')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all font-heading flex items-center gap-1 ${
+                activeTab === 'backgrounds' ? 'bg-orange-500 text-white shadow-sm' : 'text-orange-600 hover:text-orange-700'
+              }`}
+            >
+              <span>🖼️ Backgrounds Hub</span>
+              <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono font-bold ${
+                activeTab === 'backgrounds' ? 'bg-black/30 text-white' : 'bg-orange-100 text-orange-700'
+              }`}>
+                {backgroundsList.length}
+              </span>
+            </button>
+            <button
               onClick={() => setActiveTab('overview')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all font-heading ${
+              className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all font-heading ${
                 activeTab === 'overview' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600 hover:text-gray-900'
               }`}
             >
@@ -580,7 +760,7 @@ export default function Announcements({ navigate }: { navigate: (p: Page) => voi
             </button>
             <button
               onClick={() => setActiveTab('gallery')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all font-heading ${
+              className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all font-heading ${
                 activeTab === 'gallery' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600 hover:text-gray-900'
               }`}
             >
@@ -632,7 +812,7 @@ export default function Announcements({ navigate }: { navigate: (p: Page) => voi
         )}
       </div>
 
-      {/* ── 2. VIEW 1: UNIFIED WYSIWYG TEMPLATE STUDIO (Image 2) ── */}
+      {/* ── 2. VIEW 1: UNIFIED WYSIWYG TEMPLATE STUDIO ── */}
       {activeTab === 'studio' && (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
           {/* Left / Top (7 Columns): Live Interactive Template Canvas & Template Library */}
@@ -646,16 +826,19 @@ export default function Announcements({ navigate }: { navigate: (p: Page) => voi
                   </span>
                 </div>
                 <div className="flex items-center gap-2">
+                  <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 border border-slate-200">
+                    🖼️ Bg: {activeBgObj.name}
+                  </span>
                   <span className="text-xs font-bold text-gray-600">
                     {selectedScreen === 0 ? '🌐 Global All Screens' : `🖥️ Screen ${selectedScreen} Preview`}
                   </span>
                 </div>
               </div>
 
-              {/* Pop-Art Template Container Preview */}
+              {/* Template Container Preview with dynamic background and adaptive text */}
               <div
-                className="w-full aspect-[16/9] rounded-3xl border-2 border-black overflow-hidden flex flex-col justify-between p-6 sm:p-8 bg-[#faf7f2] bg-no-repeat bg-cover bg-center select-none shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] relative"
-                style={{ backgroundImage: timerMode ? "url('/assets/timer_template.png')" : "url('/assets/announcement_template.png')" }}
+                className="w-full aspect-[16/9] rounded-3xl border-2 border-black overflow-hidden flex flex-col justify-between p-6 sm:p-8 bg-[#faf7f2] bg-no-repeat bg-cover bg-center select-none shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] relative transition-all duration-300"
+                style={{ backgroundImage: timerMode ? "url('/assets/timer_template.png')" : `url("${activeBgObj.url}")` }}
               >
                 {timerMode ? (
                   /* ── Timer Preview in Canvas ── */
@@ -746,11 +929,19 @@ export default function Announcements({ navigate }: { navigate: (p: Page) => voi
                     {/* Center Headline & Message */}
                     <div className="flex-1 flex flex-col items-center justify-center text-center px-4 py-2 z-10">
                       <div className="space-y-2 max-w-full">
-                        <h2 className="text-2xl sm:text-4xl lg:text-5xl font-black font-display tracking-tight text-slate-950 uppercase leading-none drop-shadow-[0_2px_4px_rgba(0,0,0,0.12)]">
+                        <h2 className={`text-2xl sm:text-4xl lg:text-5xl font-black font-display tracking-tight uppercase leading-none ${
+                          isDarkBg
+                            ? 'text-white drop-shadow-[0_4px_16px_rgba(0,0,0,0.8)]'
+                            : 'text-slate-950 drop-shadow-[0_2px_4px_rgba(0,0,0,0.12)]'
+                        }`}>
                           {form.title || 'HEADLINE ON TEMPLATE'}
                         </h2>
                         {form.message && (
-                          <p className="text-xs sm:text-base lg:text-lg text-slate-900 font-extrabold font-heading leading-tight whitespace-pre-wrap max-w-xl mx-auto drop-shadow-[0_1px_2px_rgba(255,255,255,0.8)]">
+                          <p className={`text-xs sm:text-base lg:text-lg font-extrabold font-heading leading-tight whitespace-pre-wrap max-w-xl mx-auto ${
+                            isDarkBg
+                              ? 'text-slate-100 drop-shadow-[0_2px_8px_rgba(0,0,0,0.9)]'
+                              : 'text-slate-900 drop-shadow-[0_1px_2px_rgba(255,255,255,0.8)]'
+                          }`}>
                             {form.message}
                           </p>
                         )}
@@ -758,11 +949,13 @@ export default function Announcements({ navigate }: { navigate: (p: Page) => voi
                     </div>
 
                     {/* Footer Canvas Pill */}
-                    <div className="w-full flex items-center justify-between text-[10px] font-bold text-slate-600 z-10">
-                      <span className="bg-white/80 backdrop-blur-md px-2 py-0.5 rounded-full border border-black/10 uppercase tracking-wider">
+                    <div className="w-full flex items-center justify-between text-[10px] font-bold z-10">
+                      <span className="bg-white/80 backdrop-blur-md px-2 py-0.5 rounded-full border border-black/10 uppercase tracking-wider text-slate-800">
                         {selectedScreen === 0 ? 'All Screens Broadcast' : `Screen ${selectedScreen} Display`}
                       </span>
-                      <span className="text-orange-600 font-black">● Broadcasts in Real-Time</span>
+                      <span className="text-orange-600 font-black bg-white/80 backdrop-blur-md px-2 py-0.5 rounded-full border border-black/10">
+                        ● Broadcasts in Real-Time
+                      </span>
                     </div>
                   </>
                 )}
@@ -771,7 +964,6 @@ export default function Announcements({ navigate }: { navigate: (p: Page) => voi
               {/* ── Timer Controls (shown when timer mode is active) ── */}
               {timerMode && (
                 <div className="bg-gradient-to-r from-slate-900 to-slate-800 rounded-2xl p-4 mt-3 shadow-lg space-y-3">
-                  {/* Top Row: Duration input + Start / Pause / Resume / Reset */}
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <div className="flex items-center gap-3">
                       <span className="text-lg">⏳</span>
@@ -780,7 +972,6 @@ export default function Announcements({ navigate }: { navigate: (p: Page) => voi
                         <p className="text-[10px] text-slate-400">Set duration & control countdown</p>
                       </div>
 
-                      {/* Live Timer Display */}
                       <div className={`font-mono font-black text-2xl tracking-wider px-3 py-1 rounded-lg border-2 ${
                         timerState.status === 'running'
                           ? timerRemaining <= timerState.duration * 0.05 ? 'text-red-400 border-red-500/50 bg-red-950/40 animate-pulse'
@@ -795,7 +986,6 @@ export default function Announcements({ navigate }: { navigate: (p: Page) => voi
                     </div>
 
                     <div className="flex items-center gap-2">
-                      {/* Set Duration Input */}
                       <div className="flex items-center gap-1 bg-slate-800 rounded-lg px-2 py-1 border border-slate-600">
                         <input
                           type="number"
@@ -808,7 +998,6 @@ export default function Announcements({ navigate }: { navigate: (p: Page) => voi
                         <span className="text-[10px] text-slate-400 font-bold">min</span>
                       </div>
 
-                      {/* Set Timer Button */}
                       <button
                         onClick={() => resetTimer(timerDurationInput * 60)}
                         className="px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-white text-[10px] font-black uppercase transition-all"
@@ -816,7 +1005,6 @@ export default function Announcements({ navigate }: { navigate: (p: Page) => voi
                         Set Timer
                       </button>
 
-                      {/* Start / Pause / Resume */}
                       {timerState.status === 'idle' && (
                         <button
                           onClick={() => {
@@ -844,7 +1032,6 @@ export default function Announcements({ navigate }: { navigate: (p: Page) => voi
                         </button>
                       )}
 
-                      {/* Reset */}
                       <button
                         onClick={() => resetTimer(timerDurationInput * 60)}
                         className="px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-white text-[10px] font-black uppercase transition-all"
@@ -854,19 +1041,14 @@ export default function Announcements({ navigate }: { navigate: (p: Page) => voi
                     </div>
                   </div>
 
-                  {/* Bottom Row: Choose Which Screen(s) to Display the Timer */}
                   <div className="pt-3 border-t border-slate-700/80 flex flex-wrap items-center justify-between gap-2.5">
                     <div className="flex items-center gap-2">
                       <span className="text-[11px] font-black text-amber-400 uppercase tracking-wider font-heading flex items-center gap-1">
                         <span>📺 Display Timer On Screen(s):</span>
                       </span>
-                      <span className="text-[10px] text-slate-400">
-                        (Click to toggle live display on/off)
-                      </span>
                     </div>
 
                     <div className="flex flex-wrap items-center gap-1.5">
-                      {/* Toggle All Screens */}
                       <button
                         type="button"
                         onClick={() => {
@@ -887,7 +1069,6 @@ export default function Announcements({ navigate }: { navigate: (p: Page) => voi
                         </span>
                       </button>
 
-                      {/* Individual Screen Buttons */}
                       {ALL_SCREENS.map(s => {
                         const isTimer = (screenPages[s.id] || getScreenPage(s.id)) === 'timer';
                         return (
@@ -916,7 +1097,7 @@ export default function Announcements({ navigate }: { navigate: (p: Page) => voi
               )}
             </div>
 
-            {/* ── Reusable Templates Library (Click to apply / + Add New Template) ── */}
+            {/* ── Reusable Templates Library ── */}
             <div className="bg-white p-5 rounded-3xl border border-gray-200 shadow-sm space-y-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
@@ -926,23 +1107,30 @@ export default function Announcements({ navigate }: { navigate: (p: Page) => voi
                   </span>
                 </div>
 
-                {/* + Add New Template Button */}
-                <button
-                  type="button"
-                  onClick={() => setShowAddTemplateModal(true)}
-                  className="px-3 py-1.5 rounded-xl bg-orange-500 hover:bg-orange-600 text-white text-xs font-black font-heading transition-all shadow-sm flex items-center gap-1"
-                >
-                  <span>+ Add New Template</span>
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('backgrounds')}
+                    className="px-2.5 py-1 rounded-xl bg-orange-50 hover:bg-orange-100 text-orange-700 text-xs font-bold transition-all border border-orange-200 flex items-center gap-1"
+                  >
+                    <span>🖼️ Backgrounds Hub</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowAddTemplateModal(true)}
+                    className="px-3 py-1.5 rounded-xl bg-orange-500 hover:bg-orange-600 text-white text-xs font-black font-heading transition-all shadow-sm flex items-center gap-1"
+                  >
+                    <span>+ Add New Template</span>
+                  </button>
+                </div>
               </div>
 
               {/* Template Cards Grid */}
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5 max-h-80 overflow-y-auto pr-1">
-                {/* ── Special Timer Template Card ── */}
+                {/* Special Timer Template Card */}
                 <div
                   onClick={() => {
                     setTimerMode(true);
-                    // Switch target screen(s) to timer page (but don't start yet)
                     if (selectedScreen > 0) {
                       handlePageChangeForScreen(selectedScreen, 'timer');
                     } else {
@@ -999,6 +1187,7 @@ export default function Announcements({ navigate }: { navigate: (p: Page) => voi
                 {templateList.map((tpl, idx) => {
                   const isSelected = form.title === tpl.title;
                   const isCustom = idx < templateList.length - ANNOUNCEMENT_PRESETS.length;
+                  const tplBg = getBackgroundById(tpl.bg_url);
 
                   return (
                     <div
@@ -1012,17 +1201,24 @@ export default function Announcements({ navigate }: { navigate: (p: Page) => voi
                     >
                       <div>
                         <div className="flex items-center justify-between mb-1">
-                          <span
-                            className={`text-[9px] font-black uppercase px-1.5 py-0.5 rounded-md ${
-                              tpl.priority === 'URGENT'
-                                ? 'bg-red-500 text-white'
-                                : tpl.priority === 'IMPORTANT'
-                                ? 'bg-amber-500 text-black'
-                                : 'bg-slate-200 text-slate-700'
-                            }`}
-                          >
-                            {tpl.priority}
-                          </span>
+                          <div className="flex items-center gap-1">
+                            <span
+                              className={`text-[9px] font-black uppercase px-1.5 py-0.5 rounded-md ${
+                                tpl.priority === 'URGENT'
+                                  ? 'bg-red-500 text-white'
+                                  : tpl.priority === 'IMPORTANT'
+                                  ? 'bg-amber-500 text-black'
+                                  : 'bg-slate-200 text-slate-700'
+                              }`}
+                            >
+                              {tpl.priority}
+                            </span>
+                            {tpl.bg_url && (
+                              <span className="text-[9px] px-1 py-0.2 rounded bg-slate-200 text-slate-700 font-bold" title={`Bg: ${tplBg.name}`}>
+                                🖼️
+                              </span>
+                            )}
+                          </div>
 
                           {/* Delete button if custom template */}
                           {isCustom && (
@@ -1064,7 +1260,7 @@ export default function Announcements({ navigate }: { navigate: (p: Page) => voi
             </div>
           </div>
 
-          {/* Right (5 Columns): Template Announcement Edit Form (Image 2) */}
+          {/* Right (5 Columns): Template Announcement Edit Form */}
           <div className="lg:col-span-5 space-y-4">
             <div className="bg-white p-6 rounded-3xl border border-gray-200 shadow-sm space-y-4">
               <div className="flex items-center justify-between border-b border-gray-100 pb-3">
@@ -1093,6 +1289,63 @@ export default function Announcements({ navigate }: { navigate: (p: Page) => voi
                     placeholder="Please take your seats and prepare your workstations..."
                   />
                 </FormField>
+
+                {/* ── Visual Template Background Selector ── */}
+                <div className="space-y-2 bg-orange-50/50 p-3 rounded-2xl border border-orange-200/80">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-black uppercase text-gray-800 font-heading tracking-wide flex items-center gap-1.5">
+                      <span>🖼️ Template Background Style</span>
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab('backgrounds')}
+                      className="text-[11px] text-orange-600 font-bold hover:underline"
+                    >
+                      Browse All Hub →
+                    </button>
+                  </div>
+
+                  {/* Horizontal visual background selector chips */}
+                  <div className="grid grid-cols-2 gap-2">
+                    {backgroundsList.slice(0, 6).map(bg => {
+                      const isBgActive = form.bg_url === bg.id || form.bg_url === bg.url;
+                      return (
+                        <button
+                          key={bg.id}
+                          type="button"
+                          onClick={() => setForm(prev => ({ ...prev, bg_url: bg.id || bg.url }))}
+                          className={`p-2 rounded-xl text-left border transition-all flex items-center gap-2 cursor-pointer ${
+                            isBgActive
+                              ? 'bg-orange-500 text-white border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]'
+                              : 'bg-white hover:bg-gray-50 text-gray-800 border-gray-200'
+                          }`}
+                        >
+                          <div
+                            className="w-7 h-7 rounded-lg border border-black/20 bg-cover bg-center shrink-0"
+                            style={{ backgroundImage: `url("${bg.url}")` }}
+                          />
+                          <div className="overflow-hidden">
+                            <div className="text-[11px] font-black truncate leading-tight">{bg.name}</div>
+                            <div className={`text-[9px] uppercase font-bold truncate ${isBgActive ? 'text-orange-100' : 'text-gray-500'}`}>
+                              {bg.category}
+                            </div>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  <div className="pt-1">
+                    <Select
+                      value={form.bg_url || '/assets/announcement_template.png'}
+                      onChange={val => setForm(prev => ({ ...prev, bg_url: val }))}
+                      options={backgroundsList.map(bg => ({
+                        value: bg.id || bg.url,
+                        label: `${bg.name} (${bg.category})`,
+                      }))}
+                    />
+                  </div>
+                </div>
 
                 <div className="grid grid-cols-2 gap-3">
                   <FormField label="Priority" required>
@@ -1168,7 +1421,7 @@ export default function Announcements({ navigate }: { navigate: (p: Page) => voi
                 <button
                   onClick={() => handlePublish(true)}
                   disabled={saving || !form.title.trim()}
-                  className="w-full py-4 px-4 rounded-2xl bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-black font-heading text-sm shadow-xl shadow-orange-500/25 transition-all hover:scale-[1.01] active:scale-[0.99] disabled:opacity-50 flex items-center justify-center gap-2"
+                  className="w-full py-4 px-4 rounded-2xl bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-black font-heading text-sm shadow-xl shadow-orange-500/25 transition-all hover:scale-[1.01] active:scale-[0.99] disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer"
                 >
                   <ZapIcon className="w-4 h-4" />
                   <span>
@@ -1184,7 +1437,7 @@ export default function Announcements({ navigate }: { navigate: (p: Page) => voi
                   type="button"
                   onClick={handleSaveAsTemplate}
                   disabled={!form.title.trim()}
-                  className="w-full py-2.5 px-3 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold font-heading text-xs transition-colors flex items-center justify-center gap-1.5"
+                  className="w-full py-2.5 px-3 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold font-heading text-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
                 >
                   <span>💾 Save Current as Reusable Template</span>
                 </button>
@@ -1200,12 +1453,189 @@ export default function Announcements({ navigate }: { navigate: (p: Page) => voi
         </div>
       )}
 
-      {/* ── 3. VIEW 2: ALL SCREENS OVERVIEW (Grid of Screens 1-5) ── */}
+      {/* ── 3. VIEW: BACKGROUNDS HUB (Centralized Template Backgrounds Gallery) ── */}
+      {activeTab === 'backgrounds' && (
+        <div className="space-y-6">
+          {/* Hero Banner */}
+          <div className="bg-gradient-to-r from-orange-500 via-amber-500 to-yellow-500 p-6 rounded-3xl text-white shadow-xl shadow-orange-500/20 flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <span className="text-3xl">🖼️</span>
+                <h2 className="text-2xl font-black font-display tracking-tight uppercase">
+                  Template Backgrounds Hub
+                </h2>
+              </div>
+              <p className="text-xs sm:text-sm text-orange-100 font-medium max-w-2xl">
+                All template backgrounds in one place. Choose distinct backgrounds for different announcements, assign background styles to individual screens, or upload your own high-resolution image templates.
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setShowAddBackgroundModal(true)}
+                className="px-4 py-2.5 rounded-2xl bg-black hover:bg-slate-900 text-white font-black font-heading text-xs shadow-lg transition-transform active:scale-95 flex items-center gap-2 cursor-pointer"
+              >
+                <span>+ Upload / Add Background</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Category Filter Bar */}
+          <div className="flex flex-wrap items-center justify-between gap-3 bg-white p-4 rounded-2xl border border-gray-200 shadow-sm">
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="text-xs font-black uppercase text-gray-500 font-heading mr-1">Filter:</span>
+              {[
+                { id: 'ALL', label: `All (${backgroundsList.length})` },
+                { id: 'builtin', label: `🎨 Official Templates (${backgroundsList.filter(b => b.isBuiltIn).length})` },
+                { id: 'custom', label: `📁 My Custom Templates (${backgroundsList.filter(b => !b.isBuiltIn).length})` },
+              ].map(cat => (
+                <button
+                  key={cat.id}
+                  onClick={() => setBgCategoryFilter(cat.id)}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer ${
+                    bgCategoryFilter === cat.id
+                      ? 'bg-black text-white shadow-sm'
+                      : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
+                  }`}
+                >
+                  {cat.label}
+                </button>
+              ))}
+            </div>
+
+            <div className="text-xs font-bold text-gray-500">
+              Showing {filteredBackgrounds.length} Backgrounds
+            </div>
+          </div>
+
+          {/* Backgrounds Visual Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {filteredBackgrounds.map(bg => {
+              const isDark = bg.textColor === 'light';
+              const isCurrentFormBg = form.bg_url === bg.id || form.bg_url === bg.url;
+
+              return (
+                <div
+                  key={bg.id}
+                  className="bg-white rounded-3xl border-2 border-gray-200 hover:border-black overflow-hidden shadow-sm hover:shadow-xl transition-all flex flex-col justify-between group"
+                >
+                  {/* Visual 16:9 Canvas Preview with Sample Content */}
+                  <div
+                    className="w-full aspect-[16/9] bg-[#faf7f2] bg-no-repeat bg-cover bg-center p-4 flex flex-col justify-between relative border-b-2 border-black"
+                    style={{ backgroundImage: `url("${bg.url}")` }}
+                  >
+                    {/* Top Badges */}
+                    <div className="flex items-center justify-between z-10">
+                      <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-black/80 text-white backdrop-blur-sm">
+                        {bg.category}
+                      </span>
+                      <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${
+                        isDark ? 'bg-indigo-900/90 text-indigo-200' : 'bg-amber-100 text-amber-900'
+                      }`}>
+                        {isDark ? '🌙 Light Text Mode' : '☀️ Dark Text Mode'}
+                      </span>
+                    </div>
+
+                    {/* Sample Headline Typography */}
+                    <div className="text-center px-2 z-10">
+                      <div className={`text-lg sm:text-xl font-black font-display uppercase leading-tight ${
+                        isDark ? 'text-white drop-shadow-[0_2px_8px_rgba(0,0,0,0.8)]' : 'text-slate-950 drop-shadow-[0_1px_2px_rgba(0,0,0,0.12)]'
+                      }`}>
+                        {bg.name}
+                      </div>
+                      <div className={`text-[10px] font-bold mt-1 line-clamp-1 ${
+                        isDark ? 'text-slate-200' : 'text-slate-700'
+                      }`}>
+                        Live announcement template preview
+                      </div>
+                    </div>
+
+                    {/* Bottom Status */}
+                    <div className="flex items-center justify-between text-[9px] font-bold z-10">
+                      <span className="bg-white/80 backdrop-blur-sm px-1.5 py-0.2 rounded text-black font-mono">
+                        {bg.isBuiltIn ? 'Built-in Template' : 'Custom Upload'}
+                      </span>
+                      {isCurrentFormBg && (
+                        <span className="bg-emerald-500 text-white px-2 py-0.5 rounded-full font-black">
+                          ✓ ACTIVE IN STUDIO
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Card Body & Actions */}
+                  <div className="p-5 space-y-4">
+                    <div>
+                      <div className="flex items-center justify-between">
+                        <h4 className="text-base font-black font-heading text-gray-900">{bg.name}</h4>
+                        {!bg.isBuiltIn && (
+                          <button
+                            type="button"
+                            onClick={(e) => handleDeleteBackground(bg.id, e)}
+                            className="text-red-500 hover:text-red-700 text-xs font-bold p-1"
+                            title="Delete custom background"
+                          >
+                            <TrashIcon className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
+                      <p className="text-xs text-gray-600 font-medium mt-1">
+                        {bg.description}
+                      </p>
+                    </div>
+
+                    {/* Action Buttons */}
+                    <div className="space-y-2 pt-2 border-t border-gray-100">
+                      {/* Primary: Use for Current Studio Announcement */}
+                      <button
+                        type="button"
+                        onClick={() => handleSelectBackgroundForCurrentAnnouncement(bg)}
+                        className="w-full py-2.5 rounded-xl bg-orange-500 hover:bg-orange-600 text-white text-xs font-black uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 shadow-md shadow-orange-500/20 cursor-pointer"
+                      >
+                        <ZapIcon className="w-3.5 h-3.5" />
+                        <span>Use for Current Announcement</span>
+                      </button>
+
+                      {/* Secondary: Apply to Screen 1..5 or All */}
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => handleApplyBackgroundToScreen(0, bg)}
+                          className="flex-1 py-1.5 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-800 text-[10px] font-black uppercase transition-all"
+                          title="Set as background for All Screens"
+                        >
+                          🌐 All Screens
+                        </button>
+                        {[1, 2, 3, 4, 5].map(scrNum => (
+                          <button
+                            key={scrNum}
+                            type="button"
+                            onClick={() => handleApplyBackgroundToScreen(scrNum, bg)}
+                            className="px-2 py-1.5 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-800 text-[10px] font-black uppercase transition-all"
+                            title={`Assign to Screen ${scrNum}`}
+                          >
+                            S{scrNum}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* ── 4. VIEW: ALL SCREENS OVERVIEW (Grid of Screens 1-5) ── */}
       {activeTab === 'overview' && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {ALL_SCREENS.map(s => {
             const assignedPage = screenPages[s.id] || s.defaultPage;
             const ann = screenAnnouncements[s.id] || getScreenAnnouncement(s.id);
+            const scrBg = screenBackgrounds[s.id] || getScreenBackground(s.id);
+            const bgObj = getBackgroundById(ann.bg_url || scrBg);
             const pageConfig = DISPLAY_PAGES.find(p => p.id === assignedPage);
 
             return (
@@ -1226,29 +1656,46 @@ export default function Announcements({ navigate }: { navigate: (p: Page) => voi
                     </div>
                     <button
                       onClick={() => launchScreen(s.id)}
-                      className="px-2.5 py-1.5 rounded-lg bg-slate-900 text-white text-xs font-bold hover:bg-slate-800"
+                      className="px-2.5 py-1.5 rounded-lg bg-slate-900 text-white text-xs font-bold hover:bg-slate-800 cursor-pointer"
                     >
                       ↗ Launch
                     </button>
                   </div>
 
-                  <div className="bg-gray-50 rounded-xl p-2.5 border border-gray-200 mb-3">
-                    <div className="text-[10px] font-bold text-gray-400 uppercase">Active Output View:</div>
-                    <div className="text-xs font-black text-gray-900 mt-0.5 flex items-center gap-1.5">
-                      <span>{pageConfig?.icon}</span>
-                      <span>{pageConfig?.label}</span>
+                  <div className="grid grid-cols-2 gap-2 mb-3">
+                    <div className="bg-gray-50 rounded-xl p-2.5 border border-gray-200">
+                      <div className="text-[10px] font-bold text-gray-400 uppercase">Output Mode:</div>
+                      <div className="text-xs font-black text-gray-900 mt-0.5 flex items-center gap-1">
+                        <span>{pageConfig?.icon}</span>
+                        <span className="truncate">{pageConfig?.label}</span>
+                      </div>
+                    </div>
+
+                    <div className="bg-gray-50 rounded-xl p-2.5 border border-gray-200">
+                      <div className="text-[10px] font-bold text-gray-400 uppercase">Assigned Bg:</div>
+                      <div className="text-xs font-black text-orange-700 mt-0.5 truncate flex items-center gap-1">
+                        <span>🖼️</span>
+                        <span className="truncate">{bgObj.name}</span>
+                      </div>
                     </div>
                   </div>
 
                   {/* Announcement Mini Card */}
-                  <div className="bg-[#faf7f2] border-2 border-black rounded-2xl p-3.5 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
+                  <div
+                    className="border-2 border-black rounded-2xl p-3.5 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] bg-cover bg-center"
+                    style={{ backgroundImage: `url("${bgObj.url}")` }}
+                  >
                     <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-red-500 text-white mb-1 inline-block">
                       {ann.priority}
                     </span>
-                    <div className="font-display font-black text-slate-950 text-sm uppercase leading-tight">
+                    <div className={`font-display font-black text-sm uppercase leading-tight ${
+                      bgObj.textColor === 'light' ? 'text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)]' : 'text-slate-950'
+                    }`}>
                       {ann.title}
                     </div>
-                    <div className="text-[11px] text-slate-700 font-bold mt-1 line-clamp-2">
+                    <div className={`text-[11px] font-bold mt-1 line-clamp-2 ${
+                      bgObj.textColor === 'light' ? 'text-slate-200' : 'text-slate-700'
+                    }`}>
                       {ann.message}
                     </div>
                   </div>
@@ -1260,13 +1707,13 @@ export default function Announcements({ navigate }: { navigate: (p: Page) => voi
                       handleSelectScreen(s.id);
                       setActiveTab('studio');
                     }}
-                    className="text-xs font-black text-orange-600 hover:underline flex items-center gap-1"
+                    className="text-xs font-black text-orange-600 hover:underline flex items-center gap-1 cursor-pointer"
                   >
                     ✏️ Edit Screen {s.id} Template
                   </button>
                   <button
                     onClick={() => copyScreenLink(s.id)}
-                    className="text-xs font-bold text-gray-500 hover:text-black"
+                    className="text-xs font-bold text-gray-500 hover:text-black cursor-pointer"
                   >
                     {copiedScreen === s.id ? '✓ Copied' : '🔗 Copy URL'}
                   </button>
@@ -1277,7 +1724,7 @@ export default function Announcements({ navigate }: { navigate: (p: Page) => voi
         </div>
       )}
 
-      {/* ── 4. VIEW 3: ANNOUNCEMENT HISTORY ── */}
+      {/* ── 5. VIEW: ANNOUNCEMENT HISTORY ── */}
       {activeTab === 'gallery' && (
         <div className="bg-white p-6 rounded-3xl border border-gray-200 shadow-sm">
           <div className="flex items-center justify-between mb-4 border-b border-gray-100 pb-3">
@@ -1323,17 +1770,18 @@ export default function Announcements({ navigate }: { navigate: (p: Page) => voi
                           scheduled_at: item.scheduled_at ? new Date(item.scheduled_at).toISOString().slice(0, 16) : '',
                           expires_at: item.expires_at ? new Date(item.expires_at).toISOString().slice(0, 16) : '',
                           is_active: item.is_active,
+                          bg_url: item.bg_url || '/assets/announcement_template.png',
                         });
                         setEditingId(item.id);
                         setActiveTab('studio');
                       }}
-                      className="px-3 py-1.5 rounded-xl bg-gray-100 hover:bg-gray-200 text-xs font-bold text-gray-800"
+                      className="px-3 py-1.5 rounded-xl bg-gray-100 hover:bg-gray-200 text-xs font-bold text-gray-800 cursor-pointer"
                     >
                       ✏️ Edit
                     </button>
                     <button
                       onClick={() => setDeleteTarget(item)}
-                      className="p-1.5 rounded-xl bg-red-50 hover:bg-red-100 text-red-600 text-xs"
+                      className="p-1.5 rounded-xl bg-red-50 hover:bg-red-100 text-red-600 text-xs cursor-pointer"
                     >
                       <TrashIcon className="w-4 h-4" />
                     </button>
@@ -1370,6 +1818,17 @@ export default function Announcements({ navigate }: { navigate: (p: Page) => voi
               />
             </FormField>
 
+            <FormField label="Template Background">
+              <Select
+                value={newTemplateForm.bg_url || '/assets/announcement_template.png'}
+                onChange={val => setNewTemplateForm(prev => ({ ...prev, bg_url: val }))}
+                options={backgroundsList.map(b => ({
+                  value: b.id || b.url,
+                  label: `${b.name} (${b.category})`,
+                }))}
+              />
+            </FormField>
+
             <FormField label="Priority">
               <Select
                 value={newTemplateForm.priority}
@@ -1388,6 +1847,129 @@ export default function Announcements({ navigate }: { navigate: (p: Page) => voi
               </Button>
               <Button variant="primary" onClick={handleCreateNewTemplateModal}>
                 💾 Save & Add to Template Library
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* ── Add / Upload Custom Background Modal ── */}
+      {showAddBackgroundModal && (
+        <Modal
+          isOpen={true}
+          onClose={() => setShowAddBackgroundModal(false)}
+          title="🖼️ Upload / Add Custom Template Background"
+        >
+          <div className="space-y-4">
+            <FormField label="Background Name" required>
+              <TextInput
+                value={newBgForm.name}
+                onChange={val => setNewBgForm(prev => ({ ...prev, name: val }))}
+                placeholder="e.g. Neon Hackathon Banner"
+              />
+            </FormField>
+
+            <FormField label="Description (Optional)">
+              <TextInput
+                value={newBgForm.description}
+                onChange={val => setNewBgForm(prev => ({ ...prev, description: val }))}
+                placeholder="e.g. Dark high-contrast background with circuit lines"
+              />
+            </FormField>
+
+            <div className="grid grid-cols-2 gap-3">
+              <FormField label="Category">
+                <Select
+                  value={newBgForm.category}
+                  onChange={val => setNewBgForm(prev => ({ ...prev, category: val as any }))}
+                  options={[
+                    { value: 'custom', label: '📁 Custom Upload' },
+                    { value: 'pop-art', label: '🎨 Pop-Art Style' },
+                    { value: 'dark', label: '🌌 Dark / Cyber' },
+                    { value: 'celebration', label: '🏆 Celebration / Gold' },
+                    { value: 'alert', label: '🚨 Urgent Alert' },
+                    { value: 'minimal', label: '✨ Minimal Studio' },
+                  ]}
+                />
+              </FormField>
+
+              <FormField label="Typography Contrast">
+                <Select
+                  value={newBgForm.textColor}
+                  onChange={val => setNewBgForm(prev => ({ ...prev, textColor: val as any }))}
+                  options={[
+                    { value: 'dark', label: '☀️ Dark Text (for light bgs)' },
+                    { value: 'light', label: '🌙 Light Text (for dark bgs)' },
+                  ]}
+                />
+              </FormField>
+            </div>
+
+            {/* File Upload / URL Section */}
+            <div className="space-y-3 p-4 bg-gray-50 rounded-2xl border border-gray-200">
+              <label className="text-xs font-black uppercase text-gray-700 font-heading">
+                Option 1: Upload Image File (PNG, JPG, WebP, SVG)
+              </label>
+              <input
+                type="file"
+                accept="image/*"
+                onChange={handleFileUpload}
+                className="w-full text-xs text-slate-700 file:mr-3 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-black file:bg-orange-500 file:text-white hover:file:bg-orange-600 file:cursor-pointer"
+              />
+
+              <div className="pt-2 border-t border-gray-200">
+                <FormField label="Option 2: Or Paste Direct Image URL">
+                  <TextInput
+                    value={newBgForm.url.startsWith('data:') ? '' : newBgForm.url}
+                    onChange={val => setNewBgForm(prev => ({ ...prev, url: val }))}
+                    placeholder="https://example.com/background.jpg"
+                  />
+                </FormField>
+              </div>
+            </div>
+
+            {/* Live Interactive Preview */}
+            {newBgForm.url && (
+              <div className="space-y-1.5">
+                <label className="text-xs font-black uppercase text-gray-500 font-heading">
+                  Interactive Preview:
+                </label>
+                <div
+                  className="w-full aspect-[16/9] rounded-2xl border-2 border-black overflow-hidden p-4 flex flex-col justify-between bg-cover bg-center"
+                  style={{ backgroundImage: `url("${newBgForm.url}")` }}
+                >
+                  <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-black text-white w-max">
+                    PREVIEW
+                  </span>
+                  <div className="text-center">
+                    <h3 className={`text-xl font-black font-display uppercase ${
+                      newBgForm.textColor === 'light' ? 'text-white drop-shadow-[0_2px_8px_rgba(0,0,0,0.9)]' : 'text-slate-950'
+                    }`}>
+                      {newBgForm.name || 'HEADLINE PREVIEW'}
+                    </h3>
+                    <p className={`text-xs font-bold mt-1 ${
+                      newBgForm.textColor === 'light' ? 'text-slate-200' : 'text-slate-700'
+                    }`}>
+                      Sample announcement message on custom template background
+                    </p>
+                  </div>
+                  <div className="text-[9px] text-right font-mono font-bold text-slate-500">
+                    Promptify Template Canvas
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div className="pt-3 border-t border-gray-100 flex items-center justify-end gap-2">
+              <Button variant="secondary" onClick={() => setShowAddBackgroundModal(false)}>
+                Cancel
+              </Button>
+              <Button
+                variant="primary"
+                disabled={!newBgForm.name.trim() || !newBgForm.url.trim()}
+                onClick={handleSaveCustomBackgroundModal}
+              >
+                💾 Save Background to Hub
               </Button>
             </div>
           </div>
