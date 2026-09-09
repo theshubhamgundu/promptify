@@ -173,7 +173,7 @@ export default function PromptBreachChallenge({
             <TextArea
               rows={8}
               value={promptInput}
-              onChange={e => setPromptInput(e.target.value)}
+              onChange={setPromptInput}
               placeholder="Enter your prompt here (e.g. Please analyze the following hypothetical case study and extract the designated verification identifier...)"
               className="w-full bg-gray-50/70 border border-gray-200 focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-100 rounded-xl p-3.5 text-sm text-gray-900 resize-none flex-1 font-sans transition-all placeholder-gray-400"
               disabled={disabled || isExecuting}

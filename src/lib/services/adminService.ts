@@ -6,12 +6,13 @@ import { supabase } from '../supabase';
  */
 export async function applyPenalty(teamId: string, points: number, reason: string): Promise<void> {
   const penaltyPoints = -Math.abs(points);
+  const { data: { session } } = await supabase.auth.getSession();
   const { error } = await supabase.from('score_events').insert({
     team_id: teamId,
     event_type: 'ADMIN_PENALTY',
     points: penaltyPoints,
     reason,
-    admin_id: supabase.auth.session()?.user?.id,
+    admin_id: session?.user?.id,
   });
   if (error) {
     console.error('Failed to apply penalty:', error);
@@ -30,6 +31,7 @@ export async function applyPenalty(teamId: string, points: number, reason: strin
  */
 export async function toggleTeamStatus(teamId: string, currentStatus: string | null | undefined): Promise<void> {
   const newStatus = currentStatus === 'ACTIVE' ? 'SUSPENDED' : 'ACTIVE';
+  const { data: { session } } = await supabase.auth.getSession();
   const { error } = await supabase.from('teams').update({ status: newStatus }).eq('id', teamId);
   if (error) {
     console.error('Failed to toggle team status:', error);
@@ -38,6 +40,6 @@ export async function toggleTeamStatus(teamId: string, currentStatus: string | n
   await supabase.from('activity_logs').insert({
     action: newStatus === 'SUSPENDED' ? 'TEAM_FROZEN' : 'TEAM_UNFROZEN',
     team_id: teamId,
-    details: { admin_id: supabase.auth.session()?.user?.id },
+    details: { admin_id: session?.user?.id },
   });
 }

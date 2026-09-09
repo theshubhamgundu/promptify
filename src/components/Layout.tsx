@@ -20,6 +20,9 @@ interface NavItem {
 
 const navItems: NavItem[] = [
   { id: 'dashboard',     label: 'Dashboard',    Icon: HomeIcon },
+  { id: 'rounds',        label: 'Stages',       Icon: TargetIcon },
+  { id: 'submissions',   label: 'Submissions',  Icon: FileTextIcon },
+  { id: 'team',          label: 'Team',         Icon: UsersIcon },
 ];
 
 const pageTitles: Record<string, { title: string; subtitle: string }> = {
@@ -174,136 +177,373 @@ export default function Layout({ page, navigate, children, offline, onSessionAle
   const urgent = parseInt(timer.hours) === 0 && parseInt(timer.minutes) < 10;
 
   return (
-    <div className="flex h-full bg-[#f9f7f4] overflow-hidden flex-col">
+    <div className="flex h-full bg-[#FAF7F2] dot-bg overflow-hidden flex-col">
       {!isOnline && (
-        <div className="bg-red-600 text-white px-4 py-2 text-sm font-bold text-center flex items-center justify-center gap-2 z-[100] animate-slide-down">
+        <div className="bg-red-600 text-white px-4 py-2 text-sm font-black text-center flex items-center justify-center gap-2 z-[100] border-b-2 border-[#111111] animate-slide-down">
           <WifiOffIcon className="w-4 h-4" />
-          <span>You are currently offline. Submissions will fail until connection is restored.</span>
+          <span style={{ fontFamily: "'JetBrains Mono', monospace" }}>
+            OFFLINE MODE: Submissions will fail until connection is restored.
+          </span>
         </div>
       )}
       <div className="flex flex-1 overflow-hidden relative flex-col">
 
         {/* Top nav */}
         <header
+          style={{
+            background: "#FAF7F2",
+            borderBottom: "2.5px solid #111111",
+          }}
           className={`
-            bg-white border-b px-6 h-[68px] flex items-center gap-4 flex-shrink-0 relative z-50
+            px-6 h-[68px] flex items-center gap-4 flex-shrink-0 relative z-50
             transition-all duration-200
-            ${scrolled ? 'border-gray-200 shadow-sm' : 'border-gray-100 shadow-none'}
+            ${scrolled ? 'shadow-md' : ''}
           `}
         >
           {/* Logo & Title */}
-          <div className="flex-1 min-w-0 flex items-center gap-5">
+          <div className="flex-1 min-w-0 flex items-center gap-4 sm:gap-5">
             <button
               onClick={() => navigate('dashboard')}
-              className="flex items-center gap-2.5 group flex-shrink-0"
+              className="flex items-center gap-2.5 group flex-shrink-0 cursor-pointer"
             >
-              <div className="w-9 h-9 bg-orange-500 rounded-xl flex items-center justify-center shadow-md shadow-orange-200/60 group-hover:scale-105 transition-transform duration-200">
-                <BrainIcon />
+              <div
+                style={{
+                  width: 38,
+                  height: 38,
+                  background: "#FF5C00",
+                  border: "2px solid #111111",
+                  borderRadius: 12,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  boxShadow: "2.5px 2.5px 0 #111111",
+                  flexShrink: 0,
+                }}
+              >
+                <span
+                  style={{
+                    fontFamily: "'JetBrains Mono', monospace",
+                    fontWeight: 900,
+                    fontSize: 14,
+                    color: "#FAF7F2",
+                  }}
+                >
+                  Pf
+                </span>
               </div>
               <div className="leading-none text-left hidden sm:block">
-                <div className="text-[13px] font-black text-gray-900 font-heading tracking-wide">PROMPT</div>
-                <div className="text-[11px] font-black text-orange-500 font-heading tracking-wider">CHAMPIONSHIP</div>
+                <span
+                  style={{
+                    fontFamily: "'Nunito', sans-serif",
+                    fontWeight: 900,
+                    fontSize: 20,
+                    color: "#111111",
+                  }}
+                >
+                  Promptify<span style={{ color: "#FF5C00" }}>.</span>
+                </span>
               </div>
             </button>
-            <div className="w-px h-8 bg-gray-100 hidden md:block" />
+            <div className="w-[2px] h-7 bg-[#111111] opacity-15 hidden md:block" />
             <div className="hidden md:block">
-              <h1 className="text-[17px] font-bold text-gray-900 font-heading truncate leading-tight">{info.title}</h1>
-              <p className="text-[11px] text-gray-400 truncate leading-none mt-0.5">{info.subtitle}</p>
+              <h1
+                style={{ fontFamily: "'Nunito', sans-serif", fontWeight: 900, fontSize: 16, color: "#111111" }}
+                className="truncate leading-tight"
+              >
+                {info.title}
+              </h1>
+              <p
+                style={{ fontFamily: "'Nunito', sans-serif", fontWeight: 700, fontSize: 12, color: "#111111", opacity: 0.6 }}
+                className="truncate leading-none mt-0.5"
+              >
+                {info.subtitle}
+              </p>
             </div>
           </div>
 
           {/* ── Right cluster ── */}
-          <div className="flex items-center gap-0 flex-shrink-0">
+          <div className="flex items-center gap-3 flex-shrink-0">
 
             {/* Team Code */}
-            <div className="px-4 text-center">
-              <div className="text-[10px] text-gray-400 font-medium uppercase tracking-widest mb-0.5 font-heading">Team Code</div>
-              <div className="flex items-center gap-1.5">
-                <span className="text-base font-black text-orange-500 font-heading tracking-wider">{teamCode}</span>
-                <button
-                  onClick={copy}
-                  title="Copy code"
-                  className="text-gray-300 hover:text-orange-500 transition-colors duration-150 hover:scale-110"
+            <div
+              style={{
+                background: "#FFFFFF",
+                border: "2px solid #111111",
+                borderRadius: 12,
+                boxShadow: "2.5px 2.5px 0 #111111",
+                padding: "4px 12px",
+              }}
+              className="hidden sm:flex items-center gap-2"
+            >
+              <div>
+                <div
+                  style={{
+                    fontFamily: "'JetBrains Mono', monospace",
+                    fontSize: 9,
+                    fontWeight: 800,
+                    color: "#777",
+                    letterSpacing: "0.08em",
+                  }}
                 >
-                  <CopyIcon className="w-3.5 h-3.5" />
-                </button>
-                {copied && (
-                  <span className="text-[10px] text-green-600 font-semibold animate-fade-in">Copied!</span>
-                )}
+                  TEAM CODE
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span
+                    style={{
+                      fontFamily: "'JetBrains Mono', monospace",
+                      fontSize: 14,
+                      fontWeight: 900,
+                      color: "#FF5C00",
+                    }}
+                  >
+                    {teamCode}
+                  </span>
+                  <button
+                    onClick={copy}
+                    title="Copy code"
+                    className="text-[#111111] hover:text-[#FF5C00] transition-colors cursor-pointer hover:scale-110"
+                  >
+                    <CopyIcon className="w-3.5 h-3.5" />
+                  </button>
+                  {copied && (
+                    <span
+                      style={{
+                        fontFamily: "'JetBrains Mono', monospace",
+                        fontSize: 10,
+                        fontWeight: 800,
+                        color: "#2FE69A",
+                      }}
+                    >
+                      Copied!
+                    </span>
+                  )}
+                </div>
               </div>
             </div>
-
-            <div className="w-px h-9 bg-gray-100" />
 
             {/* Timer */}
-            <div className="px-4 text-center">
-              <div className="text-[10px] text-gray-400 font-medium uppercase tracking-widest mb-0.5 font-heading">Event Timer</div>
-              <div
-                className={`
-                  font-mono text-[15px] font-bold tabular-nums leading-none
-                  transition-colors duration-500
-                  ${urgent ? 'text-red-500' : 'text-gray-900'}
-                `}
-              >
-                {timer.hours}
-                <span className="opacity-25 mx-0.5 text-sm">:</span>
-                {timer.minutes}
-                <span className="opacity-25 mx-0.5 text-sm">:</span>
-                {timer.seconds}
+            <div
+              style={{
+                background: "#FFFFFF",
+                border: "2px solid #111111",
+                borderRadius: 12,
+                boxShadow: "2.5px 2.5px 0 #111111",
+                padding: "4px 14px",
+              }}
+              className="flex items-center gap-2"
+            >
+              <div>
+                <div
+                  style={{
+                    fontFamily: "'JetBrains Mono', monospace",
+                    fontSize: 9,
+                    fontWeight: 800,
+                    color: "#777",
+                    letterSpacing: "0.08em",
+                  }}
+                >
+                  TIMER
+                </div>
+                <div
+                  style={{
+                    fontFamily: "'JetBrains Mono', monospace",
+                    fontSize: 14,
+                    fontWeight: 900,
+                    color: urgent ? "#FF5C00" : "#111111",
+                  }}
+                  className="tabular-nums leading-none"
+                >
+                  {timer.hours}
+                  <span className="opacity-30 mx-0.5">:</span>
+                  {timer.minutes}
+                  <span className="opacity-30 mx-0.5">:</span>
+                  {timer.seconds}
+                </div>
               </div>
             </div>
 
-            <div className="w-px h-9 bg-gray-100" />
-
-            {/* Team */}
-            <div className="pl-4 relative">
+            {/* Team Dropdown */}
+            <div className="relative">
               <button
                 onClick={() => setTeamOpen(o => !o)}
-                className="flex items-center gap-2 group"
+                style={{
+                  background: "#FFD027",
+                  border: "2px solid #111111",
+                  borderRadius: 12,
+                  boxShadow: "2.5px 2.5px 0 #111111",
+                  padding: "5px 12px",
+                  cursor: "pointer",
+                }}
+                className="flex items-center gap-2 group hover:translate-x-[-1px] hover:translate-y-[-1px] transition-transform"
               >
-                <div className="w-8 h-8 bg-orange-500 rounded-full flex items-center justify-center flex-shrink-0 shadow-sm shadow-orange-200 group-hover:scale-105 transition-transform">
-                  <span className="text-white text-xs font-black font-heading">{teamInitials}</span>
+                <div
+                  style={{
+                    width: 28,
+                    height: 28,
+                    background: "#111111",
+                    borderRadius: 8,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    color: "#FAF7F2",
+                    fontFamily: "'JetBrains Mono', monospace",
+                    fontWeight: 900,
+                    fontSize: 11,
+                  }}
+                >
+                  {teamInitials}
                 </div>
-                <div className="text-left">
-                  <div className="text-[13px] font-bold text-gray-900 font-heading leading-tight">{teamName}</div>
-                  <div className="text-[11px] text-gray-400 leading-none flex items-center gap-1">
-                    <span className="w-1.5 h-1.5 rounded-full bg-green-500 live-dot" />
+                <div className="text-left hidden sm:block">
+                  <div
+                    style={{
+                      fontFamily: "'Nunito', sans-serif",
+                      fontWeight: 800,
+                      fontSize: 13,
+                      color: "#111111",
+                      lineHeight: 1.1,
+                    }}
+                  >
+                    {teamName}
+                  </div>
+                  <div
+                    style={{
+                      fontFamily: "'JetBrains Mono', monospace",
+                      fontSize: 10,
+                      fontWeight: 700,
+                      color: "#111111",
+                      opacity: 0.8,
+                    }}
+                    className="flex items-center gap-1"
+                  >
+                    <span
+                      style={{
+                        width: 6,
+                        height: 6,
+                        borderRadius: "50%",
+                        background: "#2FE69A",
+                        display: "inline-block",
+                        border: "1px solid #111111",
+                      }}
+                    />
                     {membersCount} online
                   </div>
                 </div>
                 <ChevronDownIcon
-                  className={`w-4 h-4 text-gray-400 transition-transform duration-200 ${teamOpen ? 'rotate-180' : ''}`}
+                  className={`w-3.5 h-3.5 text-[#111111] transition-transform duration-200 ${teamOpen ? 'rotate-180' : ''}`}
                 />
               </button>
 
               {teamOpen && (
-                <div className="absolute right-0 top-full mt-2 bg-white rounded-2xl border border-gray-100 shadow-xl w-52 py-2 animate-scale-in origin-top-right z-50">
-                  <div className="px-4 py-2.5 border-b border-gray-50">
-                    <div className="text-[10px] text-gray-400 uppercase tracking-wide font-heading">Active Session</div>
-                    <div className="font-bold text-gray-900 font-heading">{teamName}</div>
+                <div
+                  style={{
+                    background: "#FAF7F2",
+                    border: "2.5px solid #111111",
+                    borderRadius: 18,
+                    boxShadow: "5px 5px 0 #111111",
+                  }}
+                  className="absolute right-0 top-full mt-2 w-60 py-2 animate-scale-in origin-top-right z-50"
+                >
+                  <div className="px-4 py-2.5 border-b-[2px] border-[#111111]/10">
+                    <div
+                      style={{
+                        fontFamily: "'JetBrains Mono', monospace",
+                        fontSize: 10,
+                        fontWeight: 800,
+                        color: "#777",
+                        textTransform: "uppercase",
+                      }}
+                    >
+                      Active Session
+                    </div>
+                    <div
+                      style={{
+                        fontFamily: "'Nunito', sans-serif",
+                        fontWeight: 900,
+                        fontSize: 15,
+                        color: "#111111",
+                      }}
+                    >
+                      {teamName}
+                    </div>
                   </div>
                   <div className="px-3 py-2 space-y-1">
                     {members.map(m => (
-                      <div key={m.id} className="flex items-center gap-2.5 px-2 py-1.5 rounded-lg hover:bg-gray-50 transition-colors">
-                        <span className="w-2 h-2 rounded-full bg-green-500 flex-shrink-0" />
+                      <div
+                        key={m.id}
+                        className="flex items-center gap-2.5 px-2 py-1.5 rounded-lg hover:bg-black/5 transition-colors"
+                      >
+                        <span
+                          style={{
+                            width: 8,
+                            height: 8,
+                            borderRadius: "50%",
+                            background: "#2FE69A",
+                            border: "1px solid #111111",
+                            flexShrink: 0,
+                          }}
+                        />
                         <div className="flex-1">
-                          <div className="text-sm font-semibold text-gray-800">{m.name}</div>
-                          <div className="text-[10px] text-gray-400">{m.role}</div>
+                          <div
+                            style={{
+                              fontFamily: "'Nunito', sans-serif",
+                              fontWeight: 800,
+                              fontSize: 13,
+                              color: "#111111",
+                            }}
+                          >
+                            {m.name}
+                          </div>
+                          <div
+                            style={{
+                              fontFamily: "'JetBrains Mono', monospace",
+                              fontSize: 10,
+                              color: "#777",
+                            }}
+                          >
+                            {m.role}
+                          </div>
                         </div>
                       </div>
                     ))}
                   </div>
-                  <div className="border-t border-gray-50 px-4 py-2.5 space-y-1">
-                    <div className="text-[11px] text-green-600 font-medium">✓ Device Verified</div>
-                    <div className="text-[11px] text-green-600 font-medium">✓ Team Session Active</div>
-                    <div className="text-[11px] text-green-600 font-medium">✓ Secure Connection</div>
+                  <div className="border-t-[2px] border-[#111111]/10 px-4 py-2.5 space-y-1">
+                    <div
+                      style={{
+                        fontFamily: "'JetBrains Mono', monospace",
+                        fontSize: 11,
+                        fontWeight: 700,
+                        color: "#111111",
+                      }}
+                    >
+                      ✓ Device Verified
+                    </div>
+                    <div
+                      style={{
+                        fontFamily: "'JetBrains Mono', monospace",
+                        fontSize: 11,
+                        fontWeight: 700,
+                        color: "#111111",
+                      }}
+                    >
+                      ✓ Team Session Active
+                    </div>
+                    <div
+                      style={{
+                        fontFamily: "'JetBrains Mono', monospace",
+                        fontSize: 11,
+                        fontWeight: 700,
+                        color: "#111111",
+                      }}
+                    >
+                      ✓ Secure Connection
+                    </div>
                   </div>
-                  <div className="border-t border-gray-50 p-2 space-y-1">
+                  <div className="border-t-[2px] border-[#111111]/10 p-2 space-y-1">
                     <button 
                       onClick={() => navigate('admin')}
-                      className="w-full text-left px-2 py-1.5 rounded-lg text-sm font-medium text-gray-600 hover:text-orange-600 hover:bg-orange-50 transition-colors flex items-center gap-2"
+                      className="w-full text-left px-3 py-2 rounded-xl text-xs font-bold text-[#111111] hover:bg-[#FFD027] transition-colors flex items-center gap-2 border border-transparent hover:border-[#111111]"
                     >
-                      <span className="text-base">🛡️</span> Switch to Admin
+                      <span>🛡️</span> Switch to Admin
                     </button>
                     <button 
                       onClick={async () => { 
@@ -311,16 +551,16 @@ export default function Layout({ page, navigate, children, offline, onSessionAle
                         localStorage.removeItem('authState'); 
                         window.location.reload(); 
                       }}
-                      className="w-full text-left px-2 py-1.5 rounded-lg text-sm font-medium text-red-500 hover:text-red-600 hover:bg-red-50 transition-colors flex items-center gap-2"
+                      className="w-full text-left px-3 py-2 rounded-xl text-xs font-bold text-red-600 hover:bg-red-50 transition-colors flex items-center gap-2 border border-transparent hover:border-red-600"
                     >
-                      <span className="text-base">🚪</span> Logout
+                      <span>🚪</span> Logout
                     </button>
                   </div>
                   {onSessionAlert && (
-                    <div className="border-t border-gray-50 px-4 py-2">
+                    <div className="border-t-[2px] border-[#111111]/10 px-4 py-2">
                       <button
                         onClick={() => { setTeamOpen(false); onSessionAlert(); }}
-                        className="text-[11px] text-amber-600 font-semibold hover:underline"
+                        className="text-[11px] text-amber-700 font-extrabold hover:underline"
                       >
                         ⚠ View session alert
                       </button>
@@ -334,16 +574,12 @@ export default function Layout({ page, navigate, children, offline, onSessionAle
 
         {/* Offline banner */}
         {offline && (
-          <div className="animated-gradient border-b border-red-200 px-6 py-2.5 flex items-center gap-2.5 flex-shrink-0 animate-slide-down">
-            <WifiOffIcon className="w-4 h-4 text-red-600 flex-shrink-0" />
-            <span className="text-red-800 text-sm font-semibold">
+          <div className="bg-[#FF5C00] border-b-[2.5px] border-[#111111] px-6 py-2.5 flex items-center gap-2.5 flex-shrink-0 animate-slide-down text-[#FAF7F2]">
+            <WifiOffIcon className="w-4 h-4 flex-shrink-0" />
+            <span style={{ fontFamily: "'Nunito', sans-serif", fontWeight: 800, fontSize: 13 }}>
               Connection lost — your work is safely stored locally.
             </span>
-            <span className="text-red-600 text-sm ml-1 flex items-center gap-1">
-              <svg className="animate-spin w-3 h-3" viewBox="0 0 24 24" fill="none">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
-              </svg>
+            <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, fontWeight: 700 }} className="ml-2 opacity-90">
               Reconnecting…
             </span>
           </div>
@@ -354,42 +590,43 @@ export default function Layout({ page, navigate, children, offline, onSessionAle
           {children}
         </main>
 
-        {/* ── Floating Bottom Navigation ─────────────────────────────────────── */}
-        <nav className="absolute bottom-6 left-1/2 -translate-x-1/2 h-[64px] bg-white border border-gray-100 rounded-2xl flex items-center justify-center px-2 sm:px-4 z-50 shadow-xl shadow-gray-200/50">
-          {/* Nav Items */}
-          <div ref={navWrapperRef} className="flex items-center gap-2 max-w-2xl w-full justify-between sm:justify-center sm:gap-4 md:gap-6 relative h-full">
-            
-            {/* Sliding Background Indicator (Desktop) */}
-            <div 
-              className="absolute hidden sm:block top-1/2 -translate-y-1/2 h-10 bg-orange-500 rounded-xl transition-all duration-300 ease-out z-0 shadow-sm shadow-orange-200/50"
-              style={{ left: indicator.left, width: indicator.width, opacity: indicator.opacity }}
-            />
-            {/* Sliding Bottom Bar (optional extra flair, darker orange) */}
-            <div 
-              className="absolute bottom-1 h-[3px] bg-orange-600 rounded-full transition-all duration-300 ease-out z-0"
-              style={{ left: indicator.left + (indicator.width * 0.25), width: indicator.width * 0.5, opacity: indicator.opacity }} 
-            />
-
-            {navItems.map((item, idx) => {
+        {/* ── Floating Bottom Navigation Dock ─────────────────────────────────── */}
+        <nav
+          style={{
+            background: "#FAF7F2",
+            border: "2.5px solid #111111",
+            borderRadius: 999,
+            boxShadow: "5px 5px 0 #111111",
+            padding: "5px 12px",
+          }}
+          className="absolute bottom-6 left-1/2 -translate-x-1/2 h-[58px] flex items-center justify-center z-50"
+        >
+          <div className="flex items-center gap-1.5 sm:gap-3">
+            {navItems.map((item) => {
               const active = isActive(item);
               return (
                 <button
                   key={item.id}
                   onClick={() => navigate(item.id)}
                   title={item.label}
-                  data-active={active}
-                  className={`
-                    flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-2.5 sm:px-4 sm:py-2.5 h-full sm:h-auto rounded-xl text-xs sm:text-sm font-medium
-                    transition-colors duration-300 relative group w-full sm:w-auto z-10
-                    ${active ? 'text-white' : 'text-gray-500 hover:text-orange-500 sm:hover:bg-orange-50'}
-                  `}
+                  style={{
+                    background: active ? "#FF5C00" : "transparent",
+                    color: active ? "#FAF7F2" : "#111111",
+                    border: active ? "2px solid #111111" : "2px solid transparent",
+                    borderRadius: 999,
+                    boxShadow: active ? "2.5px 2.5px 0 #111111" : "none",
+                    padding: "7px 18px",
+                    cursor: "pointer",
+                    fontFamily: "'Nunito', sans-serif",
+                    fontWeight: 900,
+                    fontSize: 13,
+                  }}
+                  className={`flex items-center gap-2 transition-all duration-150 ${
+                    !active ? 'hover:bg-black/5 hover:translate-y-[-1px]' : ''
+                  }`}
                 >
-                  <item.Icon className={`w-5 h-5 sm:w-[18px] sm:h-[18px] flex-shrink-0 relative z-10 transition-transform duration-300 ${active ? 'scale-110' : 'group-hover:scale-110'} mb-1 sm:mb-0`} />
-                  <span className="font-heading relative z-10 transition-colors whitespace-nowrap">{item.label}</span>
-                  
-                  {item.badge && !active && (
-                    <span className="absolute top-0 right-1/4 sm:top-2 sm:right-2 w-2 h-2 bg-orange-500 rounded-full border border-white z-10" />
-                  )}
+                  <item.Icon className={`w-4 h-4 flex-shrink-0 ${active ? 'text-[#FAF7F2]' : 'text-[#111111]'}`} />
+                  <span className="whitespace-nowrap">{item.label}</span>
                 </button>
               );
             })}

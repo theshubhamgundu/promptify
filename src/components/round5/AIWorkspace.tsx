@@ -94,7 +94,7 @@ export function AIWorkspace({
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold text-slate-900 flex items-center space-x-2">
             <span>AI Workspace</span>
-            <ShieldCheck className="w-4 h-4 text-cyan-600" title="Secure BYOK Environment" />
+            <span title="Secure BYOK Environment"><ShieldCheck className="w-4 h-4 text-cyan-600" /></span>
           </h2>
           
           <div className="flex items-center space-x-2">

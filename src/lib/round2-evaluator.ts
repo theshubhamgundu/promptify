@@ -51,6 +51,7 @@ export interface HiddenTestResult {
   description: string;
   passed: boolean;
   reason?: string;
+  output?: string;
 }
 
 export interface ConstraintResult {

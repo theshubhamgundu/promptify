@@ -65,7 +65,7 @@ export function PromptSheet({ challengeSessionId, refreshTrigger }: PromptSheetP
                     {entry.status === 'SUCCESS' ? (
                       <CheckCircle2 className="w-4 h-4 text-emerald-500" />
                     ) : (
-                      <XCircle className="w-4 h-4 text-red-500" title={entry.error_code || 'Failed'} />
+                      <span title={entry.error_code || 'Failed'}><XCircle className="w-4 h-4 text-red-500" /></span>
                     )}
                   </div>
                   <div className="flex items-center space-x-4 text-xs text-slate-500">

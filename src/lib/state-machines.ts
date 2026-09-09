@@ -12,7 +12,7 @@ export const SessionStateMachine = {
     ACTIVE: ['COMPLETED', 'SUSPENDED'],
     COMPLETED: [],
     SUSPENDED: ['VERIFIED', 'ACTIVE'], // can be unsuspended
-  },
+  } as Record<SessionState, SessionState[]>,
   canTransition: (from: SessionState, to: SessionState) => {
     return SessionStateMachine.transitions[from]?.includes(to) ?? false
   }
@@ -26,7 +26,7 @@ export const EventStateMachine = {
     LIVE: ['PAUSED', 'COMPLETED'],
     PAUSED: ['LIVE', 'COMPLETED'],
     COMPLETED: [],
-  },
+  } as Record<EventState, EventState[]>,
   canTransition: (from: EventState, to: EventState) => {
     return EventStateMachine.transitions[from]?.includes(to) ?? false
   }
@@ -42,7 +42,7 @@ export const SubmissionStateMachine = {
     EVALUATING: ['EVALUATED', 'ERROR'],
     EVALUATED: [],
     ERROR: ['DRAFT', 'SUBMITTED'],
-  },
+  } as Record<SubmissionState, SubmissionState[]>,
   canTransition: (from: SubmissionState, to: SubmissionState) => {
     return SubmissionStateMachine.transitions[from]?.includes(to) ?? false
   }

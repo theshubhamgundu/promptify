@@ -74,7 +74,7 @@ interface AnnouncementItem {
 
 export default function Announcements({ navigate }: { navigate: (p: Page) => void }) {
   const { activeEvent } = useAdminStore();
-  const { session } = useAuthStore();
+  const { user, session } = useAuthStore();
   const [announcements, setAnnouncements] = useState<AnnouncementItem[]>([]);
   const [loading, setLoading] = useState(true);
 

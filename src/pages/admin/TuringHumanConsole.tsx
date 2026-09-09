@@ -127,7 +127,7 @@ export default function TuringHumanConsole({ navigate }: TuringConsoleProps) {
                 <TextArea
                   rows={3}
                   value={responseTexts[item.id] || ''}
-                  onChange={e => setResponseTexts(prev => ({ ...prev, [item.id]: e.target.value }))}
+                  onChange={val => setResponseTexts(prev => ({ ...prev, [item.id]: val }))}
                   placeholder="Type your response as Subject Zero..."
                   className="bg-black/80 border-gray-700 text-xs text-purple-300 font-mono resize-none"
                   disabled={isSending[item.id]}

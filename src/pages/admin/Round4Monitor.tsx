@@ -160,7 +160,7 @@ export default function Round4Monitor({ navigate }: Round4MonitorProps) {
             <SearchIcon className="w-4 h-4 text-gray-500 absolute left-3 top-3" />
             <TextInput
               value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
+              onChange={setSearchQuery}
               placeholder="Search team..."
               className="pl-9 bg-gray-900 border-gray-800 text-xs py-2"
             />
@@ -271,7 +271,7 @@ export default function Round4Monitor({ navigate }: Round4MonitorProps) {
                 <TextInput
                   type="number"
                   value={extendingMinutes}
-                  onChange={e => setExtendingMinutes(e.target.value)}
+                  onChange={setExtendingMinutes}
                   className="w-28 bg-black/60 border-gray-700"
                 />
                 <Button onClick={handleExtendTime} disabled={isProcessing} className="bg-orange-500 hover:bg-orange-600">

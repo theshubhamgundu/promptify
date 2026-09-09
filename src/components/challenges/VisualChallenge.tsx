@@ -216,7 +216,7 @@ export function VisualChallenge({ challenge, teamId, roundSessionId, onComplete 
                       <div className="mb-3 text-sm">
                         <div className="text-gray-300">
                           Matched <span className="font-bold text-white">
-                            {evaluationResult.matchedPatterns.filter(p => p.matched).length}/
+                            {evaluationResult.matchedPatterns.filter((p: any) => p.matched).length}/
                             {evaluationResult.matchedPatterns.length}
                           </span> elements
                         </div>
@@ -224,7 +224,7 @@ export function VisualChallenge({ challenge, teamId, roundSessionId, onComplete 
                       
                       {/* Feedback */}
                       <div className="text-xs text-gray-300 border-t border-gray-700 pt-3 space-y-1">
-                        {evaluationResult.feedback.map((line, i) => (
+                        {evaluationResult.feedback.map((line: string, i: number) => (
                           <div key={i}>{line}</div>
                         ))}
                       </div>

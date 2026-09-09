@@ -1,0 +1,6 @@
+{
+  "name": "Promptify",
+  "description": "AI prompt engineering and challenge platform with real-time scoring, quizzes, and competitions.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

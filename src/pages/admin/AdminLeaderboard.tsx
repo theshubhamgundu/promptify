@@ -18,7 +18,7 @@ interface TeamScore {
 
 export default function AdminLeaderboard({ navigate }: { navigate: (p: Page) => void }) {
   const { activeEvent } = useAdminStore();
-  const { session } = useAuthStore();
+  const { user } = useAuthStore();
   const [scores, setScores] = useState<TeamScore[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -109,7 +109,7 @@ export default function AdminLeaderboard({ navigate }: { navigate: (p: Page) => 
   }, [activeEvent]);
 
   const handleOverride = async () => {
-    if (!showOverride || !pointsDelta || !overrideReason || !session) return;
+    if (!showOverride || !pointsDelta || !overrideReason || !user) return;
     setSaving(true);
     
     const points = parseInt(pointsDelta);
@@ -120,7 +120,7 @@ export default function AdminLeaderboard({ navigate }: { navigate: (p: Page) => 
       event_type: 'ADMIN_ADJUSTMENT',
       points: points,
       reason: overrideReason,
-      admin_id: session.user?.id
+      admin_id: user?.id
     });
     
     if (!error) {
@@ -147,7 +147,7 @@ export default function AdminLeaderboard({ navigate }: { navigate: (p: Page) => 
       await supabase.from('activity_logs').insert({
         action: newStatus === 'SUSPENDED' ? 'TEAM_FROZEN' : 'TEAM_UNFROZEN',
         team_id: teamId,
-        details: { admin_id: session?.user?.id }
+        details: { admin_id: user?.id }
       });
       
       // Optionally we might want to also push an announcement or revoke session.

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../stores/authStore';
 import { useTeamStore } from '../stores/teamStore';
@@ -174,10 +174,9 @@ export default function Login({ onLogin, onBackToHome }: LoginProps) {
             <img 
               src="/assets/prompt-workspace-transparent.png" 
               alt="Prompt Engineering Workspace" 
-              className="w-full h-full max-h-[580px] object-contain scale-115 sm:scale-130 lg:scale-135 transition-transform duration-700 hover:scale-140"
+              className="w-full h-full max-h-[580px] object-contain scale-115 sm:scale-130 lg:scale-135 transition-transform duration-700 hover:scale-140" 
             />
           </div>
-
         </div>
       </main>
 

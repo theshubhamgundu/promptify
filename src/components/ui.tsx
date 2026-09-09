@@ -367,11 +367,12 @@ export function AlertDialog({ title = 'Alert', message, onClose, variant = 'info
 }
 
 // ── Confirm Dialog ────────────────────────────────────────────────────
-export function ConfirmDialog({ title, message, confirmLabel = 'Confirm', cancelLabel = 'Cancel', variant = 'danger', onConfirm, onCancel, requireReason = false }: {
+export function ConfirmDialog({ title, message, confirmLabel = 'Confirm', cancelLabel = 'Cancel', variant = 'danger', danger, onConfirm, onCancel, requireReason = false }: {
   title: string; message: string; confirmLabel?: string; cancelLabel?: string;
-  variant?: 'danger' | 'primary'; onConfirm: (reason?: string) => void; onCancel: () => void; requireReason?: boolean;
+  variant?: 'danger' | 'primary'; danger?: boolean; onConfirm: (reason?: string) => void; onCancel: () => void; requireReason?: boolean;
 }) {
   const [reason, setReason] = useState('');
+  const activeVariant = danger !== undefined ? (danger ? 'danger' : 'primary') : variant;
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4" onClick={onCancel}>
       <div className="absolute inset-0 bg-gray-900/20 backdrop-blur-sm animate-fade-in" />
@@ -395,7 +396,7 @@ export function ConfirmDialog({ title, message, confirmLabel = 'Confirm', cancel
         <div className="px-6 pb-5 flex gap-3">
           <Button variant="outline" onClick={onCancel} className="flex-1">{cancelLabel}</Button>
           <Button
-            variant={variant === 'danger' ? 'danger' : 'primary'}
+            variant={activeVariant === 'danger' ? 'danger' : 'primary'}
             onClick={() => onConfirm(reason || undefined)}
             disabled={requireReason && !reason.trim()}
             className="flex-1"
@@ -409,14 +410,17 @@ export function ConfirmDialog({ title, message, confirmLabel = 'Confirm', cancel
 }
 
 // ── Form Field ────────────────────────────────────────────────────────
-export function FormField({ label, required, error, children, className = '' }: {
-  label: string; required?: boolean; error?: string; children: React.ReactNode; className?: string;
+export function FormField({ label, hint, required, error, children, className = '' }: {
+  label: string; hint?: string; required?: boolean; error?: string; children: React.ReactNode; className?: string;
 }) {
   return (
     <div className={`space-y-1.5 ${className}`}>
-      <label className="text-xs font-bold text-gray-500 uppercase tracking-wide font-heading">
-        {label}{required && <span className="text-red-400 ml-0.5">*</span>}
-      </label>
+      <div className="flex items-baseline justify-between">
+        <label className="text-xs font-bold text-gray-500 uppercase tracking-wide font-heading">
+          {label}{required && <span className="text-red-400 ml-0.5">*</span>}
+        </label>
+        {hint && <span className="text-xs text-gray-400">{hint}</span>}
+      </div>
       {children}
       {error && <p className="text-xs text-red-500 font-medium">{error}</p>}
     </div>
@@ -424,8 +428,9 @@ export function FormField({ label, required, error, children, className = '' }: 
 }
 
 // ── Text Input ────────────────────────────────────────────────────────
-export function TextInput({ value, onChange, placeholder, type = 'text', disabled }: {
-  value: string; onChange: (v: string) => void; placeholder?: string; type?: string; disabled?: boolean;
+export function TextInput({ value, onChange, placeholder, type = 'text', disabled, className = '', min, max, onKeyDown }: {
+  value: string; onChange: (v: string) => void; placeholder?: string; type?: string; disabled?: boolean; className?: string;
+  min?: string | number; max?: string | number; onKeyDown?: (e: any) => void;
 }) {
   return (
     <input
@@ -434,14 +439,17 @@ export function TextInput({ value, onChange, placeholder, type = 'text', disable
       onChange={(e) => onChange(e.target.value)}
       placeholder={placeholder}
       disabled={disabled}
-      className="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-900 placeholder:text-gray-400 focus:border-orange-400 focus:ring-2 focus:ring-orange-100 outline-none transition-all disabled:bg-gray-50 disabled:text-gray-400"
+      min={min}
+      max={max}
+      onKeyDown={onKeyDown}
+      className={`w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-900 placeholder:text-gray-400 focus:border-orange-400 focus:ring-2 focus:ring-orange-100 outline-none transition-all disabled:bg-gray-50 disabled:text-gray-400 ${className}`}
     />
   );
 }
 
 // ── TextArea ──────────────────────────────────────────────────────────
-export function TextArea({ value, onChange, placeholder, rows = 3, disabled }: {
-  value: string; onChange: (v: string) => void; placeholder?: string; rows?: number; disabled?: boolean;
+export function TextArea({ value, onChange, placeholder, rows = 3, disabled, className = '' }: {
+  value: string; onChange: (v: string) => void; placeholder?: string; rows?: number; disabled?: boolean; className?: string;
 }) {
   return (
     <textarea
@@ -450,7 +458,7 @@ export function TextArea({ value, onChange, placeholder, rows = 3, disabled }: {
       placeholder={placeholder}
       rows={rows}
       disabled={disabled}
-      className="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-900 placeholder:text-gray-400 focus:border-orange-400 focus:ring-2 focus:ring-orange-100 outline-none transition-all resize-none disabled:bg-gray-50 disabled:text-gray-400"
+      className={`w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-900 placeholder:text-gray-400 focus:border-orange-400 focus:ring-2 focus:ring-orange-100 outline-none transition-all resize-none disabled:bg-gray-50 disabled:text-gray-400 ${className}`}
     />
   );
 }

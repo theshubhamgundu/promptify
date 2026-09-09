@@ -333,8 +333,8 @@ export default function TuringTestChallenge({
           <div className="p-4 bg-white border-t border-gray-200 flex items-center gap-3">
             <TextInput
               value={questionInput}
-              onChange={e => setQuestionInput(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && handleSendQuestion()}
+              onChange={setQuestionInput}
+              onKeyDown={(e: any) => e.key === 'Enter' && handleSendQuestion()}
               placeholder={
                 messages.length >= maxQuestions
                   ? 'Maximum question limit reached. Please submit your final verdict.'
@@ -414,7 +414,7 @@ export default function TuringTestChallenge({
               <TextArea
                 rows={3}
                 value={reasoningText}
-                onChange={e => setReasoningText(e.target.value)}
+                onChange={setReasoningText}
                 placeholder="Explain the linguistic, temporal, or logical indicators that influenced your decision..."
                 className="w-full bg-gray-50 border-gray-200 focus:bg-white text-xs text-gray-900 rounded-xl resize-none p-3"
               />

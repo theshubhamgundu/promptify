@@ -95,7 +95,7 @@ export default function AnimatedGenerateButton({
         </div>
       </button>
 
-      <style jsx>{`
+      <style>{`
         .ui-anim-btn {
           --padding: 4px;
           --radius: 24px;
