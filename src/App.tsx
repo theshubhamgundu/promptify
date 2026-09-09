@@ -53,7 +53,7 @@ import { useTeamStore } from './stores/teamStore';
 // ── Page transition wrapper ───────────────────────────────────────────
 function PageView({ pageKey, children }: { pageKey: string; children: React.ReactNode }) {
   return (
-    <div key={pageKey} className="page-enter h-full">
+    <div key={pageKey} className="page-enter min-h-full h-full w-full overflow-y-auto overflow-x-hidden">
       {children}
     </div>
   );
