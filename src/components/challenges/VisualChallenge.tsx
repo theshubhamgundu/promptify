@@ -3,22 +3,35 @@ import { supabase } from '../../lib/supabase';
 import { AIProvider } from '../../lib/byok-service';
 import { useVisionEvaluation } from '../../hooks/useVisionEvaluation';
 import { getVisionBestScore, getVisionRemainingAttempts } from '../../lib/round3-evaluator';
-import { PlayIcon, ShieldIcon, CheckCircleIcon, ExclamationCircleIcon, ImageIcon, ClockIcon } from '../icons';
+import { PlayIcon, ShieldIcon, CheckCircleIcon, ExclamationCircleIcon, EyeIcon, ClockIcon } from '../icons';
 
 interface VisualChallengeProps {
   challenge: any; // VisionQuestion from round3-questions.ts
   teamId: string;
   roundSessionId: string; // This is the round3_session ID
-  activeProvider: AIProvider | null;
   onComplete: () => void;
 }
 
-export function VisualChallenge({ challenge, teamId, roundSessionId, activeProvider, onComplete }: VisualChallengeProps) {
+export function VisualChallenge({ challenge, teamId, roundSessionId, onComplete }: VisualChallengeProps) {
   const [promptText, setPromptText] = useState('');
   const [evaluationResult, setEvaluationResult] = useState<any>(null);
   const [bestScore, setBestScore] = useState<number>(0);
   const [remainingAttempts, setRemainingAttempts] = useState<number>(3);
   const [startTime] = useState(Date.now());
+  
+  // Auto-detect active provider
+  const [activeProvider, setActiveProvider] = useState<AIProvider | null>(null);
+  
+  useEffect(() => {
+    // Import byokSession dynamically to avoid circular dependency
+    import('../../lib/byok-service').then(({ byokSession }) => {
+      const providers: AIProvider[] = ['OPENAI', 'ANTHROPIC', 'GOOGLE', 'GROQ', 'MISTRAL', 'COHERE'];
+      const found = providers.find(p => byokSession.hasKey(p));
+      if (found) {
+        setActiveProvider(found);
+      }
+    });
+  }, []);
   
   const { submitAndEvaluate, submitting, evaluating, error } = useVisionEvaluation();
 
@@ -92,36 +105,42 @@ export function VisualChallenge({ challenge, teamId, roundSessionId, activeProvi
       const isProcessing = submitting || evaluating;
 
       return (
-        <div className="flex h-full p-6 gap-6">
+        <div className="flex h-full p-6 gap-6 bg-gray-50">
           {/* Left Panel: The Subject Image */}
           <div className="w-1/3 flex flex-col gap-4">
-            <div className="bg-gray-800 rounded-xl p-4 border border-gray-700 shadow-xl">
-              <h2 className="text-lg font-bold mb-4 flex items-center gap-2">
-                <ImageIcon className="text-purple-400 w-5 h-5" /> 
+            <div className="bg-white rounded-xl p-4 border border-gray-200 shadow-sm">
+              <h2 className="text-lg font-bold mb-4 flex items-center gap-2 text-gray-900">
+                <EyeIcon className="text-blue-600 w-5 h-5" /> 
                 Target Image
               </h2>
-              <div className="aspect-square w-full rounded-lg overflow-hidden border-2 border-purple-500/30 relative">
+              <div 
+                className="aspect-square w-full rounded-lg overflow-hidden border-2 border-gray-300 relative select-none"
+                onContextMenu={(e) => e.preventDefault()}
+                onDragStart={(e) => e.preventDefault()}
+              >
                 <img 
                   src={targetImage} 
                   alt="Challenge Image" 
-                  className="w-full h-full object-cover"
+                  className="w-full h-full object-cover pointer-events-none"
+                  draggable="false"
+                  onContextMenu={(e) => e.preventDefault()}
                 />
-                {/* Scanline overlay effect */}
-                <div className="absolute inset-0 bg-[linear-gradient(transparent_50%,rgba(0,0,0,0.25)_50%)] bg-[length:100%_4px] pointer-events-none"></div>
+                {/* Overlay to prevent interaction */}
+                <div className="absolute inset-0 pointer-events-none select-none"></div>
               </div>
-              <div className="mt-4 text-sm text-gray-400 leading-relaxed">
+              <div className="mt-4 text-sm text-gray-700 leading-relaxed">
                 {challenge.description}
               </div>
               
               {/* Stats */}
-              <div className="mt-4 pt-4 border-t border-gray-700 space-y-2">
-                <div className="flex justify-between text-xs">
-                  <span className="text-gray-500">Best Score:</span>
-                  <span className="text-green-400 font-bold">{bestScore.toFixed(1)}/100</span>
+              <div className="mt-4 pt-4 border-t border-gray-200 space-y-2">
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-600">Best Score:</span>
+                  <span className="text-green-600 font-bold">{bestScore.toFixed(1)}/{challenge.maxScore}</span>
                 </div>
-                <div className="flex justify-between text-xs">
-                  <span className="text-gray-500">Attempts Left:</span>
-                  <span className="text-blue-400 font-bold">{remainingAttempts}/{maxAttempts}</span>
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-600">Attempts Left:</span>
+                  <span className="text-blue-600 font-bold">{remainingAttempts}/{maxAttempts}</span>
                 </div>
               </div>
             </div>
@@ -129,38 +148,38 @@ export function VisualChallenge({ challenge, teamId, roundSessionId, activeProvi
           
           {/* Right Panel: Prompt & Execution */}
           <div className="flex-1 flex flex-col gap-4">
-            {/* Terminal Input */}
-            <div className="bg-gray-800 rounded-xl border border-gray-700 flex flex-col shadow-xl overflow-hidden flex-1 max-h-[50%]">
-              <div className="bg-gray-900 px-4 py-3 border-b border-gray-700 font-bold flex justify-between items-center text-sm">
-                <span className="text-gray-300">VISION ANALYZER PROMPT</span>
+            {/* Input Area */}
+            <div className="bg-white rounded-xl border border-gray-200 flex flex-col shadow-sm overflow-hidden flex-1 max-h-[50%]">
+              <div className="bg-gray-100 px-4 py-3 border-b border-gray-200 font-bold flex justify-between items-center text-sm">
+                <span className="text-gray-900">Your Description</span>
                 {remainingAttempts === 0 && (
-                  <span className="text-red-400 text-xs">NO ATTEMPTS LEFT</span>
+                  <span className="text-red-600 text-xs">NO ATTEMPTS LEFT</span>
                 )}
               </div>
               <textarea
                 value={promptText}
                 onChange={(e) => setPromptText(e.target.value)}
-                placeholder="Write a prompt to analyze the image... Be specific and detailed to get a high score!"
-                className="flex-1 bg-transparent p-4 text-purple-400 font-mono text-sm focus:outline-none resize-none placeholder-purple-800/50"
+                placeholder="Describe what you see in the image... Be specific and detailed!"
+                className="flex-1 bg-white p-4 text-gray-900 text-sm focus:outline-none resize-none placeholder-gray-400"
                 spellCheck="false"
                 disabled={isProcessing || remainingAttempts === 0}
               />
-              <div className="p-4 border-t border-gray-700 bg-gray-900 flex justify-between items-center">
-                {error && <span className="text-red-400 text-xs font-bold">{error}</span>}
+              <div className="p-4 border-t border-gray-200 bg-gray-50 flex justify-between items-center">
+                {error && <span className="text-red-600 text-xs font-bold">{error}</span>}
                 {isProcessing && (
-                  <span className="text-blue-400 text-xs font-bold">
-                    {submitting ? 'Calling AI...' : 'Evaluating response...'}
+                  <span className="text-blue-600 text-xs font-bold">
+                    Evaluating...
                   </span>
                 )}
                 <button
                   onClick={handleEvaluate}
-                  disabled={isProcessing || !activeProvider || !promptText.trim() || remainingAttempts === 0}
-                  className="ml-auto px-6 py-2 bg-gradient-to-r from-purple-500 to-pink-600 hover:from-purple-400 hover:to-pink-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold rounded-lg transition-all flex items-center gap-2"
+                  disabled={isProcessing || !promptText.trim() || remainingAttempts === 0}
+                  className="ml-auto px-6 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold rounded-lg transition-all flex items-center gap-2"
                 >
                   {isProcessing ? (
                     <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
                   ) : (
-                    <><PlayIcon className="w-4 h-4" /> ANALYZE</>
+                    <><PlayIcon className="w-4 h-4" /> SUBMIT</>
                   )}
                 </button>
               </div>
@@ -211,32 +230,7 @@ export function VisualChallenge({ challenge, teamId, roundSessionId, activeProvi
                       </div>
                     </div>
                     
-                    {/* Pattern Breakdown (Collapsible) */}
-                    <details className="bg-black/30 rounded-lg p-3">
-                      <summary className="cursor-pointer text-sm font-bold text-gray-400 hover:text-gray-200">
-                        View Pattern Breakdown
-                      </summary>
-                      <div className="mt-3 space-y-2 text-xs">
-                        {evaluationResult.matchedPatterns.map((pattern, i) => (
-                          <div key={i} className={`flex justify-between items-center p-2 rounded ${
-                            pattern.matched ? 'bg-green-900/20' : 'bg-gray-800/50'
-                          }`}>
-                            <div className="flex items-center gap-2">
-                              <span className={pattern.matched ? 'text-green-400' : 'text-gray-500'}>
-                                {pattern.matched ? '✓' : '○'}
-                              </span>
-                              <span className={pattern.matched ? 'text-gray-200' : 'text-gray-500'}>
-                                {pattern.label}
-                              </span>
-                            </div>
-                            <span className={`font-bold ${pattern.matched ? 'text-green-400' : 'text-gray-600'}`}>
-                              {pattern.matched ? '+' : ''}{pattern.weight}pts
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    </details>
-                    
+
                     {/* Action Button */}
                     {isPassed ? (
                       <button 
@@ -264,8 +258,8 @@ export function VisualChallenge({ challenge, teamId, roundSessionId, activeProvi
                 ) : (
                   <div className="h-full flex flex-col items-center justify-center text-gray-600">
                     <ShieldIcon className="w-12 h-12 mb-2 opacity-50" />
-                    <p>Write a prompt and click ANALYZE</p>
-                    <p className="text-xs mt-2">Your response will be evaluated instantly</p>
+                    <p>Describe the image and click SUBMIT</p>
+                    <p className="text-xs mt-2">Your description will be evaluated instantly</p>
                   </div>
                 )}
               </div>

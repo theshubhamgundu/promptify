@@ -1,11 +1,11 @@
 /**
  * Hook for Vision Challenge Evaluation
  * Handles submission and deterministic evaluation
+ * NO AI CALLS - evaluates participant's prompt text directly using pattern matching
  */
 
 import { useState } from 'react';
 import { supabase } from '../lib/supabase';
-import { sendAIRequest, type AIProvider } from '../lib/byok-service';
 import { evaluateRound3Submission, type VisionEvaluationResult } from '../lib/round3-evaluator';
 import { getRound3Question } from '../lib/round3-questions';
 
@@ -16,7 +16,7 @@ export interface VisionSubmissionParams {
   participantPrompt: string;
   referenceImageURL: string;
   challengeData: any;
-  activeProvider: AIProvider | null;
+  activeProvider: any; // Not used, kept for compatibility
   timeTaken: number;
 }
 
@@ -33,57 +33,24 @@ export function useVisionEvaluation() {
     setError(null);
 
     try {
-      // Step 1: Call participant's Vision AI with their BYOK
-      if (!params.activeProvider) {
-        throw new Error('No AI provider configured. Please add your API key.');
-      }
-
-      const aiResponse = await sendAIRequest(
-        params.activeProvider,
-        params.teamId,
-        params.roundSessionId,
-        params.challengeId,
-        {
-          messages: [
-            {
-              role: 'user',
-              content: [
-                { type: 'text', text: params.participantPrompt },
-                { 
-                  type: 'image_url', 
-                  image_url: { url: params.referenceImageURL } 
-                }
-              ]
-            }
-          ],
-          model: params.challengeData.configuration?.byok?.allowed_models?.[0] || 'gpt-4o',
-          max_tokens: params.challengeData.configuration?.byok?.max_tokens_per_request || 500
-        }
-      );
-
-      if (!aiResponse.success) {
-        throw new Error(aiResponse.error || 'Vision AI request failed');
-      }
-
-      const aiResponseText = aiResponse.content || '';
-
-      // Step 2: Get question definition for evaluation
+      // Round 3 uses DETERMINISTIC evaluation - no AI calls!
+      // We evaluate the participant's prompt text directly using pattern matching
+      
+      // Step 1: Get question definition for evaluation
       const question = getRound3Question(params.challengeId);
       if (!question) {
         throw new Error('Question definition not found');
       }
 
-      setSubmitting(false);
-      setEvaluating(true);
-
-      // Step 3: Evaluate deterministically (NO AI judge)
+      // Step 2: Evaluate the prompt text deterministically (pattern matching only)
+      // We evaluate what the participant WROTE, not what AI would generate
       const evaluation = evaluateRound3Submission(
         question,
-        aiResponseText,
+        params.participantPrompt, // Evaluate the prompt itself, not AI response
         params.timeTaken
       );
 
-      // Step 4: Get next attempt number
+      // Step 3: Get next attempt number
       const { data: existingSubmissions } = await supabase
         .from('vision_submissions')
         .select('attempt_number')
@@ -94,7 +61,7 @@ export function useVisionEvaluation() {
 
       const attemptNumber = (existingSubmissions?.[0]?.attempt_number || 0) + 1;
 
-      // Step 5: Store submission with evaluation results
+      // Step 4: Store submission with evaluation results
       const { error: insertError } = await supabase
         .from('vision_submissions')
         .insert({
@@ -103,7 +70,7 @@ export function useVisionEvaluation() {
           round_session_id: params.roundSessionId,
           participant_prompt: params.participantPrompt,
           reference_image_url: params.referenceImageURL,
-          ai_response_text: aiResponseText,
+          ai_response_text: params.participantPrompt, // Store the prompt as the "response"
           time_taken_seconds: params.timeTaken,
           attempt_number: attemptNumber,
           evaluation_status: 'COMPLETED',
@@ -119,7 +86,7 @@ export function useVisionEvaluation() {
 
       if (insertError) throw insertError;
 
-      setEvaluating(false);
+      setSubmitting(false);
 
       return {
         success: true,

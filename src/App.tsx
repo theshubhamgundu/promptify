@@ -20,7 +20,6 @@ import ActivityLogViewer from './pages/admin/ActivityLogViewer';
 import ParticipantManager from './pages/admin/ParticipantManager';
 import VerificationManager from './pages/admin/VerificationManager';
 import SessionManager from './pages/admin/SessionManager';
-import VisionMonitor from './pages/admin/VisionMonitor';
 import TeamDetail from './pages/admin/TeamDetail';
 import SubmissionsReview from './pages/admin/SubmissionsReview';
 import Announcements from './pages/admin/Announcements';
