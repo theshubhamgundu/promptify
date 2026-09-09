@@ -108,18 +108,12 @@ export function useVisionEvaluation() {
           attempt_number: attemptNumber,
           evaluation_status: 'COMPLETED',
           total_score: evaluation.totalScore,
-          keyword_score: evaluation.breakdown.keywordScore,
-          concept_score: evaluation.breakdown.conceptScore,
-          word_count_score: evaluation.breakdown.wordCountScore,
-          forbidden_penalty: evaluation.breakdown.forbiddenPenalty,
-          bonus_score: evaluation.breakdown.bonusScore,
+          max_score: evaluation.maxScore,
+          passed: evaluation.passed,
           evaluation_details: {
-            wordCount: evaluation.details.wordCount,
-            keywordMatchRate: evaluation.details.keywordMatchRate,
-            conceptMatchRate: evaluation.details.conceptMatchRate,
-            forbiddenKeywordsFound: evaluation.details.forbiddenKeywordsFound,
-            bonusElementsMatched: evaluation.details.bonusElementsMatched,
-            feedback: evaluation.feedback
+            matchedPatterns: evaluation.matchedPatterns,
+            feedback: evaluation.feedback,
+            timeTakenSeconds: evaluation.timeTakenSeconds
           }
         });
 

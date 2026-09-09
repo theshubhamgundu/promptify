@@ -31,7 +31,7 @@ import QuizRoundSimple from './pages/QuizRoundSimple';
 import QuizResults from './pages/QuizResults';
 import QuizRound from './pages/QuizRound';
 import PromptHeist from './pages/PromptHeist';
-import VisionRound from './pages/VisionRound';
+import Round3Vision from './pages/Round3Vision';
 import Round4Engine from './pages/Round4Engine';
 import Round4Monitor from './pages/admin/Round4Monitor';
 import Round5Engine from './pages/Round5Engine';
@@ -276,7 +276,7 @@ export default function App() {
       }
       if (currentPage.startsWith('vision-'))  {
         const roundId = currentPage.replace('vision-', '');
-        return <VisionRound roundId={roundId} navigate={navigate} />;
+        return <Round3Vision roundId={roundId} navigate={navigate} />;
       }
       if (currentPage.startsWith('round4-'))  {
         const roundId = currentPage.replace('round4-', '');

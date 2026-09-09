@@ -1,13 +1,14 @@
 import { useState, useEffect } from 'react';
+import { supabase } from '../../lib/supabase';
 import { AIProvider } from '../../lib/byok-service';
 import { useVisionEvaluation } from '../../hooks/useVisionEvaluation';
 import { getVisionBestScore, getVisionRemainingAttempts } from '../../lib/round3-evaluator';
 import { PlayIcon, ShieldIcon, CheckCircleIcon, ExclamationCircleIcon, ImageIcon, ClockIcon } from '../icons';
 
 interface VisualChallengeProps {
-  challenge: any;
+  challenge: any; // VisionQuestion from round3-questions.ts
   teamId: string;
-  roundSessionId: string;
+  roundSessionId: string; // This is the round3_session ID
   activeProvider: AIProvider | null;
   onComplete: () => void;
 }
@@ -21,19 +22,17 @@ export function VisualChallenge({ challenge, teamId, roundSessionId, activeProvi
   
   const { submitAndEvaluate, submitting, evaluating, error } = useVisionEvaluation();
 
-  // Challenge config extracts
-  const targetImage = challenge.configuration?.scenario_data?.target_image_url || 
-                      challenge.configuration?.mediaUrl ||
-                      'https://images.unsplash.com/photo-1620641788421-7a1c342ea42e'; // fallback
-  
-  const maxAttempts = challenge.max_attempts || 3;
+  // Challenge is actually a VisionQuestion
+  const questionId = challenge.id;
+  const targetImage = challenge.imageUrl;
+  const maxAttempts = 3; // Fixed for all questions
   
   // Load best score and remaining attempts
   useEffect(() => {
     async function load() {
       const [score, attempts] = await Promise.all([
-        getVisionBestScore(teamId, challenge.id),
-        getVisionRemainingAttempts(teamId, challenge.id, maxAttempts)
+        getVisionBestScore(teamId, questionId),
+        getVisionRemainingAttempts(teamId, questionId, maxAttempts)
       ]);
       
       setBestScore(score);
@@ -41,7 +40,7 @@ export function VisualChallenge({ challenge, teamId, roundSessionId, activeProvi
     }
     
     load();
-  }, [teamId, challenge.id, maxAttempts]);
+  }, [teamId, questionId, maxAttempts]);
 
   const handleEvaluate = async () => {
     if (!promptText.trim()) return;
@@ -53,7 +52,7 @@ export function VisualChallenge({ challenge, teamId, roundSessionId, activeProvi
     
     const result = await submitAndEvaluate({
       teamId,
-      challengeId: challenge.id,
+      challengeId: questionId,
       roundSessionId,
       participantPrompt: promptText,
       referenceImageURL: targetImage,
@@ -66,16 +65,24 @@ export function VisualChallenge({ challenge, teamId, roundSessionId, activeProvi
       setEvaluationResult(result.evaluation);
       
       // Update best score if improved
-      if (result.evaluation.total_score > bestScore) {
-        setBestScore(result.evaluation.total_score);
+      if (result.evaluation.totalScore > bestScore) {
+        setBestScore(result.evaluation.totalScore);
       }
       
       // Update remaining attempts
       setRemainingAttempts(prev => Math.max(0, prev - 1));
       
-      // Check if passed
-      const passingScore = challenge.configuration?.scoring_rubric?.passing_score || 60;
-      if (result.evaluation.total_score >= passingScore) {
+      // Check if passed (score >= 60% of max)
+      const passingThreshold = challenge.maxScore * 0.6;
+      if (result.evaluation.totalScore >= passingThreshold) {
+        // Update round3_session to mark question as completed and add score
+        await supabase.rpc('complete_round3_question', {
+          p_session_id: roundSessionId,
+          p_question_id: questionId,
+          p_tier: challenge.tier,
+          p_score: result.evaluation.totalScore
+        });
+        
         setTimeout(() => onComplete(), 2000);
       }
     }
@@ -182,36 +189,18 @@ export function VisualChallenge({ challenge, teamId, roundSessionId, activeProvi
                           )}
                         </h3>
                         <div className="text-3xl font-black text-white">
-                          {evaluationResult.totalScore.toFixed(0)}<span className="text-lg text-gray-400">/100</span>
+                          {evaluationResult.totalScore.toFixed(1)}<span className="text-lg text-gray-400">/{evaluationResult.maxScore}</span>
                         </div>
                       </div>
                       
-                      {/* Score Breakdown */}
-                      <div className="space-y-2 mb-3">
-                        <div className="flex justify-between text-sm">
-                          <span className="text-gray-300">Keyword Match:</span>
-                          <span className="font-bold">{evaluationResult.breakdown.keywordScore.toFixed(1)}/40</span>
+                      {/* Pattern Match Summary */}
+                      <div className="mb-3 text-sm">
+                        <div className="text-gray-300">
+                          Matched <span className="font-bold text-white">
+                            {evaluationResult.matchedPatterns.filter(p => p.matched).length}/
+                            {evaluationResult.matchedPatterns.length}
+                          </span> elements
                         </div>
-                        <div className="flex justify-between text-sm">
-                          <span className="text-gray-300">Concept Coverage:</span>
-                          <span className="font-bold">{evaluationResult.breakdown.conceptScore.toFixed(1)}/30</span>
-                        </div>
-                        <div className="flex justify-between text-sm">
-                          <span className="text-gray-300">Word Count:</span>
-                          <span className="font-bold">{evaluationResult.breakdown.wordCountScore.toFixed(1)}/10</span>
-                        </div>
-                        {evaluationResult.breakdown.forbiddenPenalty < 0 && (
-                          <div className="flex justify-between text-sm">
-                            <span className="text-red-400">Forbidden Words:</span>
-                            <span className="font-bold text-red-400">{evaluationResult.breakdown.forbiddenPenalty.toFixed(1)}</span>
-                          </div>
-                        )}
-                        {evaluationResult.breakdown.bonusScore > 0 && (
-                          <div className="flex justify-between text-sm">
-                            <span className="text-yellow-400">Bonus Elements:</span>
-                            <span className="font-bold text-yellow-400">+{evaluationResult.breakdown.bonusScore.toFixed(1)}/20</span>
-                          </div>
-                        )}
                       </div>
                       
                       {/* Feedback */}
@@ -222,51 +211,29 @@ export function VisualChallenge({ challenge, teamId, roundSessionId, activeProvi
                       </div>
                     </div>
                     
-                    {/* Detailed Analysis (Collapsible) */}
+                    {/* Pattern Breakdown (Collapsible) */}
                     <details className="bg-black/30 rounded-lg p-3">
                       <summary className="cursor-pointer text-sm font-bold text-gray-400 hover:text-gray-200">
-                        View Detailed Analysis
+                        View Pattern Breakdown
                       </summary>
-                      <div className="mt-3 space-y-3 text-xs text-gray-400">
-                        <div>
-                          <strong className="text-gray-300">Word Count:</strong> {evaluationResult.details.wordCount}
-                        </div>
-                        <div>
-                          <strong className="text-gray-300">Keywords Matched ({evaluationResult.details.expectedKeywordsMatched.length}):</strong>{' '}
-                          {evaluationResult.details.expectedKeywordsMatched.join(', ') || 'None'}
-                        </div>
-                        {evaluationResult.details.expectedKeywordsMissed.length > 0 && (
-                          <div>
-                            <strong className="text-orange-400">Keywords Missed ({evaluationResult.details.expectedKeywordsMissed.length}):</strong>{' '}
-                            {evaluationResult.details.expectedKeywordsMissed.join(', ')}
+                      <div className="mt-3 space-y-2 text-xs">
+                        {evaluationResult.matchedPatterns.map((pattern, i) => (
+                          <div key={i} className={`flex justify-between items-center p-2 rounded ${
+                            pattern.matched ? 'bg-green-900/20' : 'bg-gray-800/50'
+                          }`}>
+                            <div className="flex items-center gap-2">
+                              <span className={pattern.matched ? 'text-green-400' : 'text-gray-500'}>
+                                {pattern.matched ? '✓' : '○'}
+                              </span>
+                              <span className={pattern.matched ? 'text-gray-200' : 'text-gray-500'}>
+                                {pattern.label}
+                              </span>
+                            </div>
+                            <span className={`font-bold ${pattern.matched ? 'text-green-400' : 'text-gray-600'}`}>
+                              {pattern.matched ? '+' : ''}{pattern.weight}pts
+                            </span>
                           </div>
-                        )}
-                        <div>
-                          <strong className="text-gray-300">Concepts Matched ({evaluationResult.details.conceptsMatched.length}):</strong>{' '}
-                          {evaluationResult.details.conceptsMatched.join(', ') || 'None'}
-                        </div>
-                        {evaluationResult.details.conceptsMissed.length > 0 && (
-                          <div>
-                            <strong className="text-orange-400">Concepts Missed ({evaluationResult.details.conceptsMissed.length}):</strong>{' '}
-                            {evaluationResult.details.conceptsMissed.join(', ')}
-                          </div>
-                        )}
-                        {evaluationResult.details.forbiddenKeywordsFound.length > 0 && (
-                          <div>
-                            <strong className="text-red-400">Forbidden Keywords:</strong>{' '}
-                            {evaluationResult.details.forbiddenKeywordsFound.join(', ')}
-                          </div>
-                        )}
-                        {evaluationResult.details.bonusElementsMatched.length > 0 && (
-                          <div>
-                            <strong className="text-yellow-400">Bonus Elements:</strong>
-                            <ul className="ml-4 mt-1 space-y-1">
-                              {evaluationResult.details.bonusElementsMatched.map((bonus, i) => (
-                                <li key={i}>• {bonus.keyword} - {bonus.description} (+{bonus.points}pts)</li>
-                              ))}
-                            </ul>
-                          </div>
-                        )}
+                        ))}
                       </div>
                     </details>
                     

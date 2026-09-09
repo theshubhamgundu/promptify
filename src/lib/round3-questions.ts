@@ -42,7 +42,7 @@ const TIER1_QUESTIONS: VisionQuestion[] = [
     tier: 'TIER1',
     questionNumber: 1,
     title: 'Rose on Table',
-    imageUrl: '/assets/round 3 images/tier1-q1-rose.jpg',
+    imageUrl: '/assets/round 3 images/T1-Q1.jpg',
     description: 'Analyze this image in detail.',
     maxScore: 10,
     evaluationPatterns: [
@@ -60,7 +60,7 @@ const TIER1_QUESTIONS: VisionQuestion[] = [
     tier: 'TIER1',
     questionNumber: 2,
     title: 'Food',
-    imageUrl: '/assets/round 3 images/tier1-q2-food.jpg',
+    imageUrl: '/assets/round 3 images/T1-Q2.jpg',
     description: 'Analyze this image in detail.',
     maxScore: 10,
     evaluationPatterns: [
@@ -78,7 +78,7 @@ const TIER1_QUESTIONS: VisionQuestion[] = [
     tier: 'TIER1',
     questionNumber: 3,
     title: 'Architecture',
-    imageUrl: '/assets/round 3 images/tier1-q3-architecture.jpg',
+    imageUrl: '/assets/round 3 images/T1-Q3.jpg',
     description: 'Analyze this image in detail.',
     maxScore: 10,
     evaluationPatterns: [
@@ -96,7 +96,7 @@ const TIER1_QUESTIONS: VisionQuestion[] = [
     tier: 'TIER1',
     questionNumber: 4,
     title: 'Animals',
-    imageUrl: '/assets/round 3 images/tier1-q4-animals.jpg',
+    imageUrl: '/assets/round 3 images/T1-Q4.jpg',
     description: 'Analyze this image in detail.',
     maxScore: 10,
     evaluationPatterns: [
@@ -114,7 +114,7 @@ const TIER1_QUESTIONS: VisionQuestion[] = [
     tier: 'TIER1',
     questionNumber: 5,
     title: 'Vehicles',
-    imageUrl: '/assets/round 3 images/tier1-q5-vehicles.jpg',
+    imageUrl: '/assets/round 3 images/T1-Q5.jpg',
     description: 'Analyze this image in detail.',
     maxScore: 10,
     evaluationPatterns: [
@@ -132,7 +132,7 @@ const TIER1_QUESTIONS: VisionQuestion[] = [
     tier: 'TIER1',
     questionNumber: 6,
     title: 'Weather',
-    imageUrl: '/assets/round 3 images/tier1-q6-weather.jpg',
+    imageUrl: '/assets/round 3 images/T1-Q6.jpg',
     description: 'Analyze this image in detail.',
     maxScore: 10,
     evaluationPatterns: [
@@ -150,7 +150,7 @@ const TIER1_QUESTIONS: VisionQuestion[] = [
     tier: 'TIER1',
     questionNumber: 7,
     title: 'Interiors',
-    imageUrl: '/assets/round 3 images/tier1-q7-interiors.jpg',
+    imageUrl: '/assets/round 3 images/T1-Q7.jpg',
     description: 'Analyze this image in detail.',
     maxScore: 10,
     evaluationPatterns: [
@@ -168,7 +168,7 @@ const TIER1_QUESTIONS: VisionQuestion[] = [
     tier: 'TIER1',
     questionNumber: 8,
     title: 'Sports',
-    imageUrl: '/assets/round 3 images/tier1-q8-sports.jpg',
+    imageUrl: '/assets/round 3 images/T1-Q8.jpg',
     description: 'Analyze this image in detail.',
     maxScore: 10,
     evaluationPatterns: [
@@ -186,7 +186,7 @@ const TIER1_QUESTIONS: VisionQuestion[] = [
     tier: 'TIER1',
     questionNumber: 9,
     title: 'Objects/Fashion',
-    imageUrl: '/assets/round 3 images/tier1-q9-objects.jpg',
+    imageUrl: '/assets/round 3 images/T1-Q9.jpg',
     description: 'Analyze this image in detail.',
     maxScore: 10,
     evaluationPatterns: [
@@ -204,7 +204,7 @@ const TIER1_QUESTIONS: VisionQuestion[] = [
     tier: 'TIER1',
     questionNumber: 10,
     title: 'Space/Sky',
-    imageUrl: '/assets/round 3 images/tier1-q10-sky.jpg',
+    imageUrl: '/assets/round 3 images/T1-Q10.jpg',
     description: 'Analyze this image in detail.',
     maxScore: 10,
     evaluationPatterns: [
@@ -228,7 +228,7 @@ const TIER2_QUESTIONS: VisionQuestion[] = [
     tier: 'TIER2',
     questionNumber: 1,
     title: 'Urban Street',
-    imageUrl: '/assets/round 3 images/tier2-q1-urban.jpg',
+    imageUrl: '/assets/round 3 images/T2-Q1.jpg',
     description: 'Analyze this image in detail.',
     maxScore: 15,
     evaluationPatterns: [
@@ -246,7 +246,7 @@ const TIER2_QUESTIONS: VisionQuestion[] = [
     tier: 'TIER2',
     questionNumber: 2,
     title: 'Market Scene',
-    imageUrl: '/assets/round 3 images/tier2-q2-market.jpg',
+    imageUrl: '/assets/round 3 images/T2-Q2.jpg',
     description: 'Analyze this image in detail.',
     maxScore: 15,
     evaluationPatterns: [
@@ -265,7 +265,7 @@ const TIER2_QUESTIONS: VisionQuestion[] = [
     tier: 'TIER2',
     questionNumber: 3,
     title: 'Wildlife',
-    imageUrl: '/assets/round 3 images/tier2-q3-wildlife.jpg',
+    imageUrl: '/assets/round 3 images/T2-Q3.jpg',
     description: 'Analyze this image in detail.',
     maxScore: 15,
     evaluationPatterns: [
@@ -283,7 +283,7 @@ const TIER2_QUESTIONS: VisionQuestion[] = [
     tier: 'TIER2',
     questionNumber: 4,
     title: 'Workspace',
-    imageUrl: '/assets/round 3 images/tier2-q4-workspace.jpg',
+    imageUrl: '/assets/round 3 images/T2-Q4.jpg',
     description: 'Analyze this image in detail.',
     maxScore: 15,
     evaluationPatterns: [
@@ -302,7 +302,7 @@ const TIER2_QUESTIONS: VisionQuestion[] = [
     tier: 'TIER2',
     questionNumber: 5,
     title: 'Sports/Group',
-    imageUrl: '/assets/round 3 images/tier2-q5-cycling.jpg',
+    imageUrl: '/assets/round 3 images/T2-Q5.jpg',
     description: 'Analyze this image in detail.',
     maxScore: 15,
     evaluationPatterns: [
@@ -320,7 +320,7 @@ const TIER2_QUESTIONS: VisionQuestion[] = [
     tier: 'TIER2',
     questionNumber: 6,
     title: 'Table Setting',
-    imageUrl: '/assets/round 3 images/tier2-q6-table.jpg',
+    imageUrl: '/assets/round 3 images/T2-Q6.jpg',
     description: 'Analyze this image in detail.',
     maxScore: 15,
     evaluationPatterns: [
@@ -340,7 +340,7 @@ const TIER2_QUESTIONS: VisionQuestion[] = [
     tier: 'TIER2',
     questionNumber: 7,
     title: 'Street/Architecture',
-    imageUrl: '/assets/round 3 images/tier2-q7-alley.jpg',
+    imageUrl: '/assets/round 3 images/T2-Q7.jpg',
     description: 'Analyze this image in detail.',
     maxScore: 15,
     evaluationPatterns: [
@@ -359,7 +359,7 @@ const TIER2_QUESTIONS: VisionQuestion[] = [
     tier: 'TIER2',
     questionNumber: 8,
     title: 'Product/Technology',
-    imageUrl: '/assets/round 3 images/tier2-q8-phone.jpg',
+    imageUrl: '/assets/round 3 images/T2-Q8.jpg',
     description: 'Analyze this image in detail.',
     maxScore: 15,
     evaluationPatterns: [
@@ -378,7 +378,7 @@ const TIER2_QUESTIONS: VisionQuestion[] = [
     tier: 'TIER2',
     questionNumber: 9,
     title: 'Weather/Landscape',
-    imageUrl: '/assets/round 3 images/tier2-q9-lighthouse.jpg',
+    imageUrl: '/assets/round 3 images/T2-Q9.jpg',
     description: 'Analyze this image in detail.',
     maxScore: 15,
     evaluationPatterns: [
@@ -395,7 +395,7 @@ const TIER2_QUESTIONS: VisionQuestion[] = [
     tier: 'TIER2',
     questionNumber: 10,
     title: 'Portrait/Group',
-    imageUrl: '/assets/round 3 images/tier2-q10-friends.jpg',
+    imageUrl: '/assets/round 3 images/T2-Q10.jpg',
     description: 'Analyze this image in detail.',
     maxScore: 15,
     evaluationPatterns: [
@@ -419,7 +419,7 @@ const TIER3_QUESTIONS: VisionQuestion[] = [
     tier: 'TIER3',
     questionNumber: 1,
     title: 'Complex Urban',
-    imageUrl: '/assets/round 3 images/tier3-q1-night-city.jpg',
+    imageUrl: '/assets/round 3 images/T3-Q1.jpg',
     description: 'Analyze this image in detail.',
     maxScore: 20,
     evaluationPatterns: [
@@ -439,7 +439,7 @@ const TIER3_QUESTIONS: VisionQuestion[] = [
     tier: 'TIER3',
     questionNumber: 2,
     title: 'Macro Photography',
-    imageUrl: '/assets/round 3 images/tier3-q2-macro.jpg',
+    imageUrl: '/assets/round 3 images/T3-Q2.jpg',
     description: 'Analyze this image in detail.',
     maxScore: 20,
     evaluationPatterns: [
@@ -457,7 +457,7 @@ const TIER3_QUESTIONS: VisionQuestion[] = [
     tier: 'TIER3',
     questionNumber: 3,
     title: 'Fantasy/Stylized',
-    imageUrl: '/assets/round 3 images/tier3-q3-fantasy.jpg',
+    imageUrl: '/assets/round 3 images/T3-Q3.jpg',
     description: 'Analyze this image in detail.',
     maxScore: 20,
     evaluationPatterns: [
@@ -475,7 +475,7 @@ const TIER3_QUESTIONS: VisionQuestion[] = [
     tier: 'TIER3',
     questionNumber: 4,
     title: 'Complex Food',
-    imageUrl: '/assets/round 3 images/tier3-q4-charcuterie.jpg',
+    imageUrl: '/assets/round 3 images/T3-Q4.jpg',
     description: 'Analyze this image in detail.',
     maxScore: 20,
     evaluationPatterns: [
@@ -494,7 +494,7 @@ const TIER3_QUESTIONS: VisionQuestion[] = [
     tier: 'TIER3',
     questionNumber: 5,
     title: 'Complex Architecture',
-    imageUrl: '/assets/round 3 images/tier3-q5-library.jpg',
+    imageUrl: '/assets/round 3 images/T3-Q5.jpg',
     description: 'Analyze this image in detail.',
     maxScore: 20,
     evaluationPatterns: [
@@ -511,7 +511,7 @@ const TIER3_QUESTIONS: VisionQuestion[] = [
     tier: 'TIER3',
     questionNumber: 6,
     title: 'Wildlife/Action',
-    imageUrl: '/assets/round 3 images/tier3-q6-eagle.jpg',
+    imageUrl: '/assets/round 3 images/T3-Q6.jpg',
     description: 'Analyze this image in detail.',
     maxScore: 20,
     evaluationPatterns: [
@@ -529,7 +529,7 @@ const TIER3_QUESTIONS: VisionQuestion[] = [
     tier: 'TIER3',
     questionNumber: 7,
     title: 'Futuristic/Tech',
-    imageUrl: '/assets/round 3 images/tier3-q7-robot.jpg',
+    imageUrl: '/assets/round 3 images/T3-Q7.jpg',
     description: 'Analyze this image in detail.',
     maxScore: 20,
     evaluationPatterns: [
@@ -547,7 +547,7 @@ const TIER3_QUESTIONS: VisionQuestion[] = [
     tier: 'TIER3',
     questionNumber: 8,
     title: 'Dramatic Landscape',
-    imageUrl: '/assets/round 3 images/tier3-q8-lightning.jpg',
+    imageUrl: '/assets/round 3 images/T3-Q8.jpg',
     description: 'Analyze this image in detail.',
     maxScore: 20,
     evaluationPatterns: [
@@ -565,7 +565,7 @@ const TIER3_QUESTIONS: VisionQuestion[] = [
     tier: 'TIER3',
     questionNumber: 9,
     title: 'Cultural/Event Scene',
-    imageUrl: '/assets/round 3 images/tier3-q9-lanterns.jpg',
+    imageUrl: '/assets/round 3 images/T3-Q9.jpg',
     description: 'Analyze this image in detail.',
     maxScore: 20,
     evaluationPatterns: [
@@ -583,7 +583,7 @@ const TIER3_QUESTIONS: VisionQuestion[] = [
     tier: 'TIER3',
     questionNumber: 10,
     title: 'Complex Portrait/Narrative',
-    imageUrl: '/assets/round 3 images/tier3-q10-craftsman.jpg',
+    imageUrl: '/assets/round 3 images/T3-Q10.jpg',
     description: 'Analyze this image in detail.',
     maxScore: 20,
     evaluationPatterns: [
