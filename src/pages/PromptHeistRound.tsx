@@ -2,7 +2,7 @@ import { useEffect, useState, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { useEventStore } from '../stores/eventStore';
 import { useTeamStore } from '../stores/teamStore';
-import { BYOKConnect, BYOKConnected } from '../components/BYOKConnect';
+
 import { byokSession, sendAIRequest, AIProvider, BYOKConfig } from '../lib/byok-service';
 import { ClockIcon, CheckCircleIcon, ExclamationCircleIcon, ShieldIcon } from '../components/icons';
 import { ConfirmDialog } from '../components/ui';
@@ -58,8 +58,7 @@ export default function PromptHeistRound({ roundId, navigate }: PromptHeistRound
   const [actionError, setActionError] = useState<string | null>(null);
   const [round, setRound] = useState<any>(null);
   
-  // BYOK State
-  const [showBYOKConnect, setShowBYOKConnect] = useState(false);
+  // BYOK State (auto-resolved, no UI)
   const [activeProvider, setActiveProvider] = useState<AIProvider | null>(null);
   
   // User input
@@ -177,17 +176,9 @@ export default function PromptHeistRound({ roundId, navigate }: PromptHeistRound
     
     const byokConfig = resolveBYOKConfig(currentChallenge.configuration);
     if (byokConfig?.enabled) {
-      // Do we already have a key in memory for one of the allowed providers?
       const foundProvider = byokConfig.required_providers.find(p => byokSession.hasKey(p));
-      if (foundProvider) {
-        setActiveProvider(foundProvider);
-        setShowBYOKConnect(false);
-      } else {
-        setActiveProvider(null);
-        setShowBYOKConnect(true);
-      }
+      setActiveProvider(foundProvider || null);
     } else {
-      setShowBYOKConnect(false);
       setActiveProvider(null);
     }
   }, [currentChallengeIndex, currentChallenge]);
@@ -197,7 +188,6 @@ export default function PromptHeistRound({ roundId, navigate }: PromptHeistRound
     
     const byokConfig = resolveBYOKConfig(currentChallenge.configuration);
     if (byokConfig?.enabled && !activeProvider) {
-      setShowBYOKConnect(true);
       return;
     }
     
@@ -344,14 +334,14 @@ export default function PromptHeistRound({ roundId, navigate }: PromptHeistRound
         <div className="bg-white border-b border-gray-200 px-8 py-4 flex items-center justify-between">
           <h1 className="text-2xl font-bold text-gray-900">{round?.name || 'Prompt Heist'}</h1>
           <div className="flex items-center gap-3">
+            {navigate && (
+              <button onClick={() => navigate('dashboard')} className="px-5 py-2.5 bg-white border border-gray-300 text-gray-700 font-medium rounded-lg hover:bg-gray-50">
+                Exit
+              </button>
+            )}
             {roundSession && (
               <button onClick={handleSubmitRound} className="px-5 py-2.5 bg-green-600 hover:bg-green-700 text-white font-medium rounded-lg">
                 Submit Final
-              </button>
-            )}
-            {navigate && (
-              <button onClick={() => navigate('dashboard')} className="px-5 py-2.5 bg-white border border-gray-300 text-gray-700 font-medium rounded-lg hover:bg-gray-50">
-                Back to Dashboard
               </button>
             )}
           </div>
@@ -370,19 +360,7 @@ export default function PromptHeistRound({ roundId, navigate }: PromptHeistRound
     <div className="min-h-screen bg-gray-50 flex">
       {confirmDialog}
 
-      {showBYOKConnect && byokConfig && (
-        <BYOKConnect
-          config={byokConfig}
-          teamId={currentTeam!.id}
-          roundSessionId={roundSession.id}
-          challengeId={currentChallenge.id}
-          onConnected={(provider) => {
-            setActiveProvider(provider);
-            setShowBYOKConnect(false);
-          }}
-          onCancel={() => setShowBYOKConnect(false)}
-        />
-      )}
+
 
       <div className="w-64 bg-white border-r border-gray-200 flex-shrink-0 flex flex-col">
         <div className="p-4 border-b border-gray-200">
@@ -412,10 +390,10 @@ export default function PromptHeistRound({ roundId, navigate }: PromptHeistRound
 
         <div className="p-4 border-t border-gray-200">
           <button
-            onClick={handleSubmitRound}
-            className="w-full px-4 py-3 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700"
+            onClick={() => navigate && navigate('dashboard')}
+            className="w-full px-4 py-3 bg-white border border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-50"
           >
-            Submit Final
+            Exit
           </button>
         </div>
       </div>
@@ -434,12 +412,14 @@ export default function PromptHeistRound({ roundId, navigate }: PromptHeistRound
                   {formatTime(timeLeft)}
                 </span>
               </div>
-              <button
-                onClick={handleSubmitRound}
-                className="px-5 py-2.5 bg-green-600 hover:bg-green-700 text-white font-medium rounded-lg"
-              >
-                End Round
-              </button>
+              {navigate && (
+                <button
+                  onClick={() => navigate('dashboard')}
+                  className="px-5 py-2.5 bg-white border border-gray-300 text-gray-700 font-medium rounded-lg hover:bg-gray-50"
+                >
+                  Exit
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -460,27 +440,7 @@ export default function PromptHeistRound({ roundId, navigate }: PromptHeistRound
                   </div>
                 )}
 
-                {activeProvider && (
-                  <div className="mt-4">
-                    <BYOKConnected
-                      provider={activeProvider}
-                      onDisconnect={() => {
-                        byokSession.clearKey(activeProvider);
-                        setActiveProvider(null);
-                        setShowBYOKConnect(true);
-                      }}
-                    />
-                  </div>
-                )}
 
-                {!activeProvider && byokConfig?.enabled && !showBYOKConnect && (
-                  <button
-                    onClick={() => setShowBYOKConnect(true)}
-                    className="mt-4 px-4 py-2 bg-blue-50 text-blue-700 border border-blue-200 rounded-lg font-medium hover:bg-blue-100 transition-colors flex items-center gap-2"
-                  >
-                    <ShieldIcon className="w-5 h-5" /> Connect API Key
-                  </button>
-                )}
               </div>
             </div>
 
@@ -543,12 +503,21 @@ export default function PromptHeistRound({ roundId, navigate }: PromptHeistRound
                 >
                   {evaluating ? 'Evaluating...' : 'Test Prompt'}
                 </button>
-                <button
-                  onClick={handleSubmitRound}
-                  className="flex-1 px-6 py-3 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700"
-                >
-                  Submit Final
-                </button>
+                {currentChallengeIndex < challenges.length - 1 ? (
+                  <button
+                    onClick={() => setCurrentChallengeIndex(i => i + 1)}
+                    className="flex-1 px-6 py-3 bg-gray-600 text-white rounded-lg font-medium hover:bg-gray-700"
+                  >
+                    Next Challenge
+                  </button>
+                ) : (
+                  <button
+                    onClick={handleSubmitRound}
+                    className="flex-1 px-6 py-3 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700"
+                  >
+                    Submit Final
+                  </button>
+                )}
               </div>
             </div>
           </div>

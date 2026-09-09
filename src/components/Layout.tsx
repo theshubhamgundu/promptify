@@ -321,46 +321,6 @@ export default function Layout({ page, navigate, children, offline, onSessionAle
               </div>
             </div>
 
-            {/* Timer */}
-            <div
-              style={{
-                background: "#FFFFFF",
-                border: "2px solid #111111",
-                borderRadius: 12,
-                boxShadow: "2.5px 2.5px 0 #111111",
-                padding: "4px 14px",
-              }}
-              className="flex items-center gap-2"
-            >
-              <div>
-                <div
-                  style={{
-                    fontFamily: "'JetBrains Mono', monospace",
-                    fontSize: 9,
-                    fontWeight: 800,
-                    color: "#777",
-                    letterSpacing: "0.08em",
-                  }}
-                >
-                  TIMER
-                </div>
-                <div
-                  style={{
-                    fontFamily: "'JetBrains Mono', monospace",
-                    fontSize: 14,
-                    fontWeight: 900,
-                    color: urgent ? "#FF5C00" : "#111111",
-                  }}
-                  className="tabular-nums leading-none"
-                >
-                  {timer.hours}
-                  <span className="opacity-30 mx-0.5">:</span>
-                  {timer.minutes}
-                  <span className="opacity-30 mx-0.5">:</span>
-                  {timer.seconds}
-                </div>
-              </div>
-            </div>
 
             {/* Team Dropdown */}
             <div className="relative">
@@ -586,52 +546,9 @@ export default function Layout({ page, navigate, children, offline, onSessionAle
         )}
 
         {/* Page content with scroll */}
-        <main ref={mainRef} className="flex-1 overflow-auto pb-24">
+        <main ref={mainRef} className="flex-1 overflow-auto">
           {children}
         </main>
-
-        {/* ── Floating Bottom Navigation Dock ─────────────────────────────────── */}
-        <nav
-          style={{
-            background: "#FAF7F2",
-            border: "2.5px solid #111111",
-            borderRadius: 999,
-            boxShadow: "5px 5px 0 #111111",
-            padding: "5px 12px",
-          }}
-          className="absolute bottom-6 left-1/2 -translate-x-1/2 h-[58px] flex items-center justify-center z-50"
-        >
-          <div className="flex items-center gap-1.5 sm:gap-3">
-            {navItems.map((item) => {
-              const active = isActive(item);
-              return (
-                <button
-                  key={item.id}
-                  onClick={() => navigate(item.id)}
-                  title={item.label}
-                  style={{
-                    background: active ? "#FF5C00" : "transparent",
-                    color: active ? "#FAF7F2" : "#111111",
-                    border: active ? "2px solid #111111" : "2px solid transparent",
-                    borderRadius: 999,
-                    boxShadow: active ? "2.5px 2.5px 0 #111111" : "none",
-                    padding: "7px 18px",
-                    cursor: "pointer",
-                    fontFamily: "'Nunito', sans-serif",
-                    fontWeight: 900,
-                    fontSize: 13,
-                  }}
-                  className={`flex items-center gap-2 transition-all duration-150 ${
-                    !active ? 'hover:bg-black/5 hover:translate-y-[-1px]' : ''
-                  }`}
-                >
-                  <item.Icon className={`w-4 h-4 flex-shrink-0 ${active ? 'text-[#FAF7F2]' : 'text-[#111111]'}`} />
-                  <span className="whitespace-nowrap">{item.label}</span>
-                </button>
-              );
-            })}
-          </div>
-        </nav>
 
       {/* Click-away for team dropdown */}
       {teamOpen && (

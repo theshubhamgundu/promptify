@@ -2,7 +2,7 @@ import { useEffect, useState, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { useEventStore } from '../stores/eventStore';
 import { useTeamStore } from '../stores/teamStore';
-import { BYOKConnect } from '../components/BYOKConnect';
+
 import { byokSession, BYOKConfig, AIProvider } from '../lib/byok-service';
 import { ClockIcon, ShieldIcon } from '../components/icons';
 import { ConfirmDialog } from '../components/ui';
@@ -61,8 +61,7 @@ export default function BossRound({ roundId, navigate }: BossRoundProps) {
   const deadlineRef = useRef<string | null>(null);
   const isRoundActive = useRef(true);
 
-  // BYOK State
-  const [showBYOKConnect, setShowBYOKConnect] = useState(false);
+  // BYOK State (auto-resolved, no UI)
   const [activeProvider, setActiveProvider] = useState<AIProvider | null>(null);
 
   useEffect(() => {
@@ -142,15 +141,8 @@ export default function BossRound({ roundId, navigate }: BossRoundProps) {
     const byokConfig = resolveBYOKConfig(currentChallenge.configuration);
     if (byokConfig?.enabled) {
       const foundProvider = byokConfig.required_providers.find(p => byokSession.hasKey(p));
-      if (foundProvider) {
-        setActiveProvider(foundProvider);
-        setShowBYOKConnect(false);
-      } else {
-        setActiveProvider(null);
-        setShowBYOKConnect(true);
-      }
+      setActiveProvider(foundProvider || null);
     } else {
-      setShowBYOKConnect(false);
       setActiveProvider(null);
     }
   }, [currentChallengeIndex, currentChallenge]);
@@ -238,20 +230,7 @@ export default function BossRound({ roundId, navigate }: BossRoundProps) {
           onCancel={() => setConfirmSubmit(false)}
         />
       )}
-      {/* BYOK Modal */}
-      {showBYOKConnect && byokConfig && (
-        <BYOKConnect 
-          config={byokConfig}
-          teamId={currentTeam!.id}
-          roundSessionId={roundSession.id}
-          challengeId={currentChallenge.id}
-          onConnected={(provider) => {
-            setActiveProvider(provider);
-            setShowBYOKConnect(false);
-          }}
-          onCancel={() => setShowBYOKConnect(false)}
-        />
-      )}
+
 
       {/* Header */}
       <div className="bg-black/40 border-b border-gray-800 px-6 py-4 flex items-center justify-between shadow-2xl backdrop-blur-md">
@@ -262,12 +241,7 @@ export default function BossRound({ roundId, navigate }: BossRoundProps) {
           <p className="text-sm text-gray-400 mt-1 font-mono">Stage {currentChallengeIndex + 1} // {challenges.length}</p>
         </div>
         <div className="flex items-center gap-6">
-          {activeProvider && (
-            <div className="px-3 py-1.5 bg-green-900/30 border border-green-500/30 rounded-md flex items-center gap-2 text-sm text-green-400">
-              <ShieldIcon className="w-4 h-4" />
-              Connected: {activeProvider}
-            </div>
-          )}
+
           <div className="px-4 py-2 bg-gray-800/80 rounded-lg flex items-center gap-2 border border-gray-700">
             <ClockIcon className="w-5 h-5 text-purple-400" />
             <span className="font-mono text-xl font-bold tracking-wider">{formatTime(timeLeft)}</span>
