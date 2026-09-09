@@ -71,6 +71,7 @@ interface BlurAnimatedTimerProps {
   sizeClass?: string;
   textShadow?: string;
   className?: string;
+  isLightText?: boolean;
 }
 
 /**
@@ -86,6 +87,7 @@ export function BlurAnimatedTimer({
   sizeClass = 'text-[6rem] sm:text-[8rem] md:text-[10rem] lg:text-[12rem]',
   textShadow,
   className = '',
+  isLightText = false,
 }: BlurAnimatedTimerProps) {
   const mStr = String(Math.max(0, minutes)).padStart(2, '0');
   const sStr = String(Math.max(0, seconds)).padStart(2, '0');
@@ -96,17 +98,21 @@ export function BlurAnimatedTimer({
   const s2 = isFinished ? '0' : sStr[1];
 
   const colorClass = isFinished || isCritical
-    ? 'text-red-600'
+    ? 'text-red-500'
     : isUrgent
-    ? 'text-orange-600'
+    ? 'text-orange-500'
+    : isLightText
+    ? 'text-white'
     : 'text-slate-900';
 
   const defaultShadow = isFinished
-    ? '0 0 80px rgba(220,38,38,0.4), 0 6px 12px rgba(0,0,0,0.15)'
+    ? '0 0 80px rgba(220,38,38,0.5), 0 6px 12px rgba(0,0,0,0.4)'
     : isCritical
-    ? '0 0 60px rgba(220,38,38,0.3), 0 6px 12px rgba(0,0,0,0.15)'
+    ? '0 0 60px rgba(220,38,38,0.4), 0 6px 12px rgba(0,0,0,0.3)'
     : isUrgent
-    ? '0 0 40px rgba(234,88,12,0.2), 0 6px 12px rgba(0,0,0,0.1)'
+    ? '0 0 40px rgba(234,88,12,0.3), 0 6px 12px rgba(0,0,0,0.2)'
+    : isLightText
+    ? '0 4px 16px rgba(0,0,0,0.6), 0 2px 4px rgba(0,0,0,0.4)'
     : '0 6px 12px rgba(0,0,0,0.08)';
 
   return (

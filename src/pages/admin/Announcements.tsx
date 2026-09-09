@@ -40,6 +40,18 @@ import {
   subscribeToBackgroundChanges,
   type TemplateBackground,
 } from '../../lib/backgrounds-store';
+import {
+  getAllVideos,
+  saveCustomVideo,
+  deleteCustomVideo,
+  getGlobalVideoConfig,
+  setGlobalVideoConfig,
+  getScreenVideoConfig,
+  setScreenVideoConfig,
+  subscribeToVideoChanges,
+  type VideoItem,
+  type VideoPlayerConfig,
+} from '../../lib/video-store';
 
 interface AnnouncementItem {
   id: string;
@@ -57,6 +69,7 @@ interface AnnouncementItem {
   updated_at?: string;
   created_by?: string;
   bg_url?: string;
+  hide_text?: boolean;
 }
 
 export default function Announcements({ navigate }: { navigate: (p: Page) => void }) {
@@ -65,8 +78,8 @@ export default function Announcements({ navigate }: { navigate: (p: Page) => voi
   const [announcements, setAnnouncements] = useState<AnnouncementItem[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Active View Tab: 'studio' | 'overview' | 'gallery' | 'backgrounds'
-  const [activeTab, setActiveTab] = useState<'studio' | 'overview' | 'gallery' | 'backgrounds'>('studio');
+  // Active View Tab: 'studio' | 'videos' | 'overview' | 'gallery' | 'backgrounds'
+  const [activeTab, setActiveTab] = useState<'studio' | 'videos' | 'overview' | 'gallery' | 'backgrounds'>('studio');
 
   // Active Selected Screen: 0 means 'GLOBAL' (All Screens), 1-5 means Screen 1 to 5
   const [selectedScreen, setSelectedScreen] = useState<number>(1);
@@ -76,6 +89,17 @@ export default function Announcements({ navigate }: { navigate: (p: Page) => voi
   const [bgCategoryFilter, setBgCategoryFilter] = useState<string>('ALL');
   const [showAddBackgroundModal, setShowAddBackgroundModal] = useState(false);
   const [bgActionToast, setBgActionToast] = useState<string | null>(null);
+
+  // Video Library & Player State
+  const [videosList, setVideosList] = useState<VideoItem[]>(() => getAllVideos());
+  const [videoConfig, setVideoConfig] = useState<VideoPlayerConfig>(() => getGlobalVideoConfig());
+  const [videoMode, setVideoMode] = useState(false);
+  const [showAddVideoModal, setShowAddVideoModal] = useState(false);
+  const [newVideoForm, setNewVideoForm] = useState({
+    name: '',
+    description: '',
+    url: '/assets/cinematic_loop.mp4',
+  });
 
   const [newBgForm, setNewBgForm] = useState<{
     name: string;
@@ -152,6 +176,7 @@ export default function Announcements({ navigate }: { navigate: (p: Page) => voi
     expires_at: '',
     is_active: true,
     bg_url: '/assets/announcement_template.png',
+    hide_text: false,
   });
 
   const showToast = (msg: string) => {
@@ -184,8 +209,8 @@ export default function Announcements({ navigate }: { navigate: (p: Page) => voi
             id: a.id,
             event_id: a.event_id,
             scope: a.scope || 'GLOBAL',
-            title: a.title,
-            message: a.message,
+            title: a.title || '',
+            message: a.message || '',
             priority,
             pinned: Boolean(a.pinned),
             is_active: Boolean(a.is_active),
@@ -195,6 +220,7 @@ export default function Announcements({ navigate }: { navigate: (p: Page) => voi
             updated_at: a.updated_at,
             created_by: a.created_by,
             bg_url: a.bg_url || a.background_url,
+            hide_text: Boolean(a.hide_text),
           };
         });
         setAnnouncements(normalized);
@@ -239,11 +265,17 @@ export default function Announcements({ navigate }: { navigate: (p: Page) => voi
       setLocalTimerState(newState);
     });
 
+    const unsubscribeVideos = subscribeToVideoChanges((newConfig) => {
+      setVideoConfig(newConfig);
+      setVideosList(getAllVideos());
+    });
+
     return () => {
       supabase.removeChannel(channel);
       unsubscribeScreens();
       unsubscribeBackgrounds();
       unsubscribeTimer();
+      unsubscribeVideos();
     };
   }, [activeEvent]);
 
@@ -281,21 +313,22 @@ export default function Announcements({ navigate }: { navigate: (p: Page) => voi
       const ann = screenAnnouncements[screenId] || getScreenAnnouncement(screenId);
       const scrBg = screenBackgrounds[screenId] || getScreenBackground(screenId);
       setForm({
-        title: ann.title,
-        message: ann.message,
-        priority: ann.priority,
+        title: ann.title || '',
+        message: ann.message || '',
+        priority: ann.priority || 'IMPORTANT',
         pinned: ann.pinned ?? true,
         scope: `SCREEN_${screenId}`,
         scheduled_at: '',
         expires_at: '',
         is_active: true,
         bg_url: ann.bg_url || scrBg || '/assets/announcement_template.png',
+        hide_text: Boolean(ann.hide_text),
       });
       setEditingId(null);
     }
   };
 
-  // Screen Page & Timer Helpers
+  // Screen Page & Timer / Video Helpers
   const handlePageChangeForScreen = (screenId: number, page: DisplayPageType) => {
     setScreenPage(screenId, page);
     setScreenPages(prev => ({ ...prev, [screenId]: page }));
@@ -313,35 +346,102 @@ export default function Announcements({ navigate }: { navigate: (p: Page) => voi
     });
   };
 
+  const toggleScreenVideo = (screenId: number) => {
+    const currentPage = screenPages[screenId] || getScreenPage(screenId);
+    const newPage: DisplayPageType = currentPage === 'video' ? 'announcements' : 'video';
+    handlePageChangeForScreen(screenId, newPage);
+  };
+
+  const setAllScreensVideo = (enable: boolean) => {
+    ALL_SCREENS.forEach(s => {
+      handlePageChangeForScreen(s.id, enable ? 'video' : 'announcements');
+    });
+  };
+
+  const handleSelectVideo = (video: VideoItem) => {
+    setVideoConfig(prev => {
+      const updated = { ...prev, videoUrl: video.url, title: video.name };
+      setGlobalVideoConfig(updated);
+      return updated;
+    });
+    showToast(`✓ Video "${video.name}" selected!`);
+  };
+
+  const handleBroadcastVideoToScreen = (targetScreenId: number, video?: VideoItem) => {
+    const urlToUse = video ? video.url : videoConfig.videoUrl;
+    const titleToUse = video ? video.name : (videoConfig.title || 'Cinematic Loop');
+
+    const cfg: VideoPlayerConfig = { ...videoConfig, videoUrl: urlToUse, title: titleToUse };
+    setVideoConfig(cfg);
+
+    if (targetScreenId === 0) {
+      setGlobalVideoConfig(cfg);
+      ALL_SCREENS.forEach(s => {
+        setScreenVideoConfig(s.id, cfg);
+        handlePageChangeForScreen(s.id, 'video');
+      });
+      showToast(`🎬 Video loop broadcasted to All Screens!`);
+    } else {
+      setScreenVideoConfig(targetScreenId, cfg);
+      handlePageChangeForScreen(targetScreenId, 'video');
+      showToast(`🎬 Video loop broadcasted to Screen ${targetScreenId}!`);
+    }
+  };
+
+  const handleSaveCustomVideoModal = () => {
+    if (!newVideoForm.name.trim() || !newVideoForm.url.trim()) return;
+    const saved = saveCustomVideo({
+      name: newVideoForm.name.trim(),
+      description: newVideoForm.description.trim() || 'Custom user uploaded video',
+      url: newVideoForm.url.trim(),
+    });
+    setVideosList(getAllVideos());
+    setShowAddVideoModal(false);
+    handleSelectVideo(saved);
+    setNewVideoForm({ name: '', description: '', url: '/assets/cinematic_loop.mp4' });
+    showToast(`✓ New video "${saved.name}" added to library!`);
+  };
+
+  const handleDeleteVideo = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    deleteCustomVideo(id);
+    setVideosList(getAllVideos());
+    showToast('✓ Video deleted from library');
+  };
+
   // 1-Click apply template to currently selected screen
   const applyPreset = (preset: ScreenAnnouncement) => {
     setForm(prev => ({
       ...prev,
-      title: preset.title,
-      message: preset.message,
-      priority: preset.priority,
+      title: preset.title || '',
+      message: preset.message || '',
+      priority: preset.priority || 'IMPORTANT',
       pinned: preset.pinned ?? true,
       bg_url: preset.bg_url || prev.bg_url,
+      hide_text: Boolean(preset.hide_text),
     }));
   };
 
   // 1-Click Instant Apply & Publish template directly to target screen
   const handleDirectApplyAndPublish = (preset: ScreenAnnouncement, targetScreenId: number) => {
     const bgUrlToUse = preset.bg_url || form.bg_url || '/assets/announcement_template.png';
+    const isClean = Boolean(preset.hide_text || (!preset.title?.trim() && !preset.message?.trim()));
     const payloadWithBg: ScreenAnnouncement = {
       ...preset,
       bg_url: bgUrlToUse,
+      hide_text: isClean,
     };
 
     // Update local form state
     setForm(prev => ({
       ...prev,
-      title: preset.title,
-      message: preset.message,
-      priority: preset.priority,
+      title: preset.title || '',
+      message: preset.message || '',
+      priority: preset.priority || 'IMPORTANT',
       pinned: preset.pinned ?? true,
       bg_url: bgUrlToUse,
       scope: targetScreenId === 0 ? 'GLOBAL' : `SCREEN_${targetScreenId}`,
+      hide_text: isClean,
     }));
 
     if (targetScreenId > 0) {
@@ -359,11 +459,12 @@ export default function Announcements({ navigate }: { navigate: (p: Page) => voi
     dispatchRealtimeSync(
       {
         id: `ann-${Date.now()}`,
-        title: preset.title,
-        message: preset.message,
-        priority: preset.priority,
+        title: preset.title || '',
+        message: preset.message || '',
+        priority: preset.priority || 'IMPORTANT',
         pinned: preset.pinned ?? true,
         bg_url: bgUrlToUse,
+        hide_text: isClean,
         is_active: true,
         scope: targetScreenId === 0 ? 'GLOBAL' : `SCREEN_${targetScreenId}`,
         created_at: new Date().toISOString(),
@@ -374,13 +475,14 @@ export default function Announcements({ navigate }: { navigate: (p: Page) => voi
 
   // Save current form content as a new reusable template
   const handleSaveAsTemplate = () => {
-    if (!form.title.trim()) return;
+    const isClean = Boolean(form.hide_text || (!form.title?.trim() && !form.message?.trim()));
     const newTpl: ScreenAnnouncement = {
-      title: form.title,
-      message: form.message,
+      title: form.title?.trim() || (isClean ? 'Clean Background Template' : 'Untitled Template'),
+      message: form.message || '',
       priority: form.priority,
       pinned: form.pinned,
       bg_url: form.bg_url,
+      hide_text: isClean,
     };
     saveCustomTemplate(newTpl);
     setTemplateList(getAllTemplates());
@@ -416,18 +518,32 @@ export default function Announcements({ navigate }: { navigate: (p: Page) => voi
 
   // ── Background Management Handlers ─────────────────────────────────────────
   const handleSelectBackgroundForCurrentAnnouncement = (bg: TemplateBackground) => {
-    setForm(prev => ({ ...prev, bg_url: bg.id || bg.url }));
-    showToast(`✓ Background "${bg.name}" applied to current announcement!`);
+    const bgVal = bg.id || bg.url;
+    setForm(prev => ({ ...prev, bg_url: bgVal }));
+    if (selectedScreen > 0) {
+      setScreenBackground(selectedScreen, bgVal);
+      setScreenBackgrounds(prev => ({ ...prev, [selectedScreen]: bgVal }));
+    } else {
+      ALL_SCREENS.forEach(s => setScreenBackground(s.id, bgVal));
+      setGlobalDefaultBackground(bgVal);
+      const updated: Record<number, string> = {};
+      ALL_SCREENS.forEach(s => {
+        updated[s.id] = getScreenBackground(s.id);
+      });
+      setScreenBackgrounds(updated);
+    }
+    showToast(`✓ Background "${bg.name}" applied to current announcement & screen!`);
     setActiveTab('studio');
   };
 
   const handleApplyBackgroundToScreen = (screenId: number, bg: TemplateBackground) => {
+    const bgVal = bg.id || bg.url;
     if (screenId === 0) {
-      ALL_SCREENS.forEach(s => setScreenBackground(s.id, bg.id || bg.url));
-      setGlobalDefaultBackground(bg.id || bg.url);
+      ALL_SCREENS.forEach(s => setScreenBackground(s.id, bgVal));
+      setGlobalDefaultBackground(bgVal);
       showToast(`✓ Background "${bg.name}" set for All Screens!`);
     } else {
-      setScreenBackground(screenId, bg.id || bg.url);
+      setScreenBackground(screenId, bgVal);
       showToast(`✓ Background "${bg.name}" assigned to Screen ${screenId}!`);
     }
     const updated: Record<number, string> = {};
@@ -435,6 +551,7 @@ export default function Announcements({ navigate }: { navigate: (p: Page) => voi
       updated[s.id] = getScreenBackground(s.id);
     });
     setScreenBackgrounds(updated);
+    setForm(prev => ({ ...prev, bg_url: bgVal }));
   };
 
   const handleSaveCustomBackgroundModal = () => {
@@ -507,12 +624,18 @@ export default function Announcements({ navigate }: { navigate: (p: Page) => voi
 
   // Multi-layered Real-Time Broadcast Dispatcher
   const dispatchRealtimeSync = (announcementPayload: any, targetScreenId: number) => {
+    const isClean = Boolean(
+      announcementPayload.hide_text ??
+      (form.hide_text || (!announcementPayload.title?.trim() && !announcementPayload.message?.trim()))
+    );
+
     const annData = {
-      title: announcementPayload.title,
-      message: announcementPayload.message,
-      priority: announcementPayload.priority,
+      title: announcementPayload.title || '',
+      message: announcementPayload.message || '',
+      priority: announcementPayload.priority || 'IMPORTANT',
       pinned: announcementPayload.pinned,
       bg_url: announcementPayload.bg_url || form.bg_url,
+      hide_text: isClean,
     };
 
     if (targetScreenId > 0) {
@@ -533,14 +656,14 @@ export default function Announcements({ navigate }: { navigate: (p: Page) => voi
       const bc = new BroadcastChannel('promptify_realtime_sync');
       bc.postMessage({
         type: 'ANNOUNCEMENT_UPDATE',
-        announcement: { ...announcementPayload, bg_url: annData.bg_url },
+        announcement: { ...announcementPayload, bg_url: annData.bg_url, hide_text: isClean },
         timestamp: Date.now(),
       });
       setTimeout(() => bc.close(), 100);
     } catch (e) {}
 
     try {
-      localStorage.setItem('promptify_active_announcement', JSON.stringify({ ...announcementPayload, bg_url: annData.bg_url }));
+      localStorage.setItem('promptify_active_announcement', JSON.stringify({ ...announcementPayload, bg_url: annData.bg_url, hide_text: isClean }));
       localStorage.setItem('promptify_realtime_trigger', Date.now().toString());
     } catch (e) {}
 
@@ -552,7 +675,7 @@ export default function Announcements({ navigate }: { navigate: (p: Page) => voi
           channel.send({
             type: 'broadcast',
             event: 'announcement_push',
-            payload: { announcement: { ...announcementPayload, bg_url: annData.bg_url }, timestamp: Date.now() }
+            payload: { announcement: { ...announcementPayload, bg_url: annData.bg_url, hide_text: isClean }, timestamp: Date.now() }
           });
         }
       });
@@ -560,7 +683,6 @@ export default function Announcements({ navigate }: { navigate: (p: Page) => voi
   };
 
   const handlePublish = async (shouldBeActive = true) => {
-    if (!form.title.trim()) return;
     setSaving(true);
 
     const severityMap: Record<string, string> = {
@@ -571,11 +693,12 @@ export default function Announcements({ navigate }: { navigate: (p: Page) => voi
 
     const targetScope = form.scope || (selectedScreen === 0 ? 'GLOBAL' : `SCREEN_${selectedScreen}`);
     const activeEventId = activeEvent?.id || 'default-event';
+    const isClean = Boolean(form.hide_text || (!form.title?.trim() && !form.message?.trim()));
 
     const payload: any = {
       event_id: activeEventId,
-      title: form.title,
-      message: form.message,
+      title: form.title || '',
+      message: form.message || '',
       priority: form.priority,
       severity: severityMap[form.priority] || 'INFO',
       pinned: form.pinned,
@@ -584,6 +707,7 @@ export default function Announcements({ navigate }: { navigate: (p: Page) => voi
       expires_at: form.expires_at ? new Date(form.expires_at).toISOString() : null,
       is_active: shouldBeActive,
       bg_url: form.bg_url || '/assets/announcement_template.png',
+      hide_text: isClean,
     };
 
     try {
@@ -727,7 +851,7 @@ export default function Announcements({ navigate }: { navigate: (p: Page) => voi
             })}
           </div>
 
-          {/* Tab View Switcher (Studio / Backgrounds Hub / Overview / History) */}
+          {/* Tab View Switcher (Studio / Video Player / Backgrounds Hub / Overview / History) */}
           <div className="flex items-center gap-1 bg-gray-100 p-1 rounded-2xl border border-gray-200">
             <button
               onClick={() => setActiveTab('studio')}
@@ -736,6 +860,19 @@ export default function Announcements({ navigate }: { navigate: (p: Page) => voi
               }`}
             >
               🎨 Template Studio
+            </button>
+            <button
+              onClick={() => setActiveTab('videos')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all font-heading flex items-center gap-1 ${
+                activeTab === 'videos' ? 'bg-red-600 text-white shadow-sm' : 'text-red-600 hover:text-red-700'
+              }`}
+            >
+              <span>🎬 Video Loop Player</span>
+              <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono font-bold ${
+                activeTab === 'videos' ? 'bg-black/30 text-white' : 'bg-red-100 text-red-700'
+              }`}>
+                {videosList.length}
+              </span>
             </button>
             <button
               onClick={() => setActiveTab('backgrounds')}
@@ -838,9 +975,45 @@ export default function Announcements({ navigate }: { navigate: (p: Page) => voi
               {/* Template Container Preview with dynamic background and adaptive text */}
               <div
                 className="w-full aspect-[16/9] rounded-3xl border-2 border-black overflow-hidden flex flex-col justify-between p-6 sm:p-8 bg-[#faf7f2] bg-no-repeat bg-cover bg-center select-none shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] relative transition-all duration-300"
-                style={{ backgroundImage: timerMode ? "url('/assets/timer_template.png')" : `url("${activeBgObj.url}")` }}
+                style={{ backgroundImage: videoMode ? 'none' : `url("${activeBgObj.url}")` }}
               >
-                {timerMode ? (
+                {videoMode ? (
+                  /* ── Video Loop Preview in Canvas ── */
+                  <>
+                    <div className="w-full flex items-center justify-between z-10">
+                      <span className="text-[10px] font-black uppercase px-2.5 py-1 rounded-full bg-red-600 text-white font-heading shadow-sm flex items-center gap-1">
+                        <span>🎬 VIDEO LOOP MODE</span>
+                      </span>
+                      <span className="text-[10px] font-black uppercase px-2.5 py-1 rounded-full bg-emerald-500 text-white font-bold">
+                        ● LIVE PREVIEW
+                      </span>
+                    </div>
+
+                    <div className="absolute inset-0 w-full h-full z-0 bg-black flex items-center justify-center">
+                      <video
+                        key={videoConfig.videoUrl}
+                        src={videoConfig.videoUrl}
+                        autoPlay
+                        loop={videoConfig.loop}
+                        muted={videoConfig.muted}
+                        playsInline
+                        className={`w-full h-full ${videoConfig.objectFit === 'contain' ? 'object-contain' : 'object-cover'}`}
+                      />
+                    </div>
+
+                    <div className="w-full flex items-center justify-between text-[10px] font-bold text-white z-10 mt-auto">
+                      <span className="bg-black/80 backdrop-blur-md px-2.5 py-1 rounded-full border border-white/20 uppercase tracking-wider">
+                        {selectedScreen === 0 ? 'All Screens' : `Screen ${selectedScreen}`} · 🎬 {videoConfig.title || 'Cinematic Video'}
+                      </span>
+                      <button
+                        onClick={() => setVideoMode(false)}
+                        className="text-amber-300 hover:text-white font-black hover:underline cursor-pointer bg-black/80 px-3 py-1 rounded-full border border-white/20"
+                      >
+                        ← Back to Canvas
+                      </button>
+                    </div>
+                  </>
+                ) : timerMode ? (
                   /* ── Timer Preview in Canvas ── */
                   <>
                     <div className="w-full flex items-center justify-between z-10">
@@ -866,6 +1039,7 @@ export default function Announcements({ navigate }: { navigate: (p: Page) => voi
                           isUrgent={timerState.status === 'running' && timerRemaining <= timerState.duration * 0.25}
                           isCritical={timerState.status === 'running' && timerRemaining <= timerState.duration * 0.05}
                           isFinished={timerRemaining <= 0 && (timerState.status === 'running' || timerState.status === 'finished')}
+                          isLightText={isDarkBg}
                           sizeClass="text-[3rem] sm:text-[4rem] lg:text-[4.5rem]"
                         />
                       </div>
@@ -901,51 +1075,66 @@ export default function Announcements({ navigate }: { navigate: (p: Page) => voi
                 ) : (
                   /* ── Normal Announcement Preview in Canvas ── */
                   <>
-                    {/* Top Status Badges inside Canvas */}
-                    <div className="w-full flex items-center justify-between z-10">
-                      <div className="flex items-center gap-2">
-                        <span
-                          className={`text-[10px] font-black uppercase px-2.5 py-1 rounded-full text-white font-heading shadow-sm ${
-                            form.priority === 'URGENT'
-                              ? 'bg-red-600'
-                              : form.priority === 'IMPORTANT'
-                              ? 'bg-amber-600'
-                              : 'bg-blue-600'
-                          }`}
-                        >
-                          {form.priority}
-                        </span>
-                        {form.pinned && (
-                          <span className="text-[10px] font-black uppercase px-2.5 py-1 rounded-full bg-purple-600 text-white font-heading shadow-sm">
-                            📌 PINNED
+                    {/* Top Status Badges inside Canvas (only when text overlay is active) */}
+                    {!form.hide_text && (form.title?.trim() || form.message?.trim()) ? (
+                      <div className="w-full flex items-center justify-between z-10">
+                        <div className="flex items-center gap-2">
+                          <span
+                            className={`text-[10px] font-black uppercase px-2.5 py-1 rounded-full text-white font-heading shadow-sm ${
+                              form.priority === 'URGENT'
+                                ? 'bg-red-600'
+                                : form.priority === 'IMPORTANT'
+                                ? 'bg-amber-600'
+                                : 'bg-blue-600'
+                            }`}
+                          >
+                            {form.priority}
                           </span>
-                        )}
+                          {form.pinned && (
+                            <span className="text-[10px] font-black uppercase px-2.5 py-1 rounded-full bg-purple-600 text-white font-heading shadow-sm">
+                              📌 PINNED
+                            </span>
+                          )}
+                        </div>
+                        <span className="text-[10px] font-bold bg-white/90 backdrop-blur-md px-2.5 py-1 rounded-full border border-black/20 text-slate-800">
+                          Just now
+                        </span>
                       </div>
-                      <span className="text-[10px] font-bold bg-white/90 backdrop-blur-md px-2.5 py-1 rounded-full border border-black/20 text-slate-800">
-                        Just now
-                      </span>
-                    </div>
+                    ) : (
+                      <div className="w-full h-4 z-10" />
+                    )}
 
                     {/* Center Headline & Message */}
                     <div className="flex-1 flex flex-col items-center justify-center text-center px-4 py-2 z-10">
-                      <div className="space-y-2 max-w-full">
-                        <h2 className={`text-2xl sm:text-4xl lg:text-5xl font-black font-display tracking-tight uppercase leading-none ${
-                          isDarkBg
-                            ? 'text-white drop-shadow-[0_4px_16px_rgba(0,0,0,0.8)]'
-                            : 'text-slate-950 drop-shadow-[0_2px_4px_rgba(0,0,0,0.12)]'
-                        }`}>
-                          {form.title || 'HEADLINE ON TEMPLATE'}
-                        </h2>
-                        {form.message && (
-                          <p className={`text-xs sm:text-base lg:text-lg font-extrabold font-heading leading-tight whitespace-pre-wrap max-w-xl mx-auto ${
-                            isDarkBg
-                              ? 'text-slate-100 drop-shadow-[0_2px_8px_rgba(0,0,0,0.9)]'
-                              : 'text-slate-900 drop-shadow-[0_1px_2px_rgba(255,255,255,0.8)]'
-                          }`}>
-                            {form.message}
-                          </p>
-                        )}
-                      </div>
+                      {!form.hide_text && (form.title?.trim() || form.message?.trim()) ? (
+                        <div className="space-y-2 max-w-full">
+                          {form.title?.trim() && (
+                            <h2 className={`text-2xl sm:text-4xl lg:text-5xl font-black font-display tracking-tight uppercase leading-none ${
+                              isDarkBg
+                                ? 'text-white drop-shadow-[0_4px_16px_rgba(0,0,0,0.8)]'
+                                : 'text-slate-950 drop-shadow-[0_2px_4px_rgba(0,0,0,0.12)]'
+                            }`}>
+                              {form.title}
+                            </h2>
+                          )}
+                          {form.message?.trim() && (
+                            <p className={`text-xs sm:text-base lg:text-lg font-extrabold font-heading leading-tight whitespace-pre-wrap max-w-xl mx-auto ${
+                              isDarkBg
+                                ? 'text-slate-100 drop-shadow-[0_2px_8px_rgba(0,0,0,0.9)]'
+                                : 'text-slate-900 drop-shadow-[0_1px_2px_rgba(255,255,255,0.8)]'
+                            }`}>
+                              {form.message}
+                            </p>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-black/60 backdrop-blur-md text-white border border-white/20 shadow-md">
+                          <span className="text-xs">🖼️</span>
+                          <span className="text-[11px] font-bold uppercase tracking-wider font-heading">
+                            Clean Background (No Text Overlay)
+                          </span>
+                        </div>
+                      )}
                     </div>
 
                     {/* Footer Canvas Pill */}
@@ -1103,11 +1292,18 @@ export default function Announcements({ navigate }: { navigate: (p: Page) => voi
                 <div className="flex items-center gap-2">
                   <ZapIcon className="w-4 h-4 text-orange-500" />
                   <span className="text-xs font-black uppercase font-heading tracking-wider text-gray-700">
-                    Template Library (Click to display on Screen {selectedScreen === 0 ? 'All' : selectedScreen})
+                    Template & Motion Library (Click to display on Screen {selectedScreen === 0 ? 'All' : selectedScreen})
                   </span>
                 </div>
 
                 <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('videos')}
+                    className="px-2.5 py-1 rounded-xl bg-red-50 hover:bg-red-100 text-red-700 text-xs font-bold transition-all border border-red-200 flex items-center gap-1"
+                  >
+                    <span>🎬 Video Player</span>
+                  </button>
                   <button
                     type="button"
                     onClick={() => setActiveTab('backgrounds')}
@@ -1127,10 +1323,56 @@ export default function Announcements({ navigate }: { navigate: (p: Page) => voi
 
               {/* Template Cards Grid */}
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5 max-h-80 overflow-y-auto pr-1">
+                {/* Special Video Loop Template Card */}
+                <div
+                  onClick={() => {
+                    setVideoMode(true);
+                    setTimerMode(false);
+                    handleBroadcastVideoToScreen(selectedScreen);
+                  }}
+                  className={`text-left p-3 rounded-2xl border-2 transition-all cursor-pointer relative group flex flex-col justify-between shadow-sm ${
+                    videoMode
+                      ? 'border-red-500 bg-red-100 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]'
+                      : 'border-dashed border-red-400 bg-gradient-to-br from-red-50 to-orange-50 hover:from-red-100 hover:to-orange-100 hover:border-red-500'
+                  }`}
+                >
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-[9px] font-black uppercase px-1.5 py-0.5 rounded-md bg-red-600 text-white flex items-center gap-1">
+                        <span>🎬 VIDEO</span>
+                      </span>
+                      <span className="text-[9px] font-bold text-red-600">
+                        Motion Loop
+                      </span>
+                    </div>
+                    <div className="text-xs font-black font-heading text-red-900 group-hover:text-red-700">
+                      🎬 PROMPTIFY ANIMATED LOOP
+                    </div>
+                    <div className="text-[11px] text-red-700 font-medium mt-0.5">
+                      Animated Promptify text motion graphic loop.
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setVideoMode(true);
+                      setTimerMode(false);
+                      handleBroadcastVideoToScreen(selectedScreen);
+                    }}
+                    className="mt-2.5 w-full py-1.5 rounded-xl bg-red-600 hover:bg-red-500 text-white text-[10px] font-black uppercase tracking-wider flex items-center justify-center gap-1 transition-transform active:scale-95 shadow-sm"
+                    title={`Broadcast video loop to Screen ${selectedScreen === 0 ? 'All' : selectedScreen}`}
+                  >
+                    <span>⚡ Play on Screen {selectedScreen === 0 ? 'All' : selectedScreen}</span>
+                  </button>
+                </div>
+
                 {/* Special Timer Template Card */}
                 <div
                   onClick={() => {
                     setTimerMode(true);
+                    setVideoMode(false);
                     if (selectedScreen > 0) {
                       handlePageChangeForScreen(selectedScreen, 'timer');
                     } else {
@@ -1171,6 +1413,7 @@ export default function Announcements({ navigate }: { navigate: (p: Page) => voi
                     onClick={(e) => {
                       e.stopPropagation();
                       setTimerMode(true);
+                      setVideoMode(false);
                       if (selectedScreen > 0) {
                         handlePageChangeForScreen(selectedScreen, 'timer');
                       } else {
@@ -1273,20 +1516,49 @@ export default function Announcements({ navigate }: { navigate: (p: Page) => voi
               </div>
 
               <div className="space-y-4">
-                <FormField label="Headline on Template" required>
+                {/* ── Quick Mode Toggle: Background Only / Text Overlay ── */}
+                <div className="p-3 rounded-2xl bg-amber-50/90 border border-amber-200 flex items-center justify-between gap-3">
+                  <label className="flex items-center gap-2.5 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={Boolean(form.hide_text || (!form.title?.trim() && !form.message?.trim()))}
+                      onChange={e => setForm(prev => ({ ...prev, hide_text: e.target.checked }))}
+                      className="w-4 h-4 text-orange-500 rounded border-gray-300 focus:ring-orange-400"
+                    />
+                    <div>
+                      <div className="text-xs font-black text-gray-900 font-heading">
+                        🖼️ Only Background (Hide text overlays)
+                      </div>
+                      <div className="text-[10px] text-gray-600 font-medium">
+                        Display clean template poster without headline, message, or top badges
+                      </div>
+                    </div>
+                  </label>
+
+                  <button
+                    type="button"
+                    onClick={() => setForm(prev => ({ ...prev, title: '', message: '', hide_text: true }))}
+                    className="px-2.5 py-1.5 rounded-xl bg-white hover:bg-amber-100 text-amber-900 border border-amber-300 text-[11px] font-bold transition-all shrink-0 cursor-pointer"
+                    title="Clear title and message text"
+                  >
+                    🧹 Clear Text
+                  </button>
+                </div>
+
+                <FormField label="Headline on Template (Optional)">
                   <TextInput
                     value={form.title}
-                    onChange={val => setForm(prev => ({ ...prev, title: val.toUpperCase() }))}
-                    placeholder="e.g. STARTS IN 10 MINS"
+                    onChange={val => setForm(prev => ({ ...prev, title: val.toUpperCase(), hide_text: false }))}
+                    placeholder="Leave blank for clean background only"
                   />
                 </FormField>
 
-                <FormField label="Message Details" required>
+                <FormField label="Message Details (Optional)">
                   <TextArea
                     value={form.message}
-                    onChange={val => setForm(prev => ({ ...prev, message: val }))}
-                    rows={4}
-                    placeholder="Please take your seats and prepare your workstations..."
+                    onChange={val => setForm(prev => ({ ...prev, message: val, hide_text: false }))}
+                    rows={3}
+                    placeholder="Leave blank for clean background only..."
                   />
                 </FormField>
 
@@ -1308,12 +1580,27 @@ export default function Announcements({ navigate }: { navigate: (p: Page) => voi
                   {/* Horizontal visual background selector chips */}
                   <div className="grid grid-cols-2 gap-2">
                     {backgroundsList.slice(0, 6).map(bg => {
+                      const bgVal = bg.id || bg.url;
                       const isBgActive = form.bg_url === bg.id || form.bg_url === bg.url;
                       return (
                         <button
                           key={bg.id}
                           type="button"
-                          onClick={() => setForm(prev => ({ ...prev, bg_url: bg.id || bg.url }))}
+                          onClick={() => {
+                            setForm(prev => ({ ...prev, bg_url: bgVal }));
+                            if (selectedScreen > 0) {
+                              setScreenBackground(selectedScreen, bgVal);
+                              setScreenBackgrounds(prev => ({ ...prev, [selectedScreen]: bgVal }));
+                            } else {
+                              ALL_SCREENS.forEach(s => setScreenBackground(s.id, bgVal));
+                              setGlobalDefaultBackground(bgVal);
+                              const updated: Record<number, string> = {};
+                              ALL_SCREENS.forEach(s => {
+                                updated[s.id] = getScreenBackground(s.id);
+                              });
+                              setScreenBackgrounds(updated);
+                            }
+                          }}
                           className={`p-2 rounded-xl text-left border transition-all flex items-center gap-2 cursor-pointer ${
                             isBgActive
                               ? 'bg-orange-500 text-white border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]'
@@ -1338,7 +1625,21 @@ export default function Announcements({ navigate }: { navigate: (p: Page) => voi
                   <div className="pt-1">
                     <Select
                       value={form.bg_url || '/assets/announcement_template.png'}
-                      onChange={val => setForm(prev => ({ ...prev, bg_url: val }))}
+                      onChange={val => {
+                        setForm(prev => ({ ...prev, bg_url: val }));
+                        if (selectedScreen > 0) {
+                          setScreenBackground(selectedScreen, val);
+                          setScreenBackgrounds(prev => ({ ...prev, [selectedScreen]: val }));
+                        } else {
+                          ALL_SCREENS.forEach(s => setScreenBackground(s.id, val));
+                          setGlobalDefaultBackground(val);
+                          const updated: Record<number, string> = {};
+                          ALL_SCREENS.forEach(s => {
+                            updated[s.id] = getScreenBackground(s.id);
+                          });
+                          setScreenBackgrounds(updated);
+                        }
+                      }}
                       options={backgroundsList.map(bg => ({
                         value: bg.id || bg.url,
                         label: `${bg.name} (${bg.category})`,
@@ -1348,7 +1649,7 @@ export default function Announcements({ navigate }: { navigate: (p: Page) => voi
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
-                  <FormField label="Priority" required>
+                  <FormField label="Priority">
                     <Select
                       value={form.priority}
                       onChange={val => setForm(prev => ({ ...prev, priority: val as any }))}
@@ -1420,7 +1721,7 @@ export default function Announcements({ navigate }: { navigate: (p: Page) => voi
               <div className="pt-4 border-t border-gray-100 space-y-2.5">
                 <button
                   onClick={() => handlePublish(true)}
-                  disabled={saving || !form.title.trim()}
+                  disabled={saving}
                   className="w-full py-4 px-4 rounded-2xl bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-black font-heading text-sm shadow-xl shadow-orange-500/25 transition-all hover:scale-[1.01] active:scale-[0.99] disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer"
                 >
                   <ZapIcon className="w-4 h-4" />
@@ -1436,7 +1737,6 @@ export default function Announcements({ navigate }: { navigate: (p: Page) => voi
                 <button
                   type="button"
                   onClick={handleSaveAsTemplate}
-                  disabled={!form.title.trim()}
                   className="w-full py-2.5 px-3 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold font-heading text-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
                 >
                   <span>💾 Save Current as Reusable Template</span>
@@ -1453,7 +1753,216 @@ export default function Announcements({ navigate }: { navigate: (p: Page) => voi
         </div>
       )}
 
-      {/* ── 3. VIEW: BACKGROUNDS HUB (Centralized Template Backgrounds Gallery) ── */}
+      {/* ── 3. VIEW: VIDEO LOOP PLAYER (Centralized Video Motion Graphic Hub) ── */}
+      {activeTab === 'videos' && (
+        <div className="space-y-6">
+          {/* Hero Banner */}
+          <div className="bg-gradient-to-r from-red-600 via-rose-600 to-amber-600 p-6 rounded-3xl text-white shadow-xl shadow-red-500/20 flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <span className="text-3xl">🎬</span>
+                <h2 className="text-2xl font-black font-display tracking-tight uppercase">
+                  Cinematic Video Loop Player
+                </h2>
+              </div>
+              <p className="text-xs sm:text-sm text-red-100 font-medium max-w-2xl">
+                Broadcast full-screen high-energy cinematic motion graphics and video loops to your digital screens. Plays smoothly in a continuous seamless loop with instant real-time synchronization.
+              </p>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setShowAddVideoModal(true)}
+                className="px-4 py-2.5 rounded-2xl bg-black hover:bg-slate-900 text-white font-black font-heading text-xs shadow-lg transition-transform active:scale-95 flex items-center gap-2 cursor-pointer"
+              >
+                <span>+ Upload / Add Video</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => handleBroadcastVideoToScreen(0)}
+                className="px-4 py-2.5 rounded-2xl bg-white hover:bg-red-50 text-red-700 font-black font-heading text-xs shadow-lg transition-transform active:scale-95 flex items-center gap-2 cursor-pointer"
+              >
+                <span>⚡ 🚀 Broadcast to All Screens</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Player Settings Bar */}
+          <div className="flex flex-wrap items-center justify-between gap-4 bg-white p-4 rounded-2xl border border-gray-200 shadow-sm">
+            <div className="flex flex-wrap items-center gap-4">
+              <span className="text-xs font-black uppercase text-gray-700 font-heading">Player Options:</span>
+              
+              <label className="flex items-center gap-2 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={videoConfig.loop}
+                  onChange={e => {
+                    const updated = { ...videoConfig, loop: e.target.checked };
+                    setVideoConfig(updated);
+                    setGlobalVideoConfig(updated);
+                  }}
+                  className="w-4 h-4 text-red-600 rounded border-gray-300 focus:ring-red-400"
+                />
+                <span className="text-xs font-bold text-gray-800">🔁 Continuous Loop</span>
+              </label>
+
+              <label className="flex items-center gap-2 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={videoConfig.muted}
+                  onChange={e => {
+                    const updated = { ...videoConfig, muted: e.target.checked };
+                    setVideoConfig(updated);
+                    setGlobalVideoConfig(updated);
+                  }}
+                  className="w-4 h-4 text-red-600 rounded border-gray-300 focus:ring-red-400"
+                />
+                <span className="text-xs font-bold text-gray-800">🔇 Muted (Autoplay Safe)</span>
+              </label>
+
+              <div className="flex items-center gap-1.5 pl-2 border-l border-gray-200">
+                <span className="text-xs font-bold text-gray-600">Fit:</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const updated: VideoPlayerConfig = { ...videoConfig, objectFit: 'cover' };
+                    setVideoConfig(updated);
+                    setGlobalVideoConfig(updated);
+                  }}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${
+                    videoConfig.objectFit === 'cover' ? 'bg-black text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  Cover (Full-Bleed)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const updated: VideoPlayerConfig = { ...videoConfig, objectFit: 'contain' };
+                    setVideoConfig(updated);
+                    setGlobalVideoConfig(updated);
+                  }}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${
+                    videoConfig.objectFit === 'contain' ? 'bg-black text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  Contain (Letterbox)
+                </button>
+              </div>
+            </div>
+
+            <div className="text-xs font-bold text-gray-500">
+              {videosList.length} Video{videosList.length !== 1 ? 's' : ''} in Library
+            </div>
+          </div>
+
+          {/* Videos Visual Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {videosList.map(v => {
+              const isSelected = videoConfig.videoUrl === v.url;
+              return (
+                <div
+                  key={v.id}
+                  className={`bg-white rounded-3xl border-2 overflow-hidden shadow-sm hover:shadow-xl transition-all flex flex-col justify-between group ${
+                    isSelected ? 'border-red-500 ring-2 ring-red-300' : 'border-gray-200 hover:border-black'
+                  }`}
+                >
+                  {/* Visual Video Preview Container */}
+                  <div className="w-full aspect-[16/9] bg-black relative flex items-center justify-center overflow-hidden border-b-2 border-black">
+                    <video
+                      src={v.url}
+                      autoPlay
+                      loop
+                      muted
+                      playsInline
+                      className={`w-full h-full ${videoConfig.objectFit === 'contain' ? 'object-contain' : 'object-cover'}`}
+                    />
+
+                    {/* Badges */}
+                    <div className="absolute top-3 left-3 z-10 flex items-center gap-1.5">
+                      <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-red-600 text-white shadow">
+                        {v.duration || 'VIDEO'}
+                      </span>
+                      {v.isBuiltIn && (
+                        <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-white/90 text-black backdrop-blur-sm">
+                          Built-in
+                        </span>
+                      )}
+                    </div>
+
+                    {isSelected && (
+                      <div className="absolute top-3 right-3 z-10">
+                        <span className="bg-emerald-500 text-white text-[9px] font-black uppercase px-2 py-0.5 rounded-full shadow">
+                          ✓ ACTIVE
+                        </span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Card Body */}
+                  <div className="p-5 space-y-4">
+                    <div>
+                      <div className="flex items-center justify-between">
+                        <h4 className="text-base font-black font-heading text-gray-900">{v.name}</h4>
+                        {!v.isBuiltIn && (
+                          <button
+                            type="button"
+                            onClick={(e) => handleDeleteVideo(v.id, e)}
+                            className="text-red-500 hover:text-red-700 text-xs font-bold p-1"
+                            title="Delete custom video"
+                          >
+                            <TrashIcon className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
+                      <p className="text-xs text-gray-600 font-medium mt-1">
+                        {v.description || 'Cinematic video loop'}
+                      </p>
+                    </div>
+
+                    {/* Action Buttons */}
+                    <div className="space-y-2 pt-2 border-t border-gray-100">
+                      <button
+                        type="button"
+                        onClick={() => handleBroadcastVideoToScreen(selectedScreen, v)}
+                        className="w-full py-2.5 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-black uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 shadow-md shadow-red-500/20 cursor-pointer"
+                      >
+                        <ZapIcon className="w-3.5 h-3.5" />
+                        <span>Play on Screen {selectedScreen === 0 ? 'All' : selectedScreen}</span>
+                      </button>
+
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => handleBroadcastVideoToScreen(0, v)}
+                          className="flex-1 py-1.5 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-800 text-[10px] font-black uppercase transition-all"
+                          title="Broadcast to All Screens"
+                        >
+                          🌐 All Screens
+                        </button>
+                        {[1, 2, 3, 4, 5].map(scrNum => (
+                          <button
+                            key={scrNum}
+                            type="button"
+                            onClick={() => handleBroadcastVideoToScreen(scrNum, v)}
+                            className="px-2 py-1.5 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-800 text-[10px] font-black uppercase transition-all"
+                            title={`Broadcast to Screen ${scrNum}`}
+                          >
+                            S{scrNum}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* ── 4. VIEW: BACKGROUNDS HUB (Centralized Template Backgrounds Gallery) ── */}
       {activeTab === 'backgrounds' && (
         <div className="space-y-6">
           {/* Hero Banner */}
@@ -1847,6 +2356,107 @@ export default function Announcements({ navigate }: { navigate: (p: Page) => voi
               </Button>
               <Button variant="primary" onClick={handleCreateNewTemplateModal}>
                 💾 Save & Add to Template Library
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* ── Add / Upload Custom Video Modal ── */}
+      {showAddVideoModal && (
+        <Modal
+          isOpen={true}
+          onClose={() => setShowAddVideoModal(false)}
+          title="🎬 Add / Upload Custom Video Loop"
+        >
+          <div className="space-y-4">
+            <FormField label="Video Title" required>
+              <TextInput
+                value={newVideoForm.name}
+                onChange={val => setNewVideoForm(prev => ({ ...prev, name: val }))}
+                placeholder="e.g. Hackathon Cinematic Teaser"
+              />
+            </FormField>
+
+            <FormField label="Description (Optional)">
+              <TextInput
+                value={newVideoForm.description}
+                onChange={val => setNewVideoForm(prev => ({ ...prev, description: val }))}
+                placeholder="e.g. 10-second cinematic video loop"
+              />
+            </FormField>
+
+            {/* Video File / URL Selector */}
+            <div className="space-y-3 p-4 bg-gray-50 rounded-2xl border border-gray-200">
+              <label className="text-xs font-black uppercase text-gray-700 font-heading">
+                Option 1: Upload Video File (MP4, WebM, MOV)
+              </label>
+              <input
+                type="file"
+                accept="video/*"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  if (file.size > 100 * 1024 * 1024) {
+                    alert('Video is too large. Please select a video under 100MB.');
+                    return;
+                  }
+                  const reader = new FileReader();
+                  reader.onload = (event) => {
+                    const dataUrl = event.target?.result as string;
+                    if (dataUrl) {
+                      setNewVideoForm(prev => ({
+                        ...prev,
+                        url: dataUrl,
+                        name: prev.name || file.name.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' ').toUpperCase(),
+                      }));
+                    }
+                  };
+                  reader.readAsDataURL(file);
+                }}
+                className="w-full text-xs text-slate-700 file:mr-3 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-black file:bg-red-600 file:text-white hover:file:bg-red-700 file:cursor-pointer"
+              />
+
+              <div className="pt-2 border-t border-gray-200">
+                <FormField label="Option 2: Or Paste Direct Video URL / Path">
+                  <TextInput
+                    value={newVideoForm.url.startsWith('data:') ? '' : newVideoForm.url}
+                    onChange={val => setNewVideoForm(prev => ({ ...prev, url: val }))}
+                    placeholder="/assets/cinematic_loop.mp4 or https://..."
+                  />
+                </FormField>
+              </div>
+            </div>
+
+            {/* Live Interactive Preview */}
+            {newVideoForm.url && (
+              <div className="space-y-1.5">
+                <label className="text-xs font-black uppercase text-gray-500 font-heading">
+                  Video Preview:
+                </label>
+                <div className="w-full aspect-[16/9] rounded-2xl border-2 border-black overflow-hidden bg-black flex items-center justify-center">
+                  <video
+                    src={newVideoForm.url}
+                    autoPlay
+                    loop
+                    muted
+                    playsInline
+                    className="w-full h-full object-cover"
+                  />
+                </div>
+              </div>
+            )}
+
+            <div className="pt-3 border-t border-gray-100 flex items-center justify-end gap-2">
+              <Button variant="secondary" onClick={() => setShowAddVideoModal(false)}>
+                Cancel
+              </Button>
+              <Button
+                variant="primary"
+                disabled={!newVideoForm.name.trim() || !newVideoForm.url.trim()}
+                onClick={handleSaveCustomVideoModal}
+              >
+                💾 Save Video to Library
               </Button>
             </div>
           </div>

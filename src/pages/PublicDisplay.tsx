@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase';
 import { LeaderboardEngine, type LeaderboardEntry } from '../lib/leaderboard-engine';
 import { getScreenPage, subscribeToScreenChanges, getTimerState, subscribeToTimerChanges, type DisplayPageType, type TimerState } from '../lib/screen-sync';
 import { getBackgroundById, getScreenBackground, subscribeToBackgroundChanges } from '../lib/backgrounds-store';
+import { getScreenVideoConfig, subscribeToVideoChanges, type VideoPlayerConfig } from '../lib/video-store';
 import { BlurAnimatedTimer } from '../components/BlurAnimatedTimer';
 
 export default function PublicDisplay() {
@@ -28,6 +29,7 @@ export default function PublicDisplay() {
   // Active page assigned to this screen (synced from Admin Portal)
   const [activePage, setActivePage] = useState<DisplayPageType>(() => getScreenPage(screenId));
   const [screenBg, setScreenBg] = useState<string>(() => getScreenBackground(screenId));
+  const [videoConfig, setVideoConfig] = useState<VideoPlayerConfig>(() => getScreenVideoConfig(screenId));
 
   const prevAnnouncementsCount = useRef(announcements.length);
 
@@ -35,6 +37,7 @@ export default function PublicDisplay() {
   useEffect(() => {
     setActivePage(getScreenPage(screenId));
     setScreenBg(getScreenBackground(screenId));
+    setVideoConfig(getScreenVideoConfig(screenId));
 
     const unsubscribeScreens = subscribeToScreenChanges((changedScreenId, newPage) => {
       if (changedScreenId === screenId) {
@@ -46,6 +49,12 @@ export default function PublicDisplay() {
       setScreenBg(getScreenBackground(screenId));
     });
 
+    const unsubscribeVideos = subscribeToVideoChanges((newConfig, changedScreenId) => {
+      if (!changedScreenId || changedScreenId === screenId) {
+        setVideoConfig(newConfig);
+      }
+    });
+
     // Polling fallback: localStorage events don't fire in the same tab,
     // so poll every second to catch changes from the same browser context
     const pollInterval = setInterval(() => {
@@ -53,11 +62,14 @@ export default function PublicDisplay() {
       setActivePage(prev => prev !== current ? current : prev);
       const currentBg = getScreenBackground(screenId);
       setScreenBg(prev => prev !== currentBg ? currentBg : prev);
+      const currentVid = getScreenVideoConfig(screenId);
+      setVideoConfig(prev => JSON.stringify(prev) !== JSON.stringify(currentVid) ? currentVid : prev);
     }, 1000);
 
     return () => {
       unsubscribeScreens();
       unsubscribeBackgrounds();
+      unsubscribeVideos();
       clearInterval(pollInterval);
     };
   }, [screenId]);
@@ -132,17 +144,17 @@ export default function PublicDisplay() {
       created_at: new Date().toISOString()
     };
 
-  // Resolve background for active display
+  // Resolve background for active display (uses screen background, announcement background, or global default)
   const currentBgObj = getBackgroundById(
-    activePage === 'timer'
-      ? 'timer-retro'
-      : (activeAnnouncement.bg_url || screenBg)
+    activeAnnouncement.bg_url || screenBg || (activePage === 'timer' ? 'timer-retro' : 'pop-art-retro')
   );
 
   return (
     <div
-      className="fixed inset-0 w-screen h-screen bg-[#faf7f2] bg-no-repeat bg-cover bg-center flex flex-col justify-between overflow-hidden select-none font-sans cursor-pointer transition-all duration-300"
-      style={{ backgroundImage: `url("${currentBgObj.url}")` }}
+      className={`fixed inset-0 w-screen h-screen flex flex-col justify-between overflow-hidden select-none font-sans cursor-pointer transition-all duration-300 ${
+        activePage === 'video' ? 'bg-black' : 'bg-[#faf7f2] bg-no-repeat bg-cover bg-center'
+      }`}
+      style={activePage === 'video' ? undefined : { backgroundImage: `url("${currentBgObj.url}")` }}
       onClick={() => {
         if (!document.fullscreenElement) {
           toggleFullscreen();
@@ -153,7 +165,7 @@ export default function PublicDisplay() {
       onMouseLeave={resumeRotation}
     >
       {/* ── Discreet Fullscreen Indicator when in windowed mode ── */}
-      {!isFullscreen && showFullscreenHelper && (
+      {!isFullscreen && showFullscreenHelper && activePage !== 'video' && (
         <div className="fixed top-4 right-4 z-50 animate-bounce pointer-events-auto">
           <button
             onClick={(e) => {
@@ -182,7 +194,8 @@ export default function PublicDisplay() {
         {activePage === 'rounds' && <DisplayRoundsView />}
         {activePage === 'results' && <DisplayResultsView />}
         {activePage === 'rules' && <DisplayRulesView />}
-        {activePage === 'timer' && <DisplayTimerView />}
+        {activePage === 'timer' && <DisplayTimerView isLightText={currentBgObj.textColor === 'light'} />}
+        {activePage === 'video' && <DisplayVideoView videoConfig={videoConfig} />}
       </main>
     </div>
   );
@@ -202,28 +215,34 @@ function DisplayAnnouncementsView({
   rotationProgress: number;
   isLightText?: boolean;
 }) {
+  const isCleanBgOnly = activeAnnouncement.hide_text || (!activeAnnouncement.title?.trim() && !activeAnnouncement.message?.trim());
+
   return (
     <div className="flex-1 flex flex-col justify-between w-full h-full max-w-7xl mx-auto px-6 sm:px-12 py-8">
       <div className="flex-1 flex flex-col items-center justify-center text-center px-4">
-        <div className="space-y-4 lg:space-y-6 animate-fade-in w-full max-w-5xl" key={activeAnnouncement.id}>
-          <h1 className={`text-4xl sm:text-6xl md:text-7xl lg:text-8xl font-black font-display tracking-tight uppercase leading-none mx-auto ${
-            isLightText
-              ? 'text-white drop-shadow-[0_4px_16px_rgba(0,0,0,0.8)]'
-              : 'text-slate-950 drop-shadow-[0_4px_8px_rgba(0,0,0,0.12)]'
-          }`}>
-            {activeAnnouncement.title}
-          </h1>
+        {!isCleanBgOnly && (
+          <div className="space-y-4 lg:space-y-6 animate-fade-in w-full max-w-5xl" key={activeAnnouncement.id}>
+            {activeAnnouncement.title && activeAnnouncement.title.trim() !== '' && (
+              <h1 className={`text-4xl sm:text-6xl md:text-7xl lg:text-8xl font-black font-display tracking-tight uppercase leading-none mx-auto ${
+                isLightText
+                  ? 'text-white drop-shadow-[0_4px_16px_rgba(0,0,0,0.8)]'
+                  : 'text-slate-950 drop-shadow-[0_4px_8px_rgba(0,0,0,0.12)]'
+              }`}>
+                {activeAnnouncement.title}
+              </h1>
+            )}
 
-          {activeAnnouncement.message && (
-            <div className={`text-xl sm:text-2xl md:text-3xl lg:text-4xl font-extrabold font-heading leading-tight whitespace-pre-wrap max-w-4xl mx-auto px-4 ${
-              isLightText
-                ? 'text-slate-100 drop-shadow-[0_2px_8px_rgba(0,0,0,0.9)]'
-                : 'text-slate-900 drop-shadow-[0_1px_2px_rgba(255,255,255,0.8)]'
-            }`}>
-              {activeAnnouncement.message}
-            </div>
-          )}
-        </div>
+            {activeAnnouncement.message && activeAnnouncement.message.trim() !== '' && (
+              <div className={`text-xl sm:text-2xl md:text-3xl lg:text-4xl font-extrabold font-heading leading-tight whitespace-pre-wrap max-w-4xl mx-auto px-4 ${
+                isLightText
+                  ? 'text-slate-100 drop-shadow-[0_2px_8px_rgba(0,0,0,0.9)]'
+                  : 'text-slate-900 drop-shadow-[0_1px_2px_rgba(255,255,255,0.8)]'
+              }`}>
+                {activeAnnouncement.message}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Subtle bottom auto-rotation progress bar if multiple slides */}
@@ -547,7 +566,7 @@ function DisplayRulesView() {
 // ─────────────────────────────────────────────────────────────────────────────
 // 6. 40-MINUTE ROUND TIMER VIEW (Animated Countdown on Template Background)
 // ─────────────────────────────────────────────────────────────────────────────
-function DisplayTimerView() {
+function DisplayTimerView({ isLightText = false }: { isLightText?: boolean }) {
   const [timerState, setTimerState] = useState<TimerState>(() => getTimerState());
   const [remaining, setRemaining] = useState<number>(2400);
 
@@ -600,11 +619,11 @@ function DisplayTimerView() {
       <div className="flex flex-col items-center justify-center gap-3 animate-fade-in">
         {/* Status Label */}
         <div className={`text-base sm:text-xl font-black font-heading uppercase tracking-[0.3em] ${
-          isFinished ? 'text-red-600' :
-          timerState.status === 'paused' ? 'text-amber-600' :
-          timerState.status === 'idle' ? 'text-slate-500' :
-          isUrgent ? 'text-red-600' : 'text-slate-700'
-        }`}>
+          isFinished ? 'text-red-500' :
+          timerState.status === 'paused' ? 'text-amber-400' :
+          timerState.status === 'idle' ? (isLightText ? 'text-slate-300' : 'text-slate-500') :
+          isUrgent ? 'text-red-500' : (isLightText ? 'text-slate-200' : 'text-slate-700')
+        } ${isLightText ? 'drop-shadow-[0_2px_8px_rgba(0,0,0,0.8)]' : ''}`}>
           {isFinished ? '🚨 TIME\'S UP!' :
            timerState.status === 'paused' ? '⏸️ PAUSED' :
            timerState.status === 'idle' ? '⏳ READY TO START' :
@@ -619,6 +638,7 @@ function DisplayTimerView() {
           isUrgent={isUrgent}
           isCritical={isCritical}
           isFinished={isFinished}
+          isLightText={isLightText}
           sizeClass="text-[6rem] sm:text-[8rem] md:text-[10rem] lg:text-[12rem]"
         />
 
@@ -636,12 +656,52 @@ function DisplayTimerView() {
         </div>
 
         {/* Subtext */}
-        <div className="text-sm sm:text-lg font-bold text-slate-600 font-heading tracking-wide">
+        <div className={`text-sm sm:text-lg font-bold font-heading tracking-wide ${
+          isLightText ? 'text-slate-200 drop-shadow-[0_1px_4px_rgba(0,0,0,0.8)]' : 'text-slate-600'
+        }`}>
           {isFinished ? 'Please submit your work now!' :
            timerState.status === 'idle' ? `${minutes} min round · Waiting for admin to start` :
            `${minutes} min ${seconds} sec remaining`}
         </div>
       </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 7. VIDEO LOOP VIEW (Pure Clean Full-Screen Looped Motion Graphics)
+// ─────────────────────────────────────────────────────────────────────────────
+function DisplayVideoView({ videoConfig }: { videoConfig: VideoPlayerConfig }) {
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+
+  useEffect(() => {
+    if (videoRef.current) {
+      videoRef.current.playbackRate = videoConfig.playbackRate || 1;
+      videoRef.current.muted = videoConfig.muted ?? true;
+      videoRef.current.play().catch(() => {
+        // Autoplay policy fallback: mute and retry
+        if (videoRef.current) {
+          videoRef.current.muted = true;
+          videoRef.current.play().catch(() => {});
+        }
+      });
+    }
+  }, [videoConfig.videoUrl, videoConfig.muted, videoConfig.playbackRate]);
+
+  return (
+    <div className="relative w-full h-full bg-black flex items-center justify-center overflow-hidden">
+      <video
+        ref={videoRef}
+        key={videoConfig.videoUrl}
+        src={videoConfig.videoUrl}
+        autoPlay={videoConfig.autoplay ?? true}
+        loop={videoConfig.loop ?? true}
+        muted={videoConfig.muted ?? true}
+        playsInline
+        className={`w-full h-full ${
+          videoConfig.objectFit === 'contain' ? 'object-contain' : 'object-cover'
+        }`}
+      />
     </div>
   );
 }

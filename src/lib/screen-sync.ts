@@ -1,4 +1,4 @@
-export type DisplayPageType = 'announcements' | 'leaderboard' | 'rounds' | 'results' | 'rules' | 'timer';
+export type DisplayPageType = 'announcements' | 'leaderboard' | 'rounds' | 'results' | 'rules' | 'timer' | 'video';
 
 export interface ScreenInfo {
   id: number;
@@ -13,6 +13,7 @@ export interface ScreenAnnouncement {
   priority: 'NORMAL' | 'IMPORTANT' | 'URGENT';
   pinned?: boolean;
   bg_url?: string;
+  hide_text?: boolean;
 }
 
 export const ALL_SCREENS: ScreenInfo[] = [
@@ -30,6 +31,7 @@ export const DISPLAY_PAGES: { id: DisplayPageType; label: string; icon: string; 
   { id: 'results', label: 'Final Awards & Podium', icon: '🎖️', desc: 'Championship reveal and winner showcase', preview: 'Grand celebration podium revealing 1st, 2nd, and 3rd place winners.' },
   { id: 'rules', label: 'Rules & Guidelines', icon: '📋', desc: 'Event regulations & submission rules', preview: 'Displays workstation rules, allowed AI policies, and code of conduct.' },
   { id: 'timer', label: '40-Min Round Timer', icon: '⏳', desc: 'Full-screen 40-minute countdown timer', preview: 'Displays a large animated 40-minute countdown timer for each competition round.' },
+  { id: 'video', label: 'Video Loop', icon: '🎬', desc: 'Full-screen looped cinematic video showcase', preview: 'Plays a high-resolution looped cinematic video with autoplay and audio controls.' },
 ];
 
 export const DEFAULT_SCREEN_ANNOUNCEMENTS: Record<number, ScreenAnnouncement> = {
