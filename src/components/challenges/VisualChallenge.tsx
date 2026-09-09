@@ -78,27 +78,26 @@ export function VisualChallenge({ challenge, teamId, roundSessionId, onComplete 
       setEvaluationResult(result.evaluation);
       
       // Update best score if improved
+      const newBestScore = Math.max(bestScore, result.evaluation.totalScore);
       if (result.evaluation.totalScore > bestScore) {
         setBestScore(result.evaluation.totalScore);
       }
       
       // Update remaining attempts
       setRemainingAttempts(prev => Math.max(0, prev - 1));
-      
-      // Check if passed (score >= 60% of max)
-      const passingThreshold = challenge.maxScore * 0.6;
-      if (result.evaluation.totalScore >= passingThreshold) {
-        // Update round3_session to mark question as completed and add score
-        await supabase.rpc('complete_round3_question', {
-          p_session_id: roundSessionId,
-          p_question_id: questionId,
-          p_tier: challenge.tier,
-          p_score: result.evaluation.totalScore
-        });
-        
-        setTimeout(() => onComplete(), 2000);
-      }
     }
+  };
+
+  const handleFinishQuestion = async () => {
+    // Record the question as completed using the BEST score achieved across all attempts
+    await supabase.rpc('complete_round3_question', {
+      p_session_id: roundSessionId,
+      p_question_id: questionId,
+      p_tier: challenge.tier,
+      p_score: bestScore
+    });
+    
+    onComplete();
   };
 
       const isPassed = evaluationResult && evaluationResult.passed;
@@ -232,28 +231,32 @@ export function VisualChallenge({ challenge, teamId, roundSessionId, onComplete 
                     
 
                     {/* Action Button */}
-                    {isPassed ? (
+                    <div className="space-y-3 mt-4">
+                      {remainingAttempts > 0 && (
+                        <button 
+                          onClick={() => {
+                            setPromptText('');
+                            setEvaluationResult(null);
+                          }}
+                          className="w-full px-4 py-3 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-lg transition-all"
+                        >
+                          Try Again for Higher Score ({remainingAttempts} attempts left)
+                        </button>
+                      )}
+                      
+                      {remainingAttempts === 0 && (
+                        <div className="w-full px-4 py-3 bg-red-900/50 border-2 border-red-500 text-red-200 font-bold rounded-lg text-center">
+                          No attempts remaining. Best score: {bestScore.toFixed(1)}/{challenge.maxScore}
+                        </div>
+                      )}
+
                       <button 
-                        onClick={onComplete}
+                        onClick={handleFinishQuestion}
                         className="w-full px-4 py-3 bg-green-600 hover:bg-green-500 text-white font-bold rounded-lg transition-all"
                       >
-                        Continue to Next Challenge →
+                        Submit Best Score ({bestScore.toFixed(1)} pts) & Continue →
                       </button>
-                    ) : remainingAttempts > 0 ? (
-                      <button 
-                        onClick={() => {
-                          setPromptText('');
-                          setEvaluationResult(null);
-                        }}
-                        className="w-full px-4 py-3 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-lg transition-all"
-                      >
-                        Try Again ({remainingAttempts} attempts left)
-                      </button>
-                    ) : (
-                      <div className="w-full px-4 py-3 bg-red-900/50 border-2 border-red-500 text-red-200 font-bold rounded-lg text-center">
-                        No attempts remaining. Best score: {bestScore.toFixed(1)}/100
-                      </div>
-                    )}
+                    </div>
                   </div>
                 ) : (
                   <div className="h-full flex flex-col items-center justify-center text-gray-600">

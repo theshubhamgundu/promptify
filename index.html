@@ -10,6 +10,17 @@
   </head>
   <body>
     <div id="root"></div>
+    <script>
+      // Unregister any stale service workers (no PWA in this project)
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.getRegistrations().then(function(registrations) {
+          registrations.forEach(function(registration) {
+            registration.unregister();
+            console.log('[cleanup] Unregistered stale service worker:', registration.scope);
+          });
+        });
+      }
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
