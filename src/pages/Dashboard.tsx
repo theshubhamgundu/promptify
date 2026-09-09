@@ -292,13 +292,15 @@ export default function Dashboard({ navigate }: { navigate: (p: Page) => void })
                     }
                     if (round.status === 'completed') {
                       sounds.error();
-                      setToast({ message: 'You have already completed this round. Contact an admin if you need to reset it.', variant: 'warning' });
+                      // Round already completed - admin can reset if needed
                       return;
                     }
                     
                     sounds.start();
                     if (round.type === 'QUIZ' || round.type === 'KNOWLEDGE_TEST') {
                         navigate(`quiz-${round.id}` as any);
+                      } else if (round.type === 'ROUND2_HEIST' || round.title?.includes('Round 2') || round.title?.includes('Prompt Heist')) {
+                        navigate(`round2-heist-${round.id}` as any);
                       } else if (round.type === 'PROMPT' || round.type === 'PROMPT_CHALLENGE') {
                         navigate(`prompt-heist-${round.id}` as any);
                       } else if (round.type === 'VISION_CHALLENGE') {

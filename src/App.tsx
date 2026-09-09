@@ -20,7 +20,6 @@ import ActivityLogViewer from './pages/admin/ActivityLogViewer';
 import ParticipantManager from './pages/admin/ParticipantManager';
 import VerificationManager from './pages/admin/VerificationManager';
 import SessionManager from './pages/admin/SessionManager';
-import VisionMonitor from './pages/admin/VisionMonitor';
 import TeamDetail from './pages/admin/TeamDetail';
 import SubmissionsReview from './pages/admin/SubmissionsReview';
 import Announcements from './pages/admin/Announcements';
@@ -31,7 +30,7 @@ import QuizRoundSimple from './pages/QuizRoundSimple';
 import QuizResults from './pages/QuizResults';
 import QuizRound from './pages/QuizRound';
 import PromptHeist from './pages/PromptHeist';
-import VisionRound from './pages/VisionRound';
+import Round3Vision from './pages/Round3Vision';
 import Round4Engine from './pages/Round4Engine';
 import Round4Monitor from './pages/admin/Round4Monitor';
 import Round5Engine from './pages/Round5Engine';
@@ -41,6 +40,9 @@ import PublicDisplay from './pages/PublicDisplay';
 import AdminLayout from './components/AdminLayout';
 import FullscreenEnforcer from './components/FullscreenEnforcer';
 import LandingPage from './pages/LandingPage';
+import Registration from './pages/Registration';
+import Round2Heist from './pages/Round2Heist';
+import Round2Results from './pages/Round2Results';
 import { SyncEngine } from './lib/sync-engine';
 import { IntegrityMonitor } from './lib/integrity-monitor';
 import { supabase } from './lib/supabase';
@@ -66,10 +68,11 @@ export default function App() {
     return p === '/display' || p === '/live-board' || h === '#/display' || h === '#display' || s.includes('page=display') || s.includes('page=live-board');
   };
 
-  // Landing page state
+  // Landing and Registration state
   const [showLanding, setShowLanding] = useState(() => {
     return localStorage.getItem('hasVisitedLanding') !== 'true';
   });
+  const [showRegistration, setShowRegistration] = useState(false);
 
   // Initialize authState from localStorage
   const [authState, setAuthState] = useState<'login' | 'verification' | 'app'>(() => {
@@ -226,12 +229,26 @@ export default function App() {
   }
 
   if (authState === 'login') {
+    // Show registration page if requested
+    if (showRegistration) {
+      return <Registration onBack={() => {
+        setShowRegistration(false);
+        setShowLanding(true);
+      }} />;
+    }
+
     // Show landing page on first visit or when explicitly requested
     if (showLanding) {
-      return <LandingPage onEnter={() => {
-        setShowLanding(false);
-        localStorage.setItem('hasVisitedLanding', 'true');
-      }} />;
+      return <LandingPage 
+        onEnter={() => {
+          setShowLanding(false);
+          localStorage.setItem('hasVisitedLanding', 'true');
+        }}
+        onRegister={() => {
+          setShowLanding(false);
+          setShowRegistration(true);
+        }}
+      />;
     }
 
     return (
@@ -277,13 +294,21 @@ export default function App() {
         const roundId = currentPage.replace('prompt-heist-', '');
         return <PromptHeist roundId={roundId} navigate={navigate} />;
       }
+      if (currentPage.startsWith('round2-heist-'))  {
+        const roundId = currentPage.replace('round2-heist-', '');
+        return <Round2Heist roundId={roundId} navigate={navigate} />;
+      }
+      if (currentPage.startsWith('round2-results-'))  {
+        const roundId = currentPage.replace('round2-results-', '');
+        return <Round2Results roundId={roundId} navigate={navigate} />;
+      }
       if (currentPage.startsWith('round-'))  {
         const roundId = currentPage.replace('round-', '');
         return <GenericRound roundId={roundId} navigate={navigate} />;
       }
       if (currentPage.startsWith('vision-'))  {
         const roundId = currentPage.replace('vision-', '');
-        return <VisionRound roundId={roundId} navigate={navigate} />;
+        return <Round3Vision roundId={roundId} navigate={navigate} />;
       }
       if (currentPage.startsWith('round4-'))  {
         const roundId = currentPage.replace('round4-', '');
@@ -332,7 +357,7 @@ export default function App() {
   };
 
   const isAdminPage = typeof page === 'string' && page.startsWith('admin');
-  const isRoundPage = typeof page === 'string' && (page.startsWith('quiz-') || page.startsWith('quiz-results-') || page.startsWith('prompt-heist-') || page.startsWith('round-') || page.startsWith('vision-') || page.startsWith('round4-') || page.startsWith('round5-'));
+  const isRoundPage = typeof page === 'string' && (page.startsWith('quiz-') || page.startsWith('quiz-results-') || page.startsWith('prompt-heist-') || page.startsWith('round2-heist-') || page.startsWith('round2-results-') || page.startsWith('round-') || page.startsWith('vision-') || page.startsWith('round4-') || page.startsWith('round5-'));
   const isQuizPage = typeof page === 'string' && (page.startsWith('quiz-') || page.startsWith('quiz-results-'));
 
   return (

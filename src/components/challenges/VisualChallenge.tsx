@@ -1,201 +1,270 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
-import { sendAIRequest, AIProvider } from '../../lib/byok-service';
-import { PlayIcon, ShieldIcon, CheckCircleIcon, ExclamationCircleIcon, ImageIcon } from '../icons';
+import { AIProvider } from '../../lib/byok-service';
+import { useVisionEvaluation } from '../../hooks/useVisionEvaluation';
+import { getVisionBestScore, getVisionRemainingAttempts } from '../../lib/round3-evaluator';
+import { PlayIcon, ShieldIcon, CheckCircleIcon, ExclamationCircleIcon, EyeIcon, ClockIcon } from '../icons';
 
 interface VisualChallengeProps {
-  challenge: any;
+  challenge: any; // VisionQuestion from round3-questions.ts
   teamId: string;
-  roundSessionId: string;
-  activeProvider: AIProvider | null;
+  roundSessionId: string; // This is the round3_session ID
   onComplete: () => void;
 }
 
-export function VisualChallenge({ challenge, teamId, roundSessionId, activeProvider, onComplete }: VisualChallengeProps) {
+export function VisualChallenge({ challenge, teamId, roundSessionId, onComplete }: VisualChallengeProps) {
   const [promptText, setPromptText] = useState('');
-  const [evaluating, setEvaluating] = useState(false);
-  const [llmOutput, setLlmOutput] = useState<string>('');
   const [evaluationResult, setEvaluationResult] = useState<any>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [bestScore, setBestScore] = useState<number>(0);
+  const [remainingAttempts, setRemainingAttempts] = useState<number>(3);
+  const [startTime] = useState(Date.now());
+  
+  // Auto-detect active provider
+  const [activeProvider, setActiveProvider] = useState<AIProvider | null>(null);
+  
+  useEffect(() => {
+    // Import byokSession dynamically to avoid circular dependency
+    import('../../lib/byok-service').then(({ byokSession }) => {
+      const providers: AIProvider[] = ['OPENAI', 'ANTHROPIC', 'GOOGLE', 'GROQ', 'MISTRAL', 'COHERE'];
+      const found = providers.find(p => byokSession.hasKey(p));
+      if (found) {
+        setActiveProvider(found);
+      }
+    });
+  }, []);
+  
+  const { submitAndEvaluate, submitting, evaluating, error } = useVisionEvaluation();
 
-  // Challenge config extracts
-  const targetImage = challenge.configuration?.scenario_data?.target_image_url || 'https://images.unsplash.com/photo-1620641788421-7a1c342ea42e'; // fallback
-  const expectedKeyword = challenge.configuration?.expected_output || '';
+  // Challenge is actually a VisionQuestion
+  const questionId = challenge.id;
+  const targetImage = challenge.imageUrl;
+  const maxAttempts = 3; // Fixed for all questions
+  
+  // Load best score and remaining attempts
+  useEffect(() => {
+    async function load() {
+      const [score, attempts] = await Promise.all([
+        getVisionBestScore(teamId, questionId),
+        getVisionRemainingAttempts(teamId, questionId, maxAttempts)
+      ]);
+      
+      setBestScore(score);
+      setRemainingAttempts(attempts);
+    }
+    
+    load();
+  }, [teamId, questionId, maxAttempts]);
 
   const handleEvaluate = async () => {
     if (!promptText.trim()) return;
+    if (remainingAttempts <= 0) {
+      return;
+    }
     
-    setEvaluating(true);
-    setLlmOutput('');
-    setEvaluationResult(null);
-    setError(null);
+    const timeTaken = Math.floor((Date.now() - startTime) / 1000);
     
-    try {
-      let aiResponseText = "";
+    const result = await submitAndEvaluate({
+      teamId,
+      challengeId: questionId,
+      roundSessionId,
+      participantPrompt: promptText,
+      referenceImageURL: targetImage,
+      challengeData: challenge,
+      activeProvider,
+      timeTaken
+    });
+    
+    if (result.success && result.evaluation) {
+      setEvaluationResult(result.evaluation);
       
-      if (activeProvider) {
-        // Send a multi-modal request (Assuming ai-gateway forwards it correctly)
-        // Some providers might need specific formatting for images.
-        // For simplicity, we assume the provider supports standard text + image_url array formats.
-        const aiResponse = await sendAIRequest(
-          activeProvider,
-          teamId,
-          roundSessionId,
-          challenge.id,
-          {
-            // @ts-ignore - Extending the message structure slightly for Vision
-            messages: [
-              {
-                role: 'user', 
-                content: [
-                  { type: 'text', text: promptText },
-                  { type: 'image_url', image_url: { url: targetImage } }
-                ]
-              }
-            ],
-            model: challenge.configuration?.byok?.allowed_models?.[0] || 'gpt-4o', // Must use a vision model
-            maxTokens: challenge.configuration?.byok?.max_tokens_per_request || 500,
-          }
-        );
-        
-        if (!aiResponse.success) {
-          throw new Error(aiResponse.error || 'AI Request failed');
-        }
-        
-        aiResponseText = aiResponse.content || '';
-        setLlmOutput(aiResponseText);
-      } else {
-        throw new Error("API Key required to run the Visual Engine");
+      // Update best score if improved
+      if (result.evaluation.totalScore > bestScore) {
+        setBestScore(result.evaluation.totalScore);
       }
       
-      // Grade output
-      const isMatch = expectedKeyword ? aiResponseText.toLowerCase().includes(expectedKeyword.toLowerCase()) : true;
-      const score = isMatch ? challenge.base_points : 0;
+      // Update remaining attempts
+      setRemainingAttempts(prev => Math.max(0, prev - 1));
       
-      const evalResult = {
-        passed: isMatch,
-        score,
-        feedback: isMatch ? "Visual features correctly identified." : "The AI failed to identify the expected features based on your prompt."
-      };
-      
-      setEvaluationResult(evalResult);
-      
-      // Save attempt
-      await supabase.rpc('create_challenge_attempt', {
-        p_team_id: teamId,
-        p_challenge_id: challenge.id,
-        p_round_session_id: roundSessionId,
-        p_payload: {
-          prompt_text: promptText,
-          llm_output: aiResponseText,
-          evaluation: evalResult
-        }
-      });
-      
-    } catch (err: any) {
-      console.error('Visual Evaluation error:', err);
-      setError(err.message || 'Evaluation failed');
-    } finally {
-      setEvaluating(false);
+      // Check if passed (score >= 60% of max)
+      const passingThreshold = challenge.maxScore * 0.6;
+      if (result.evaluation.totalScore >= passingThreshold) {
+        // Update round3_session to mark question as completed and add score
+        await supabase.rpc('complete_round3_question', {
+          p_session_id: roundSessionId,
+          p_question_id: questionId,
+          p_tier: challenge.tier,
+          p_score: result.evaluation.totalScore
+        });
+        
+        setTimeout(() => onComplete(), 2000);
+      }
     }
   };
 
-  return (
-    <div className="flex h-full p-6 gap-6">
-      {/* Left Panel: The Subject Image */}
-      <div className="w-1/3 flex flex-col gap-4">
-        <div className="bg-gray-800 rounded-xl p-4 border border-gray-700 shadow-xl">
-          <h2 className="text-lg font-bold mb-4 flex items-center gap-2">
-            <ImageIcon className="text-purple-400 w-5 h-5" /> 
-            Target Anomaly
-          </h2>
-          <div className="aspect-square w-full rounded-lg overflow-hidden border-2 border-purple-500/30 relative">
-            <img 
-              src={targetImage} 
-              alt="Target Anomaly" 
-              className="w-full h-full object-cover"
-            />
-            {/* Scanline overlay effect */}
-            <div className="absolute inset-0 bg-[linear-gradient(transparent_50%,rgba(0,0,0,0.25)_50%)] bg-[length:100%_4px] pointer-events-none"></div>
-          </div>
-          <div className="mt-4 text-sm text-gray-400 leading-relaxed">
-            {challenge.description}
-          </div>
-        </div>
-      </div>
-      
-      {/* Right Panel: Prompt & Execution */}
-      <div className="flex-1 flex flex-col gap-4">
-        {/* Terminal Input */}
-        <div className="bg-gray-800 rounded-xl border border-gray-700 flex flex-col shadow-xl overflow-hidden flex-1 max-h-[50%]">
-          <div className="bg-gray-900 px-4 py-3 border-b border-gray-700 font-bold flex justify-between items-center text-sm">
-            <span className="text-gray-300">VISION DECODER TERMINAL</span>
-          </div>
-          <textarea
-            value={promptText}
-            onChange={(e) => setPromptText(e.target.value)}
-            placeholder="Instruct the AI how to analyze the image..."
-            className="flex-1 bg-transparent p-4 text-purple-400 font-mono text-sm focus:outline-none resize-none placeholder-purple-800/50"
-            spellCheck="false"
-          />
-          <div className="p-4 border-t border-gray-700 bg-gray-900 flex justify-between items-center">
-            {error && <span className="text-red-400 text-xs font-bold">{error}</span>}
-            <button
-              onClick={handleEvaluate}
-              disabled={evaluating || !activeProvider || !promptText.trim()}
-              className="ml-auto px-6 py-2 bg-gradient-to-r from-purple-500 to-pink-600 hover:from-purple-400 hover:to-pink-500 disabled:opacity-50 text-white font-bold rounded-lg transition-all flex items-center gap-2"
-            >
-              {evaluating ? (
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-              ) : (
-                <><PlayIcon className="w-4 h-4" /> EXTRACT DATA</>
-              )}
-            </button>
-          </div>
-        </div>
-        
-        {/* Results */}
-        <div className="bg-gray-800 rounded-xl border border-gray-700 flex flex-col shadow-xl overflow-hidden flex-1">
-          <div className="bg-gray-900 px-4 py-3 border-b border-gray-700 font-bold text-sm text-gray-300">
-            DECODED SIGNAL
-          </div>
-          <div className="flex-1 p-4 overflow-y-auto">
-            {llmOutput ? (
-              <div className="space-y-4">
-                <div className="bg-black/50 p-4 rounded-lg border border-gray-700 font-mono text-sm text-gray-300 whitespace-pre-wrap">
-                  {llmOutput}
+      const isPassed = evaluationResult && evaluationResult.passed;
+      const isProcessing = submitting || evaluating;
+
+      return (
+        <div className="flex h-full p-6 gap-6 bg-gray-50">
+          {/* Left Panel: The Subject Image */}
+          <div className="w-1/3 flex flex-col gap-4">
+            <div className="bg-white rounded-xl p-4 border border-gray-200 shadow-sm">
+              <h2 className="text-lg font-bold mb-4 flex items-center gap-2 text-gray-900">
+                <EyeIcon className="text-blue-600 w-5 h-5" /> 
+                Target Image
+              </h2>
+              <div 
+                className="aspect-square w-full rounded-lg overflow-hidden border-2 border-gray-300 relative select-none"
+                onContextMenu={(e) => e.preventDefault()}
+                onDragStart={(e) => e.preventDefault()}
+              >
+                <img 
+                  src={targetImage} 
+                  alt="Challenge Image" 
+                  className="w-full h-full object-cover pointer-events-none"
+                  draggable="false"
+                  onContextMenu={(e) => e.preventDefault()}
+                />
+                {/* Overlay to prevent interaction */}
+                <div className="absolute inset-0 pointer-events-none select-none"></div>
+              </div>
+              <div className="mt-4 text-sm text-gray-700 leading-relaxed">
+                {challenge.description}
+              </div>
+              
+              {/* Stats */}
+              <div className="mt-4 pt-4 border-t border-gray-200 space-y-2">
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-600">Best Score:</span>
+                  <span className="text-green-600 font-bold">{bestScore.toFixed(1)}/{challenge.maxScore}</span>
                 </div>
-                {evaluationResult && (
-                  <div className={`p-4 rounded-lg border flex items-center justify-between ${evaluationResult.passed ? 'bg-green-900/20 border-green-500/50' : 'bg-red-900/20 border-red-500/50'}`}>
-                    <div>
-                      <h3 className="text-xs font-bold uppercase mb-1 flex items-center gap-2">
-                        {evaluationResult.passed ? <CheckCircleIcon className="w-4 h-4 text-green-400" /> : <ExclamationCircleIcon className="w-4 h-4 text-red-400" />}
-                        <span className={evaluationResult.passed ? 'text-green-400' : 'text-red-400'}>
-                          {evaluationResult.passed ? 'TARGET IDENTIFIED' : 'TARGET MISSED'}
-                        </span>
-                      </h3>
-                      <div className="text-sm text-gray-300">{evaluationResult.feedback}</div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-600">Attempts Left:</span>
+                  <span className="text-blue-600 font-bold">{remainingAttempts}/{maxAttempts}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          {/* Right Panel: Prompt & Execution */}
+          <div className="flex-1 flex flex-col gap-4">
+            {/* Input Area */}
+            <div className="bg-white rounded-xl border border-gray-200 flex flex-col shadow-sm overflow-hidden flex-1 max-h-[50%]">
+              <div className="bg-gray-100 px-4 py-3 border-b border-gray-200 font-bold flex justify-between items-center text-sm">
+                <span className="text-gray-900">Your Description</span>
+                {remainingAttempts === 0 && (
+                  <span className="text-red-600 text-xs">NO ATTEMPTS LEFT</span>
+                )}
+              </div>
+              <textarea
+                value={promptText}
+                onChange={(e) => setPromptText(e.target.value)}
+                placeholder="Describe what you see in the image... Be specific and detailed!"
+                className="flex-1 bg-white p-4 text-gray-900 text-sm focus:outline-none resize-none placeholder-gray-400"
+                spellCheck="false"
+                disabled={isProcessing || remainingAttempts === 0}
+              />
+              <div className="p-4 border-t border-gray-200 bg-gray-50 flex justify-between items-center">
+                {error && <span className="text-red-600 text-xs font-bold">{error}</span>}
+                {isProcessing && (
+                  <span className="text-blue-600 text-xs font-bold">
+                    Evaluating...
+                  </span>
+                )}
+                <button
+                  onClick={handleEvaluate}
+                  disabled={isProcessing || !promptText.trim() || remainingAttempts === 0}
+                  className="ml-auto px-6 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold rounded-lg transition-all flex items-center gap-2"
+                >
+                  {isProcessing ? (
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                  ) : (
+                    <><PlayIcon className="w-4 h-4" /> SUBMIT</>
+                  )}
+                </button>
+              </div>
+            </div>
+            
+            {/* Results */}
+            <div className="bg-gray-800 rounded-xl border border-gray-700 flex flex-col shadow-xl overflow-hidden flex-1">
+              <div className="bg-gray-900 px-4 py-3 border-b border-gray-700 font-bold text-sm text-gray-300">
+                EVALUATION RESULTS
+              </div>
+              <div className="flex-1 p-4 overflow-y-auto">
+                {evaluationResult ? (
+                  <div className="space-y-4">
+                    {/* Score Card */}
+                    <div className={`p-4 rounded-lg border-2 ${
+                      isPassed 
+                        ? 'bg-green-900/20 border-green-500' 
+                        : 'bg-orange-900/20 border-orange-500'
+                    }`}>
+                      <div className="flex items-center justify-between mb-3">
+                        <h3 className="text-xl font-bold flex items-center gap-2">
+                          {isPassed ? (
+                            <><CheckCircleIcon className="w-6 h-6 text-green-400" /> PASSED</>
+                          ) : (
+                            <><ClockIcon className="w-6 h-6 text-orange-400" /> TRY AGAIN</>
+                          )}
+                        </h3>
+                        <div className="text-3xl font-black text-white">
+                          {evaluationResult.totalScore.toFixed(1)}<span className="text-lg text-gray-400">/{evaluationResult.maxScore}</span>
+                        </div>
+                      </div>
+                      
+                      {/* Pattern Match Summary */}
+                      <div className="mb-3 text-sm">
+                        <div className="text-gray-300">
+                          Matched <span className="font-bold text-white">
+                            {evaluationResult.matchedPatterns.filter(p => p.matched).length}/
+                            {evaluationResult.matchedPatterns.length}
+                          </span> elements
+                        </div>
+                      </div>
+                      
+                      {/* Feedback */}
+                      <div className="text-xs text-gray-300 border-t border-gray-700 pt-3 space-y-1">
+                        {evaluationResult.feedback.map((line, i) => (
+                          <div key={i}>{line}</div>
+                        ))}
+                      </div>
                     </div>
-                    {evaluationResult.passed && (
+                    
+
+                    {/* Action Button */}
+                    {isPassed ? (
                       <button 
                         onClick={onComplete}
-                        className="px-4 py-2 bg-green-600 hover:bg-green-500 text-white font-bold rounded-lg"
+                        className="w-full px-4 py-3 bg-green-600 hover:bg-green-500 text-white font-bold rounded-lg transition-all"
                       >
-                        Next Stage
+                        Continue to Next Challenge →
                       </button>
+                    ) : remainingAttempts > 0 ? (
+                      <button 
+                        onClick={() => {
+                          setPromptText('');
+                          setEvaluationResult(null);
+                        }}
+                        className="w-full px-4 py-3 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-lg transition-all"
+                      >
+                        Try Again ({remainingAttempts} attempts left)
+                      </button>
+                    ) : (
+                      <div className="w-full px-4 py-3 bg-red-900/50 border-2 border-red-500 text-red-200 font-bold rounded-lg text-center">
+                        No attempts remaining. Best score: {bestScore.toFixed(1)}/100
+                      </div>
                     )}
+                  </div>
+                ) : (
+                  <div className="h-full flex flex-col items-center justify-center text-gray-600">
+                    <ShieldIcon className="w-12 h-12 mb-2 opacity-50" />
+                    <p>Describe the image and click SUBMIT</p>
+                    <p className="text-xs mt-2">Your description will be evaluated instantly</p>
                   </div>
                 )}
               </div>
-            ) : (
-              <div className="h-full flex flex-col items-center justify-center text-gray-600">
-                <ShieldIcon className="w-12 h-12 mb-2 opacity-50" />
-                <p>Awaiting visual extraction...</p>
-              </div>
-            )}
+            </div>
           </div>
         </div>
-      </div>
-    </div>
-  );
-}
+      );
+    }

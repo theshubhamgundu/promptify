@@ -4,9 +4,10 @@
 
 interface LandingPageProps {
   onEnter: () => void;
+  onRegister: () => void;
 }
 
-export default function LandingPage({ onEnter }: LandingPageProps) {
+export default function LandingPage({ onEnter, onRegister }: LandingPageProps) {
   return (
     <>
       {/* ── MOBILE (< md) ────────────────────────────────────── */}
@@ -15,8 +16,8 @@ export default function LandingPage({ onEnter }: LandingPageProps) {
         style={{ background: "#FAF7F2", minHeight: "100dvh" }}
       >
         <MobileBlobs />
-        <MobileNav onEnter={onEnter} />
-        <MobileHero onEnter={onEnter} />
+        <MobileNav onEnter={onEnter} onRegister={onRegister} />
+        <MobileHero onEnter={onEnter} onRegister={onRegister} />
         <MobileInfoCards />
         <MobileFooter />
       </div>
@@ -28,8 +29,8 @@ export default function LandingPage({ onEnter }: LandingPageProps) {
       >
         <Blobs />
         <Ornaments />
-        <Navbar onEnter={onEnter} />
-        <Stage onEnter={onEnter} />
+        <Navbar onEnter={onEnter} onRegister={onRegister} />
+        <Stage onEnter={onEnter} onRegister={onRegister} />
         <BottomBar />
       </div>
     </>
@@ -56,7 +57,7 @@ function MobileBlobs() {
 }
 
 /* ── Mobile navbar ──────────────────────────────────────────── */
-function MobileNav({ onEnter }: { onEnter: () => void }) {
+function MobileNav({ onEnter, onRegister }: { onEnter: () => void; onRegister: () => void }) {
   return (
     <nav
       style={{
@@ -121,7 +122,7 @@ function MobileNav({ onEnter }: { onEnter: () => void }) {
 }
 
 /* ── Mobile hero ────────────────────────────────────────────── */
-function MobileHero({ onEnter }: { onEnter: () => void }) {
+function MobileHero({ onEnter, onRegister }: { onEnter: () => void; onRegister: () => void }) {
   return (
     <div style={{ position: "relative", padding: "28px 20px 8px", zIndex: 10 }}>
 
@@ -209,7 +210,7 @@ function MobileHero({ onEnter }: { onEnter: () => void }) {
       {/* CTAs */}
       <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 22 }}>
         <button
-          onClick={onEnter}
+          onClick={onRegister}
           className="btn-orange"
           style={{ justifyContent: "center", fontSize: 15, padding: "14px 24px" }}
         >
@@ -487,7 +488,7 @@ function Ornaments() {
 }
 
 /* ── Navbar ─────────────────────────────────────────────────── */
-function Navbar({ onEnter }: { onEnter: () => void }) {
+function Navbar({ onEnter, onRegister }: { onEnter: () => void; onRegister: () => void }) {
   return (
     <nav className="absolute top-5 inset-x-0 flex justify-center px-10" style={{ zIndex: 50 }}>
       <div
@@ -608,7 +609,7 @@ function ParamsPanel() {
 }
 
 /* ── Stage (3-col layout) ───────────────────────────────────── */
-function Stage({ onEnter }: { onEnter: () => void }) {
+function Stage({ onEnter, onRegister }: { onEnter: () => void; onRegister: () => void }) {
   return (
     <div
       className="absolute inset-0 grid"
@@ -634,7 +635,7 @@ function Stage({ onEnter }: { onEnter: () => void }) {
       </div>
 
       {/* Centre hero */}
-      <HeroCenter onEnter={onEnter} />
+      <HeroCenter onEnter={onEnter} onRegister={onRegister} />
 
       {/* Right mascot column */}
       <div className="relative flex flex-col items-center justify-center gap-4" style={{ zIndex: 5, maxWidth: "280px", overflow: "hidden" }}>
@@ -651,7 +652,7 @@ function Stage({ onEnter }: { onEnter: () => void }) {
 }
 
 /* ── Hero centre ────────────────────────────────────────────── */
-function HeroCenter({ onEnter }: { onEnter: () => void }) {
+function HeroCenter({ onEnter, onRegister }: { onEnter: () => void; onRegister: () => void }) {
   return (
     <div className="flex flex-col items-center justify-center text-center px-4" style={{ position: "relative", zIndex: 20 }}>
 
@@ -733,7 +734,7 @@ function HeroCenter({ onEnter }: { onEnter: () => void }) {
 
       {/* CTAs */}
       <div className="flex items-center gap-4" style={{ position: "relative", zIndex: 20 }}>
-        <button onClick={onEnter} className="btn-orange">
+        <button onClick={onRegister} className="btn-orange">
           <span>REGISTER SQUAD</span>
           <span style={{ fontSize: 16 }}>→</span>
         </button>
