@@ -1,6 +1,5 @@
 import { useState } from 'react';
-import { BrainIcon } from '../components/icons';
-import { Button, Toast } from '../components/ui';
+import { Toast } from '../components/ui';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../stores/authStore';
 import { useTeamStore } from '../stores/teamStore';
@@ -70,143 +69,318 @@ export default function Login({ onLogin, onBackToHome }: { onLogin: (isAdmin: bo
   };
 
   return (
-    <div className="min-h-screen bg-[#f9f7f4] flex">
-      {/* Left — branding */}
-      <div className="hidden lg:flex flex-1 bg-gradient-to-br from-orange-500 via-orange-600 to-red-600 relative overflow-hidden flex-col justify-between p-12">
-        <div>
+    <div className="min-h-screen bg-[#FAF7F2] dot-bg flex flex-col lg:flex-row overflow-x-hidden">
+      {/* ── Left Branding Panel ─────────────────────────────────── */}
+      <div
+        style={{
+          background: "#FF5C00",
+        }}
+        className="flex-1 lg:border-r-[3px] border-[#111111] relative overflow-hidden flex flex-col justify-between p-8 sm:p-12 lg:p-16 min-h-[420px] lg:min-h-screen"
+      >
+        {/* Background Depth Ornaments matching homepage */}
+        <div className="absolute -top-16 -right-16 w-80 h-80 rounded-full bg-white/[0.08] pointer-events-none" />
+        <div className="absolute top-[28%] -right-24 w-[420px] h-[420px] rounded-full bg-white/[0.07] pointer-events-none" />
+        <div className="absolute -bottom-24 right-1/4 w-[460px] h-[460px] rounded-full bg-black/[0.06] pointer-events-none" />
+        <div className="absolute bottom-1/3 left-10 w-72 h-72 rounded-full bg-white/[0.04] pointer-events-none" />
+
+        {/* Top Logo — Promptify */}
+        <div className="relative z-10">
           <div className="flex items-center gap-3">
-            <div className="w-11 h-11 bg-white/20 backdrop-blur rounded-xl flex items-center justify-center">
-              <BrainIcon />
+            <div
+              style={{
+                width: 44,
+                height: 44,
+                background: "#FAF7F2",
+                border: "2.5px solid #111111",
+                borderRadius: 14,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                boxShadow: "3px 3px 0 #111111",
+                flexShrink: 0,
+              }}
+            >
+              <span
+                style={{
+                  fontFamily: "'JetBrains Mono', monospace",
+                  fontWeight: 900,
+                  fontSize: 16,
+                  color: "#FF5C00",
+                }}
+              >
+                Pf
+              </span>
             </div>
             <div>
-              <div className="text-white font-bold text-lg font-heading leading-none">PROMPT</div>
-              <div className="text-white/80 font-bold text-sm font-heading leading-none">CHAMPIONSHIP</div>
+              <span
+                style={{
+                  fontFamily: "'Nunito', sans-serif",
+                  fontWeight: 900,
+                  fontSize: 24,
+                  color: "#FAF7F2",
+                }}
+              >
+                Promptify<span style={{ color: "#FFD027" }}>.</span>
+              </span>
             </div>
           </div>
         </div>
 
-        <div>
-          <h2 className="text-white text-5xl font-bold font-heading leading-tight mb-4">
-            Think.<br />Prompt.<br />Solve.<br />Win.
-          </h2>
-          <p className="text-white/70 text-lg">A battle of creativity, logic,<br />and AI mastery.</p>
+        {/* Center Big Headline */}
+        <div className="my-auto py-10 lg:py-0 relative z-10">
+          <h1
+            style={{
+              fontFamily: "'Nunito', sans-serif",
+              fontWeight: 900,
+              lineHeight: 1.05,
+              letterSpacing: "-0.02em",
+            }}
+            className="text-[#FAF7F2] text-5xl sm:text-6xl xl:text-7xl"
+          >
+            Think.<br />
+            Prompt.<br />
+            Solve.<br />
+            Win.
+          </h1>
+          <p
+            style={{
+              fontFamily: "'Nunito', sans-serif",
+              fontWeight: 700,
+            }}
+            className="text-[#FAF7F2] text-base sm:text-lg opacity-90 mt-5 max-w-sm leading-relaxed"
+          >
+            A battle of creativity, logic, and AI mastery.
+          </p>
+
+          {/* Technique chips matching homepage */}
+          <div className="flex flex-wrap gap-2 pt-6">
+            {[
+              { text: "zero-shot", bg: "#2FE69A", fg: "#111111" },
+              { text: "few-shot", bg: "#B57CFF", fg: "#111111" },
+              { text: "chain-of-thought", bg: "#FFD027", fg: "#111111" },
+              { text: "RAG", bg: "#FAF7F2", fg: "#111111" },
+            ].map((t) => (
+              <span
+                key={t.text}
+                style={{
+                  fontFamily: "'JetBrains Mono', monospace",
+                  fontWeight: 700,
+                  fontSize: 11,
+                  background: t.bg,
+                  color: t.fg,
+                  border: "2px solid #111111",
+                  borderRadius: 999,
+                  padding: "4px 12px",
+                  boxShadow: "2.5px 2.5px 0 #111111",
+                }}
+              >
+                {t.text}
+              </span>
+            ))}
+          </div>
         </div>
 
-        <div className="flex items-center gap-6 text-white/60 text-sm">
-          <div><span className="text-white font-bold text-xl font-heading">5</span><br />Rounds</div>
-          <div className="w-px h-8 bg-white/20" />
-          <div><span className="text-white font-bold text-xl font-heading">1100</span><br />Max Points</div>
-          <div className="w-px h-8 bg-white/20" />
-          <div><span className="text-white font-bold text-xl font-heading">5–6</span><br />Hours</div>
+        {/* Bottom decorative anchor tag */}
+        <div className="relative z-10 pt-4">
+          <span
+            style={{
+              fontFamily: "'JetBrains Mono', monospace",
+              fontSize: 11,
+              fontWeight: 700,
+              color: "#FAF7F2",
+              opacity: 0.75,
+              letterSpacing: "0.08em",
+            }}
+          >
+            PROMPT CHAMPIONSHIP 2026
+          </span>
         </div>
-
-        {/* Decorative circles */}
-        <div className="absolute -right-20 -top-20 w-80 h-80 bg-white/5 rounded-full" />
-        <div className="absolute -right-10 top-40 w-48 h-48 bg-white/5 rounded-full" />
-        <div className="absolute right-20 -bottom-10 w-64 h-64 bg-white/5 rounded-full" />
       </div>
 
-      {/* Right — form */}
-      <div className="flex-1 lg:max-w-md flex flex-col justify-center px-8 lg:px-12">
-        {/* Back to Home Button */}
-        {onBackToHome && (
-          <button
-            onClick={onBackToHome}
-            className="mb-6 flex items-center gap-2 text-gray-500 hover:text-orange-500 transition-colors group"
-          >
-            <svg className="w-5 h-5 transform group-hover:-translate-x-1 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-            </svg>
-            <span className="font-semibold text-sm">Back to Homepage</span>
-          </button>
-        )}
+      {/* ── Right Login Form ────────────────────────────────────── */}
+      <div className="flex-1 flex flex-col justify-center items-center px-6 sm:px-12 lg:px-16 py-12 bg-[#FAF7F2] dot-bg relative overflow-y-auto">
+        <div className="w-full max-w-[440px] flex flex-col">
+          {/* Back to Homepage */}
+          {onBackToHome && (
+            <button
+              type="button"
+              onClick={onBackToHome}
+              style={{
+                fontFamily: "'Nunito', sans-serif",
+                fontWeight: 800,
+                fontSize: 13,
+                color: "#111111",
+                background: "#FAF7F2",
+                border: "2px solid #111111",
+                borderRadius: 999,
+                padding: "8px 18px",
+                boxShadow: "3px 3px 0 #111111",
+                cursor: "pointer",
+              }}
+              className="self-start mb-6 inline-flex items-center gap-2 hover:translate-x-[-2px] transition-transform"
+            >
+              <span className="text-base leading-none">←</span>
+              <span>Back to Homepage</span>
+            </button>
+          )}
 
-        {/* Mobile logo */}
-        <div className="flex lg:hidden items-center gap-2.5 mb-8">
-          <div className="w-9 h-9 bg-orange-500 rounded-xl flex items-center justify-center">
-            <BrainIcon />
-          </div>
-          <div>
-            <div className="text-sm font-bold text-gray-900 font-heading">HAPPENO TECHNOLOGIES</div>
-          </div>
-        </div>
-
-        <h1 className="text-3xl font-bold text-gray-900 font-heading mb-1">Participant Login</h1>
-        <p className="text-gray-500 text-sm mb-8">Enter your team credentials to access the competition portal.</p>
-
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-1.5 font-heading">Team Code</label>
-            <input
-              type="text"
-              value={teamCode}
-              onChange={(e) => setTeamCode(e.target.value.toUpperCase())}
-              placeholder="e.g. PC5247"
-              className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-sm font-mono font-semibold text-gray-900 placeholder:text-gray-300 focus:border-orange-400 focus:ring-2 focus:ring-orange-100 transition-all"
-              required
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-1.5 font-heading">Password</label>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="Team password"
-              className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-sm text-gray-900 placeholder:text-gray-300 focus:border-orange-400 focus:ring-2 focus:ring-orange-100 transition-all"
-              required
-            />
-          </div>
-
-          <Button
-            type="submit"
-            className="w-full py-3 mt-2"
-            disabled={loading}
-          >
-            {loading ? (
-              <span className="flex items-center gap-2">
-                <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                </svg>
-                Authenticating...
-              </span>
-            ) : (
-              'Enter Competition →'
-            )}
-          </Button>
-
-          <button
-            type="button"
-            onClick={(e) => {
-              e.preventDefault();
-              setTeamCode('test1234');
-              setPassword('TeamPassword123!');
-              setTimeout(() => {
-                const form = (e.target as HTMLElement).closest('form');
-                if (form) form.requestSubmit();
-              }, 50);
+          {/* Form Card */}
+          <div
+            className="w-full shadow-hard"
+            style={{
+              background: "#FAF7F2",
+              border: "2.5px solid #111111",
+              borderRadius: 22,
+              padding: "36px 30px",
             }}
-            className="w-full py-2.5 mt-2 bg-gray-100 hover:bg-gray-200 text-gray-600 font-bold rounded-xl transition-colors text-sm"
           >
-            Quick Login (test1234)
-          </button>
-        </form>
+            {/* Heading */}
+            <h2
+              style={{
+                fontFamily: "'Nunito', sans-serif",
+                fontWeight: 900,
+                fontSize: 30,
+                color: "#111111",
+              }}
+              className="tracking-tight mb-2"
+            >
+              Participant Login
+            </h2>
+            <p
+              style={{
+                fontFamily: "'Nunito', sans-serif",
+                fontWeight: 600,
+                fontSize: 14,
+                color: "#111111",
+                opacity: 0.7,
+              }}
+              className="mb-7 leading-normal"
+            >
+              Enter your team credentials to access the competition portal.
+            </p>
 
-        <div className="mt-8 pt-8 border-t border-gray-100">
-          <div className="grid grid-cols-3 gap-3 text-center text-xs text-gray-400">
-            <div className="bg-white rounded-lg p-3 border border-gray-100">
-              <div className="text-green-500 font-bold mb-0.5">✓</div>
-              Device Verified
-            </div>
-            <div className="bg-white rounded-lg p-3 border border-gray-100">
-              <div className="text-green-500 font-bold mb-0.5">✓</div>
-              Secure Session
-            </div>
-            <div className="bg-white rounded-lg p-3 border border-gray-100">
-              <div className="text-orange-500 font-bold mb-0.5">⏱</div>
-              Timer Synced
-            </div>
+            {/* Form */}
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div>
+                <label
+                  style={{
+                    fontFamily: "'Nunito', sans-serif",
+                    fontWeight: 800,
+                    fontSize: 13,
+                    color: "#111111",
+                  }}
+                  className="block mb-1.5"
+                >
+                  Team Code
+                </label>
+                <input
+                  type="text"
+                  value={teamCode}
+                  onChange={(e) => setTeamCode(e.target.value.toUpperCase())}
+                  placeholder="e.g. PC5247"
+                  style={{
+                    fontFamily: "'JetBrains Mono', monospace",
+                    fontWeight: 700,
+                    fontSize: 14,
+                    color: "#111111",
+                    background: "#FFFFFF",
+                    border: "2px solid #111111",
+                    borderRadius: 12,
+                    boxShadow: "2px 2px 0 #111111",
+                  }}
+                  className="w-full px-4 py-3 outline-none focus:border-[#FF5C00] transition-colors"
+                  required
+                />
+              </div>
+
+              <div>
+                <label
+                  style={{
+                    fontFamily: "'Nunito', sans-serif",
+                    fontWeight: 800,
+                    fontSize: 13,
+                    color: "#111111",
+                  }}
+                  className="block mb-1.5"
+                >
+                  Password
+                </label>
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Team password"
+                  style={{
+                    fontFamily: "'Nunito', sans-serif",
+                    fontWeight: 600,
+                    fontSize: 14,
+                    color: "#111111",
+                    background: "#FFFFFF",
+                    border: "2px solid #111111",
+                    borderRadius: 12,
+                    boxShadow: "2px 2px 0 #111111",
+                  }}
+                  className="w-full px-4 py-3 outline-none focus:border-[#FF5C00] transition-colors"
+                  required
+                />
+              </div>
+
+              {/* Enter Competition Button */}
+              <button
+                type="submit"
+                disabled={loading}
+                className="btn-orange w-full"
+                style={{
+                  justifyContent: "center",
+                  fontSize: 15,
+                  padding: "14px",
+                  marginTop: 8,
+                  borderRadius: 14,
+                  boxShadow: "3px 3px 0 #111111",
+                }}
+              >
+                {loading ? (
+                  <span className="flex items-center gap-2">
+                    <svg className="animate-spin w-4 h-4 text-[#FAF7F2]" viewBox="0 0 24 24" fill="none">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                    </svg>
+                    Authenticating...
+                  </span>
+                ) : (
+                  'Enter Competition →'
+                )}
+              </button>
+
+              {/* Quick Login Button */}
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  setTeamCode('test1234');
+                  setPassword('TeamPassword123!');
+                  setTimeout(() => {
+                    const form = (e.target as HTMLElement).closest('form');
+                    if (form) form.requestSubmit();
+                  }, 50);
+                }}
+                style={{
+                  fontFamily: "'Nunito', sans-serif",
+                  fontWeight: 800,
+                  fontSize: 13,
+                  background: "#FFD027",
+                  color: "#111111",
+                  border: "2px solid #111111",
+                  borderRadius: 14,
+                  padding: "10px 16px",
+                  boxShadow: "3px 3px 0 #111111",
+                  cursor: "pointer",
+                }}
+                className="w-full mt-3 flex items-center justify-center gap-2 hover:translate-x-[-1px] hover:translate-y-[-1px] transition-transform"
+              >
+                ⚡ Quick Login (test1234)
+              </button>
+            </form>
           </div>
         </div>
       </div>

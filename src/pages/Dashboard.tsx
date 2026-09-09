@@ -148,7 +148,7 @@ export default function Dashboard({ navigate }: { navigate: (p: Page) => void })
         orderIndex: r.order_index,
         desc: r.description || '',
         status: isCompleted ? 'completed' : (r.is_active ? 'upcoming' : 'locked'),
-        maxScore: r.challenges?.length > 0 ? r.challenges.reduce((sum: number, c: any) => sum + (c.base_points || 0), 0) : 200, // Sum of challenge base_points; falls back to 200
+        maxScore: (r.challenges && r.challenges.length > 0) ? r.challenges.reduce((sum: number, c: any) => sum + (c.base_points || 0), 0) : 200, // Sum of challenge base_points; falls back to 200
         duration: `${r.duration_minutes} min`,
         Icon: getIconForType(r.type),
       };
@@ -156,128 +156,212 @@ export default function Dashboard({ navigate }: { navigate: (p: Page) => void })
   }, [dbRounds, completedRounds]);
 
   return (
-    <div className="p-6 space-y-5">
-      {/* ── Top stat strip ───────────────────────────────── */}
-      <div className="grid grid-cols-[1fr_280px] gap-5">
-        <div className="space-y-5">
+    <div className="p-4 sm:p-6 lg:p-8 space-y-6 max-w-7xl mx-auto">
+      {/* ── Top section with Hero & Sidebar ───────────────────────────────── */}
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_300px] gap-6">
+        <div className="space-y-6">
           {/* Hero banner */}
-          <Card className="overflow-hidden animate-slide-up stagger-1">
-            <div className="flex min-h-[180px]">
+          <div
+            style={{
+              background: "#FFFFFF",
+              border: "2.5px solid #111111",
+              borderRadius: 22,
+              boxShadow: "5px 5px 0 #111111",
+            }}
+            className="overflow-hidden animate-slide-up"
+          >
+            <div className="flex flex-col md:flex-row min-h-[200px]">
               {/* Left content */}
-              <div className="flex-1 p-7 bg-gradient-to-br from-amber-50 via-orange-50/60 to-white relative overflow-hidden">
-                {/* Decorative pattern */}
-                <div className="absolute inset-0 opacity-[0.03]">
-                  {Array.from({length: 6}).map((_, r) => Array.from({length: 8}).map((_, c) => (
-                    <div
-                      key={`${r}-${c}`}
-                      className="absolute w-6 h-6 border border-orange-500 rounded"
-                      style={{ left: c * 48 - 20, top: r * 48 - 20, transform: 'rotate(30deg)' }}
-                    />
-                  )))}
-                </div>
-
+              <div className="flex-1 p-6 sm:p-8 relative overflow-hidden bg-[#FAF7F2]">
                 <div className="relative z-10">
-                  <div className="inline-flex items-center gap-1.5 bg-orange-100 border border-orange-200 rounded-full px-2.5 py-1 text-[10px] font-black text-orange-600 uppercase tracking-widest mb-3 font-heading">
-                    <span className="w-1.5 h-1.5 rounded-full bg-orange-500 live-dot" />
-                    Live Event
+                  <div
+                    style={{
+                      background: "#FF5C00",
+                      color: "#FAF7F2",
+                      border: "2px solid #111111",
+                      borderRadius: 999,
+                      boxShadow: "2.5px 2.5px 0 #111111",
+                      padding: "4px 14px",
+                    }}
+                    className="inline-flex items-center gap-2 mb-3"
+                  >
+                    <span className="w-2 h-2 rounded-full bg-[#2FE69A] border border-[#111111] animate-pulse" />
+                    <span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 900, fontSize: 11, letterSpacing: "0.08em" }}>
+                      LIVE TOURNAMENT
+                    </span>
                   </div>
-                  <h2 className="text-2xl font-black text-gray-900 font-heading leading-tight mb-1">
+
+                  <h2
+                    style={{ fontFamily: "'Nunito', sans-serif", fontWeight: 900 }}
+                    className="text-2xl sm:text-3xl lg:text-4xl text-[#111111] leading-tight mb-2"
+                  >
                     PROMPT ENGINEERING<br />
-                    <span className="gradient-text">CHAMPIONSHIP</span>
+                    <span style={{ color: "#FF5C00" }}>CHAMPIONSHIP</span>
                   </h2>
-                  <p className="text-gray-500 text-sm mb-1">A battle of creativity, logic, and AI mastery.</p>
-                  <p className="text-gray-400 text-sm mb-5">Use your prompts wisely. Outthink. Outperform. Outrank.</p>
-                  <Button onClick={() => navigate('rounds')} className="group">
-                    View Event Details
-                    <ArrowRightIcon className="w-4 h-4 group-hover:translate-x-0.5 transition-transform duration-150" />
-                  </Button>
+
+                  <p
+                    style={{ fontFamily: "'Nunito', sans-serif", fontWeight: 700 }}
+                    className="text-[#111111]/80 text-sm sm:text-base mb-1"
+                  >
+                    A battle of creativity, logic, and AI mastery.
+                  </p>
+                  <p
+                    style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 600 }}
+                    className="text-[#111111]/60 text-xs sm:text-sm mb-6"
+                  >
+                    Use your prompts wisely. Outthink. Outperform. Outrank.
+                  </p>
+
+                  <button
+                    onClick={() => navigate('rounds')}
+                    style={{
+                      background: "#FF5C00",
+                      color: "#FAF7F2",
+                      border: "2.5px solid #111111",
+                      borderRadius: 999,
+                      boxShadow: "3px 3px 0 #111111",
+                      padding: "10px 24px",
+                      fontFamily: "'Nunito', sans-serif",
+                      fontWeight: 900,
+                      fontSize: 14,
+                      cursor: "pointer",
+                    }}
+                    className="inline-flex items-center gap-2 hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none transition-all group"
+                  >
+                    <span>View Event Details</span>
+                    <ArrowRightIcon className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                  </button>
                 </div>
               </div>
 
               {/* AI Illustration panel */}
-              <div className="w-56 flex-shrink-0 bg-gradient-to-br from-orange-100 to-amber-50 flex items-center justify-center relative overflow-hidden">
-                {/* Dot grid */}
-                <div className="absolute inset-0 opacity-20">
+              <div
+                style={{
+                  background: "#FFD027",
+                  borderLeft: "2.5px solid #111111",
+                }}
+                className="w-full md:w-64 flex-shrink-0 flex items-center justify-center p-6 relative overflow-hidden"
+              >
+                {/* Background dot pattern */}
+                <div className="absolute inset-0 opacity-15">
                   {Array.from({length: 25}).map((_, i) => (
                     <div
                       key={i}
-                      className="absolute w-1 h-1 rounded-full bg-orange-400"
-                      style={{ left: `${(i % 5) * 25 + 10}%`, top: `${Math.floor(i / 5) * 22 + 5}%` }}
+                      className="absolute w-1.5 h-1.5 rounded-full bg-[#111111]"
+                      style={{ left: `${(i % 5) * 22 + 8}%`, top: `${Math.floor(i / 5) * 20 + 8}%` }}
                     />
                   ))}
                 </div>
 
-                <svg viewBox="0 0 160 180" className="w-44 h-44 relative z-10">
-                  {/* Code symbols floating */}
-                  <text x="8"  y="32" fontSize="11" fill="#f97316" opacity="0.5" fontFamily="monospace">{'</>'}</text>
-                  <text x="120" y="28" fontSize="10" fill="#ea580c" opacity="0.4" fontFamily="monospace">{'{ }'}</text>
-                  <text x="128" y="88" fontSize="9"  fill="#f97316" opacity="0.5" fontFamily="monospace">AI</text>
-                  <text x="6"  y="120" fontSize="9"  fill="#ea580c" opacity="0.4" fontFamily="monospace">∑</text>
+                <div className="relative z-10 flex flex-col items-center">
+                  <svg viewBox="0 0 160 180" className="w-36 h-36">
+                    {/* Code symbols floating */}
+                    <text x="8"  y="32" fontSize="12" fill="#111111" fontWeight="bold" opacity="0.6" fontFamily="monospace">{'</>'}</text>
+                    <text x="120" y="28" fontSize="11" fill="#111111" fontWeight="bold" opacity="0.6" fontFamily="monospace">{'{ }'}</text>
+                    <text x="128" y="88" fontSize="10" fill="#111111" fontWeight="bold" opacity="0.6" fontFamily="monospace">AI</text>
 
-                  {/* Robot body */}
-                  <rect x="40" y="82" width="80" height="75" rx="14" fill="#f97316"/>
-                  <rect x="44" y="86" width="72" height="71" rx="12" fill="#ea580c" opacity="0.4"/>
+                    {/* Robot body */}
+                    <rect x="40" y="82" width="80" height="75" rx="14" fill="#FF5C00" stroke="#111111" strokeWidth="3"/>
+                    <rect x="46" y="88" width="68" height="63" rx="10" fill="#FF7A29" stroke="#111111" strokeWidth="2"/>
 
-                  {/* Head */}
-                  <rect x="45" y="42" width="70" height="50" rx="12" fill="#ea580c"/>
-                  <rect x="48" y="45" width="64" height="47" rx="10" fill="#f97316" opacity="0.5"/>
+                    {/* Head */}
+                    <rect x="45" y="42" width="70" height="48" rx="12" fill="#FAF7F2" stroke="#111111" strokeWidth="3"/>
 
-                  {/* Visor */}
-                  <rect x="52" y="52" width="56" height="22" rx="6" fill="#1f2937" opacity="0.9"/>
+                    {/* Visor */}
+                    <rect x="52" y="52" width="56" height="22" rx="6" fill="#111111"/>
 
-                  {/* Eyes inside visor */}
-                  <circle cx="68" cy="63" r="6" fill="#f97316"/>
-                  <circle cx="92" cy="63" r="6" fill="#f97316"/>
-                  <circle cx="70" cy="64" r="3" fill="#fff"/>
-                  <circle cx="94" cy="64" r="3" fill="#fff"/>
+                    {/* Eyes inside visor */}
+                    <circle cx="68" cy="63" r="6" fill="#2FE69A"/>
+                    <circle cx="92" cy="63" r="6" fill="#2FE69A"/>
+                    <circle cx="70" cy="64" r="2.5" fill="#FAF7F2"/>
+                    <circle cx="94" cy="64" r="2.5" fill="#FAF7F2"/>
 
-                  {/* Mouth */}
-                  <rect x="62" y="80" width="36" height="5" rx="2.5" fill="white" opacity="0.5"/>
+                    {/* Mouth */}
+                    <rect x="64" y="78" width="32" height="4" rx="2" fill="#111111"/>
 
-                  {/* Antenna */}
-                  <line x1="80" y1="42" x2="80" y2="26" stroke="#ea580c" strokeWidth="3" strokeLinecap="round"/>
-                  <circle cx="80" cy="22" r="6" fill="#f97316"/>
-                  <circle cx="80" cy="22" r="3" fill="white" opacity="0.7"/>
+                    {/* Antenna */}
+                    <line x1="80" y1="42" x2="80" y2="24" stroke="#111111" strokeWidth="3" strokeLinecap="round"/>
+                    <circle cx="80" cy="20" r="6" fill="#FF5C00" stroke="#111111" strokeWidth="2.5"/>
 
-                  {/* Chest panel */}
-                  <rect x="54" y="96" width="52" height="36" rx="8" fill="#c2410c" opacity="0.6"/>
-                  <rect x="60" y="103" width="14" height="6" rx="3" fill="white" opacity="0.9"/>
-                  <rect x="86" y="103" width="14" height="6" rx="3" fill="white" opacity="0.9"/>
-                  <rect x="60" y="116" width="40" height="4" rx="2" fill="white" opacity="0.4"/>
+                    {/* Arms */}
+                    <rect x="18" y="90" width="20" height="42" rx="8" fill="#FF5C00" stroke="#111111" strokeWidth="2.5"/>
+                    <rect x="122" y="90" width="20" height="42" rx="8" fill="#FF5C00" stroke="#111111" strokeWidth="2.5"/>
 
-                  {/* Arms */}
-                  <rect x="16" y="88" width="24" height="48" rx="10" fill="#f97316"/>
-                  <rect x="120" y="88" width="24" height="48" rx="10" fill="#f97316"/>
-                  <rect x="13" y="120" width="28" height="14" rx="7" fill="#ea580c"/>
-                  <rect x="119" y="120" width="28" height="14" rx="7" fill="#ea580c"/>
+                    {/* Legs */}
+                    <rect x="52" y="157" width="22" height="18" rx="6" fill="#111111"/>
+                    <rect x="86" y="157" width="22" height="18" rx="6" fill="#111111"/>
+                  </svg>
 
-                  {/* Legs */}
-                  <rect x="52" y="154" width="22" height="20" rx="8" fill="#ea580c"/>
-                  <rect x="86" y="154" width="22" height="20" rx="8" fill="#ea580c"/>
-
-                  {/* Chat bubble */}
-                  <rect x="100" y="42" width="44" height="28" rx="8" fill="white" opacity="0.9"/>
-                  <path d="M108 70 L104 76 L112 70" fill="white" opacity="0.9"/>
-                  <circle cx="112" cy="56" r="3" fill="#f97316"/>
-                  <circle cx="122" cy="56" r="3" fill="#f97316"/>
-                  <circle cx="132" cy="56" r="3" fill="#f97316"/>
-                </svg>
+                  <div
+                    style={{
+                      background: "#FFFFFF",
+                      border: "2px solid #111111",
+                      borderRadius: 999,
+                      boxShadow: "2px 2px 0 #111111",
+                      padding: "2px 10px",
+                    }}
+                    className="mt-2 text-center"
+                  >
+                    <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, fontWeight: 900, color: "#111111" }}>
+                      5 STAGES • 1100 PTS
+                    </span>
+                  </div>
+                </div>
               </div>
             </div>
-          </Card>
+          </div>
 
           {/* ── Event Rounds ─────────────────────────────── */}
           <div className="animate-slide-up stagger-2">
-            <SectionHeader
-              icon={<TargetIcon className="w-4 h-4" />}
-              title="Event Rounds"
-              action={
-                <button onClick={() => navigate('rounds')} className="text-xs text-orange-500 font-bold font-heading hover:underline">
-                  View All →
-                </button>
-              }
-            />
-            <div className="grid grid-cols-5 gap-4 lg:gap-5">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <div
+                  style={{
+                    background: "#FF5C00",
+                    border: "2px solid #111111",
+                    borderRadius: 10,
+                    boxShadow: "2.5px 2.5px 0 #111111",
+                    padding: "6px",
+                  }}
+                  className="text-[#FAF7F2]"
+                >
+                  <TargetIcon className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3
+                    style={{ fontFamily: "'Nunito', sans-serif", fontWeight: 900, fontSize: 20, color: "#111111" }}
+                  >
+                    Event Stages
+                  </h3>
+                  <p
+                    style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 700, color: "#777" }}
+                  >
+                    Complete each stage in sequence to climb the leaderboard
+                  </p>
+                </div>
+              </div>
+
+              <button
+                onClick={() => navigate('rounds')}
+                style={{
+                  background: "#FFFFFF",
+                  border: "2px solid #111111",
+                  borderRadius: 999,
+                  boxShadow: "2.5px 2.5px 0 #111111",
+                  padding: "6px 14px",
+                  fontFamily: "'Nunito', sans-serif",
+                  fontWeight: 800,
+                  fontSize: 12,
+                  color: "#111111",
+                  cursor: "pointer",
+                }}
+                className="hover:translate-x-[-1px] hover:translate-y-[-1px] transition-transform"
+              >
+                View All Stages →
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4">
               {mappedRounds.map((round, i) => (
                 <RoundCard
                   key={round.id}
@@ -292,41 +376,70 @@ export default function Dashboard({ navigate }: { navigate: (p: Page) => void })
                     }
                     if (round.status === 'completed') {
                       sounds.error();
-                      // Round already completed - admin can reset if needed
                       return;
                     }
                     
                     sounds.start();
                     if (round.type === 'QUIZ' || round.type === 'KNOWLEDGE_TEST') {
-                        navigate(`quiz-${round.id}` as any);
-                      } else if (round.type === 'ROUND2_HEIST' || round.title?.includes('Round 2') || round.title?.includes('Prompt Heist')) {
-                        navigate(`round2-heist-${round.id}` as any);
-                      } else if (round.type === 'PROMPT' || round.type === 'PROMPT_CHALLENGE') {
-                        navigate(`prompt-heist-${round.id}` as any);
-                      } else if (round.type === 'VISION_CHALLENGE') {
-                        navigate(`vision-${round.id}` as any);
-                      } else if (round.type === 'AI_ADVERSARIAL' || round.type === 'ADVERSARIAL_CHALLENGE') {
-                        navigate(`round4-${round.id}` as any);
-                      } else if (round.type === 'AI_SYSTEMS' || round.type === 'SYSTEMS_CHALLENGE') {
-                        navigate(`round5-${round.id}` as any);
-                      } else {
-                        navigate(`round-${round.id}` as any);
-                      }
+                      navigate(`quiz-${round.id}` as any);
+                    } else if (round.type === 'ROUND2_HEIST' || round.name?.includes('Round 2') || round.name?.includes('Prompt Heist')) {
+                      navigate(`round2-heist-${round.id}` as any);
+                    } else if (round.type === 'PROMPT' || round.type === 'PROMPT_CHALLENGE') {
+                      navigate(`prompt-heist-${round.id}` as any);
+                    } else if (round.type === 'VISION_CHALLENGE') {
+                      navigate(`vision-${round.id}` as any);
+                    } else if (round.type === 'AI_ADVERSARIAL' || round.type === 'ADVERSARIAL_CHALLENGE') {
+                      navigate(`round4-${round.id}` as any);
+                    } else if (round.type === 'AI_SYSTEMS' || round.type === 'SYSTEMS_CHALLENGE') {
+                      navigate(`round5-${round.id}` as any);
+                    } else {
+                      navigate(`round-${round.id}` as any);
+                    }
                   }}
                   animDelay={i * 60}
                 />
               ))}
             </div>
           </div>
-
-
         </div>
 
         {/* ── Right sidebar ─────────────────────────────── */}
-        <div className="space-y-4">
+        <div className="space-y-5">
           {/* BYOK Configuration Card */}
-          <Card className="p-4 animate-slide-left stagger-1 bg-gradient-to-br from-indigo-50 to-purple-50 border-indigo-100">
-            <SectionHeader icon={<ZapIcon className="w-4 h-4 text-indigo-600" />} title="AI Tools Config" />
+          <div
+            style={{
+              background: "#FFFFFF",
+              border: "2.5px solid #111111",
+              borderRadius: 20,
+              boxShadow: "5px 5px 0 #111111",
+              padding: "18px",
+            }}
+            className="animate-slide-left stagger-1"
+          >
+            <div className="flex items-center gap-2.5 mb-3">
+              <div
+                style={{
+                  background: "#B57CFF",
+                  border: "2px solid #111111",
+                  borderRadius: 10,
+                  boxShadow: "2px 2px 0 #111111",
+                  padding: "6px",
+                  color: "#111111",
+                }}
+              >
+                <ZapIcon className="w-4 h-4" />
+              </div>
+              <div>
+                <h4
+                  style={{ fontFamily: "'Nunito', sans-serif", fontWeight: 900, fontSize: 15, color: "#111111", lineHeight: 1.1 }}
+                >
+                  AI Tools Config
+                </h4>
+                <p style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: "#777" }}>
+                  BYOK Session
+                </p>
+              </div>
+            </div>
             
             {activeProvider ? (
               <div className="mt-3 space-y-3">
@@ -343,31 +456,116 @@ export default function Dashboard({ navigate }: { navigate: (p: Page) => void })
               </div>
             ) : (
               <div className="mt-3">
-                <p className="text-xs text-gray-600 mb-3 leading-relaxed">
-                  Some stages require your own API key to use LLMs. Configure it now to save time later.
-                </p>
-                <Button 
-                  onClick={() => setShowBYOKConnect(true)} 
-                  variant="outline" 
-                  className="w-full text-xs py-2 border-indigo-200 text-indigo-700 hover:bg-indigo-100"
+                <p
+                  style={{ fontFamily: "'Nunito', sans-serif", fontWeight: 700 }}
+                  className="text-xs text-[#111111]/70 mb-3 leading-relaxed"
                 >
-                  Connect API Key →
-                </Button>
+                  Connect your own API key to unlock LLMs and advanced reasoning throughout the event.
+                </p>
+                <button 
+                  onClick={() => setShowBYOKConnect(true)} 
+                  style={{
+                    background: "#FFD027",
+                    color: "#111111",
+                    border: "2px solid #111111",
+                    borderRadius: 999,
+                    boxShadow: "2.5px 2.5px 0 #111111",
+                    padding: "8px 16px",
+                    fontFamily: "'Nunito', sans-serif",
+                    fontWeight: 900,
+                    fontSize: 12,
+                    cursor: "pointer",
+                  }}
+                  className="w-full hover:translate-x-[-1px] hover:translate-y-[-1px] transition-transform flex items-center justify-center gap-1.5"
+                >
+                  <span>Connect API Key</span>
+                  <span>→</span>
+                </button>
               </div>
             )}
-          </Card>
+          </div>
+
+          {/* Tournament Guidelines Card */}
+          <div
+            style={{
+              background: "#FAF7F2",
+              border: "2.5px solid #111111",
+              borderRadius: 20,
+              boxShadow: "5px 5px 0 #111111",
+              padding: "18px",
+            }}
+            className="animate-slide-left stagger-2"
+          >
+            <div className="flex items-center gap-2 mb-3">
+              <span className="text-lg">📋</span>
+              <h4
+                style={{ fontFamily: "'Nunito', sans-serif", fontWeight: 900, fontSize: 14, color: "#111111" }}
+              >
+                Key Guidelines
+              </h4>
+            </div>
+
+            <div className="space-y-2.5">
+              {importantRules.map((rule, idx) => (
+                <div
+                  key={idx}
+                  style={{
+                    background: "#FFFFFF",
+                    border: "1.5px solid #111111",
+                    borderRadius: 12,
+                    padding: "8px 10px",
+                  }}
+                  className="flex items-start gap-2.5 text-xs text-[#111111] font-semibold"
+                >
+                  <span className="flex-shrink-0 mt-0.5">{rule.icon}</span>
+                  <span style={{ fontFamily: "'Nunito', sans-serif", fontSize: 11, lineHeight: 1.3 }}>{rule.text}</span>
+                </div>
+              ))}
+            </div>
+          </div>
 
           {/* Trophy motivational */}
-          <Card className="p-5 overflow-hidden relative animate-slide-left stagger-2 bg-gradient-to-br from-amber-50 to-orange-50 border-orange-100">
-            <div className="relative z-10 text-center">
-              <div className="text-3xl mb-2">🏆</div>
-              <div className="text-sm text-gray-600 mb-0.5">Every prompt is a move.</div>
-              <div className="text-base font-black text-orange-600 font-heading">Make it count!</div>
+          <div
+            style={{
+              background: "#FF5C00",
+              color: "#FAF7F2",
+              border: "2.5px solid #111111",
+              borderRadius: 20,
+              boxShadow: "5px 5px 0 #111111",
+              padding: "20px",
+            }}
+            className="relative overflow-hidden text-center animate-slide-left stagger-3"
+          >
+            <div className="relative z-10">
+              <div className="text-3xl mb-1">🏆</div>
+              <div
+                style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 700, opacity: 0.9 }}
+                className="mb-1 uppercase tracking-wider"
+              >
+                Every prompt is a move
+              </div>
+              <div
+                style={{ fontFamily: "'Boogaloo', cursive", fontSize: 24, letterSpacing: "0.02em" }}
+                className="leading-tight"
+              >
+                Make it count!
+              </div>
             </div>
-            {/* Decorative */}
-            <div className="absolute -right-4 -bottom-4 w-20 h-20 bg-orange-200/30 rounded-full" />
-            <div className="absolute -left-2 -top-2 w-12 h-12 bg-amber-200/30 rounded-full" />
-          </Card>
+            {/* Neo-brutalist circle decorative */}
+            <div
+              style={{
+                position: "absolute",
+                right: -20,
+                bottom: -20,
+                width: 70,
+                height: 70,
+                borderRadius: "50%",
+                background: "#FFD027",
+                border: "2px solid #111111",
+                opacity: 0.4,
+              }}
+            />
+          </div>
         </div>
       </div>
       
@@ -403,70 +601,120 @@ function RoundCard({ round, hovered, onClick, onHover, onLeave, animDelay }: {
       onClick={onClick}
       onMouseEnter={onHover}
       onMouseLeave={onLeave}
-      className={`
-        rounded-2xl border p-4 sm:p-5 cursor-pointer transition-all duration-200 animate-slide-up min-h-[240px] flex flex-col
-        ${completed
-          ? 'border-green-300 bg-green-50 opacity-90'
-          : hovered && !locked
-          ? 'border-orange-300 bg-orange-50 shadow-lg shadow-orange-100/50 -translate-y-1'
-          : locked
-          ? 'border-gray-100 bg-white opacity-75'
-          : 'border-gray-100 bg-white shadow-sm hover:border-orange-200'}
-      `}
-      style={{ animationDelay: `${animDelay}ms` }}
+      style={{
+        background: completed ? "#F0FDF4" : locked ? "#F4F1EA" : "#FFFFFF",
+        border: "2.5px solid #111111",
+        borderRadius: 20,
+        boxShadow: hovered && !locked ? "6px 6px 0 #111111" : "4px 4px 0 #111111",
+        transform: hovered && !locked ? "translateY(-3px)" : "none",
+        transition: "all 0.15s cubic-bezier(0.4, 0, 0.2, 1)",
+        cursor: locked ? "not-allowed" : "pointer",
+        opacity: locked ? 0.8 : 1,
+      }}
+      className="p-5 flex flex-col justify-between min-h-[290px] relative"
     >
-      {/* Round badge + status */}
+      {/* Top row: Order badge + status pill */}
       <div className="flex items-center justify-between mb-3">
-        <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-black font-heading transition-all ${
-          completed ? 'bg-green-500 text-white' :
-          locked ? 'bg-gray-800 text-white' : hovered ? 'bg-orange-500 text-white scale-110' : 'bg-orange-500 text-white'
-        }`}>
-          {completed ? '✓' : round.orderIndex}
+        <div
+          style={{
+            width: 32,
+            height: 32,
+            border: "2px solid #111111",
+            borderRadius: 10,
+            background: completed ? "#2FE69A" : locked ? "#111111" : "#FF5C00",
+            color: completed ? "#111111" : "#FAF7F2",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            boxShadow: "2px 2px 0 #111111",
+            fontFamily: "'JetBrains Mono', monospace",
+            fontWeight: 900,
+            fontSize: 13,
+          }}
+        >
+          {completed ? "✓" : round.orderIndex}
         </div>
-        {locked
-          ? <LockIcon className="w-4 h-4 text-gray-300" />
-          : completed
-          ? <span className="text-xs font-bold text-green-600">COMPLETED</span>
-          : round.status === 'live'
-          ? <span className="w-2.5 h-2.5 rounded-full bg-green-500 live-dot" />
-          : null
-        }
+
+        {/* Status indicator */}
+        <span
+          style={{
+            background: completed ? "#2FE69A" : locked ? "#111111" : round.status === 'live' ? "#FF5C00" : "#FFD027",
+            color: completed ? "#111111" : locked ? "#FAF7F2" : round.status === 'live' ? "#FAF7F2" : "#111111",
+            border: "1.5px solid #111111",
+            borderRadius: 999,
+            boxShadow: "1.5px 1.5px 0 #111111",
+            padding: "2px 8px",
+            fontFamily: "'JetBrains Mono', monospace",
+            fontWeight: 800,
+            fontSize: 9,
+            letterSpacing: "0.05em",
+          }}
+        >
+          {completed ? "DONE ✓" : locked ? "LOCKED" : round.status === 'live' ? "LIVE" : "READY"}
+        </span>
       </div>
 
-      {/* Icon */}
-      <div className={`flex justify-center mb-4 transition-all duration-200 ${locked ? 'opacity-30' : hovered ? 'scale-110 text-orange-500' : 'text-orange-400'}`}>
-        <round.Icon className="w-10 h-10" />
+      {/* Icon squircle */}
+      <div
+        style={{
+          width: 54,
+          height: 54,
+          border: "2px solid #111111",
+          borderRadius: 14,
+          background: completed ? "#DCFCE7" : locked ? "#E5E0D8" : "#FFF4E5",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          margin: "8px auto 12px auto",
+          boxShadow: "2.5px 2.5px 0 #111111",
+        }}
+      >
+        <round.Icon className={`w-7 h-7 ${completed ? 'text-green-700' : locked ? 'text-gray-500' : 'text-[#FF5C00]'}`} />
       </div>
 
-      {/* Name */}
-      <div className="text-center mb-3">
-        <div className="text-base font-black text-gray-900 font-heading leading-tight">{round.name}</div>
-        <div className="text-[11px] text-gray-400 mt-1">{round.sub}</div>
+      {/* Title and Subtitle */}
+      <div className="text-center mb-2">
+        <div
+          style={{ fontFamily: "'Nunito', sans-serif", fontWeight: 900, fontSize: 15, color: "#111111", lineHeight: 1.2 }}
+        >
+          {round.name}
+        </div>
+        <div
+          style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, fontWeight: 700, color: "#888" }}
+          className="mt-0.5"
+        >
+          {round.sub}
+        </div>
       </div>
 
-      {/* Status pill */}
-      <div className="flex justify-center mb-3">
-        {completed
-          ? <Badge variant="live" className="bg-green-100 text-green-700">COMPLETED ✓</Badge>
-          : locked
-          ? <Badge variant="locked">LOCKED</Badge>
-          : <Badge variant={round.status === 'live' ? 'live' : 'upcoming'}>{round.status.toUpperCase()}</Badge>
-        }
-      </div>
-
-      <div className="text-xs text-gray-500 text-center leading-relaxed mb-4 flex-grow line-clamp-3">
+      {/* Description */}
+      <div
+        style={{ fontFamily: "'Nunito', sans-serif", fontSize: 11, fontWeight: 600, color: "#666" }}
+        className="text-center leading-tight mb-4 flex-grow line-clamp-2"
+      >
         {round.desc}
       </div>
 
-      {/* Meta */}
-      <div className="border-t border-gray-100 pt-3 grid grid-cols-2 gap-2 text-center mt-auto">
+      {/* Meta Footer */}
+      <div
+        style={{ borderTop: "2px solid #111111", paddingTop: 8 }}
+        className="grid grid-cols-2 gap-2 text-center mt-auto"
+      >
         <div>
-          <div className="text-[10px] text-gray-400 font-heading mb-0.5">Duration</div>
-          <div className="text-sm font-bold text-gray-700">{round.duration}</div>
+          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9, fontWeight: 800, color: "#888" }}>
+            DURATION
+          </div>
+          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 900, color: "#111111" }}>
+            {round.duration}
+          </div>
         </div>
         <div>
-          <div className="text-[10px] text-gray-400 font-heading mb-0.5">Max Score</div>
-          <div className="text-lg font-black text-orange-500 font-heading leading-none">{round.maxScore}</div>
+          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9, fontWeight: 800, color: "#888" }}>
+            MAX PTS
+          </div>
+          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, fontWeight: 900, color: "#FF5C00" }}>
+            {round.maxScore}
+          </div>
         </div>
       </div>
     </div>

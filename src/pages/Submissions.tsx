@@ -7,6 +7,7 @@ import { useTeamStore } from '../stores/teamStore';
 interface SubmissionData {
   id: string;
   challenge_id: string;
+  challenge_title?: string;
   attempt_number: number;
   score: number;
   status: string;

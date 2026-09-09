@@ -233,7 +233,7 @@ export async function validateBYOKKey(
       throw new Error('Not authenticated');
     }
 
-    const response = await fetch(`${supabase.supabaseUrl}/functions/v1/validate-byok-key`, {
+    const response = await fetch(`${(supabase as any).supabaseUrl}/functions/v1/validate-byok-key`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${session.access_token}`,
@@ -287,7 +287,7 @@ export async function sendAIRequest(
       throw new Error('Not authenticated');
     }
 
-    const response = await fetch(`${supabase.supabaseUrl}/functions/v1/ai-gateway`, {
+    const response = await fetch(`${(supabase as any).supabaseUrl}/functions/v1/ai-gateway`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${session.access_token}`,

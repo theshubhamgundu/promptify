@@ -54,8 +54,11 @@ export const DownloadIcon = ic('M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4|M7 10l5 
 export const ExpandIcon = ic('M15 3h6v6|M9 21H3v-6|M21 3l-7 7|M3 21l7-7');
 export const EyeIcon = ic('M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z|M12 15a3 3 0 100-6 3 3 0 000 6z');
 export const ShieldIcon = ic('M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z');
-export const BrainIcon = () => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5">
+export const MenuIcon = ic('M4 6h16|M4 12h16|M4 18h16');
+export const UserIcon = ic('M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2|M12 11a4 4 0 100-8 4 4 0 000 8z');
+export const BotIcon = ic('M12 2v2|M4 11a4 4 0 014-4h8a4 4 0 014 4v6a4 4 0 01-4 4H8a4 4 0 01-4-4v-6z|M9 13v.01|M15 13v.01');
+export const BrainIcon = ({ className = 'w-5 h-5' }: IconProps) => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" className={className}>
     <path d="M12 5a3 3 0 10-5.997.125 4 4 0 00-2.526 5.77 4 4 0 00.556 6.588A4 4 0 1012 18z" />
     <path d="M12 5a3 3 0 115.997.125 4 4 0 012.526 5.77 4 4 0 01-.556 6.588A4 4 0 1112 18z" />
     <path d="M15 13a4.5 4.5 0 01-3-4 4.5 4.5 0 01-3 4" />

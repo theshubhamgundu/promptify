@@ -206,7 +206,7 @@ export default function PromptZipperChallenge({
             <div className="w-44">
               <TextInput
                 value={docSearchQuery}
-                onChange={e => setDocSearchQuery(e.target.value)}
+                onChange={setDocSearchQuery}
                 placeholder="Search document..."
                 className="bg-gray-50 border-gray-200 focus:bg-white text-xs py-1"
               />
@@ -246,7 +246,7 @@ export default function PromptZipperChallenge({
             <TextArea
               rows={8}
               value={compressedPrompt}
-              onChange={e => setCompressedPrompt(e.target.value)}
+              onChange={setCompressedPrompt}
               placeholder="Enter your compressed technical summary here..."
               className="w-full bg-gray-50 border-gray-200 focus:bg-white focus:border-blue-500 rounded-xl p-3.5 text-xs text-gray-900 resize-none flex-1 font-mono leading-relaxed placeholder-gray-400"
               disabled={disabled || isEvaluating}

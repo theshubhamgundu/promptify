@@ -19,7 +19,7 @@ interface Announcement {
 
 export default function Announcements({ navigate }: { navigate: (p: Page) => void }) {
   const { activeEvent } = useAdminStore();
-  const { session } = useAuthStore();
+  const { user } = useAuthStore();
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -51,7 +51,7 @@ export default function Announcements({ navigate }: { navigate: (p: Page) => voi
   }, [activeEvent]);
 
   const handlePush = async () => {
-    if (!activeEvent || !form.title || !form.message || !session) return;
+    if (!activeEvent || !form.title || !form.message || !user) return;
     setSaving(true);
     
     const { error } = await supabase.from('announcements').insert({
@@ -60,7 +60,7 @@ export default function Announcements({ navigate }: { navigate: (p: Page) => voi
       message: form.message,
       severity: form.severity,
       scope: form.scope,
-      created_by: session.user?.id,
+      created_by: user?.id,
       is_active: true
     });
     

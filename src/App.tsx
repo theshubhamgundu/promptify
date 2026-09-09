@@ -59,11 +59,31 @@ function PageView({ pageKey, children }: { pageKey: string; children: React.Reac
 }
 
 export default function App() {
-  // Landing and Registration state
+  // Landing and Registration state — Landing Page is the root page, Login and Register are dedicated pages
   const [showLanding, setShowLanding] = useState(() => {
-    return localStorage.getItem('hasVisitedLanding') !== 'true';
+    return window.location.hash !== '#login' && window.location.hash !== '#register';
   });
-  const [showRegistration, setShowRegistration] = useState(false);
+  const [showRegistration, setShowRegistration] = useState(() => {
+    return window.location.hash === '#register';
+  });
+
+  useEffect(() => {
+    const handleHash = () => {
+      const hash = window.location.hash;
+      if (hash === '#login') {
+        setShowLanding(false);
+        setShowRegistration(false);
+      } else if (hash === '#register') {
+        setShowLanding(false);
+        setShowRegistration(true);
+      } else if (hash === '' || hash === '#' || hash === '#home') {
+        setShowLanding(true);
+        setShowRegistration(false);
+      }
+    };
+    window.addEventListener('hashchange', handleHash);
+    return () => window.removeEventListener('hashchange', handleHash);
+  }, []);
 
   // Initialize authState from localStorage
   const [authState, setAuthState] = useState<'login' | 'verification' | 'app'>(() => {
@@ -198,24 +218,33 @@ export default function App() {
   if (authState === 'login') {
     // Show registration page if requested
     if (showRegistration) {
-      return <Registration onBack={() => {
-        setShowRegistration(false);
-        setShowLanding(true);
-      }} />;
+      return (
+        <Registration
+          onBack={() => {
+            window.location.hash = '';
+            setShowRegistration(false);
+            setShowLanding(true);
+          }}
+        />
+      );
     }
 
-    // Show landing page on first visit or when explicitly requested
+    // Show landing page on root or when explicitly requested
     if (showLanding) {
-      return <LandingPage 
-        onEnter={() => {
-          setShowLanding(false);
-          localStorage.setItem('hasVisitedLanding', 'true');
-        }}
-        onRegister={() => {
-          setShowLanding(false);
-          setShowRegistration(true);
-        }}
-      />;
+      return (
+        <LandingPage 
+          onEnter={() => {
+            window.location.hash = 'login';
+            setShowLanding(false);
+            setShowRegistration(false);
+          }}
+          onRegister={() => {
+            window.location.hash = 'register';
+            setShowLanding(false);
+            setShowRegistration(true);
+          }}
+        />
+      );
     }
 
     return (
@@ -230,8 +259,9 @@ export default function App() {
           }
         }}
         onBackToHome={() => {
+          window.location.hash = '';
           setShowLanding(true);
-          localStorage.removeItem('hasVisitedLanding');
+          setShowRegistration(false);
         }}
       />
     );
@@ -303,7 +333,7 @@ export default function App() {
       if (currentPage === 'admin-participants') return <ParticipantManager navigate={navigate} />;
       if (currentPage === 'admin-verification') return <VerificationManager navigate={navigate} />;
       if (currentPage === 'admin-sessions')     return <SessionManager navigate={navigate} />;
-      if (currentPage === 'admin-vision-monitor') return <VisionMonitor navigate={navigate} />;
+      if (currentPage === 'admin-vision-monitor') return <LiveMonitor navigate={navigate} />;
       if (currentPage === 'admin-round4-monitor') return <Round4Monitor navigate={navigate} />;
       if (currentPage === 'admin-round5-monitor') return <Round5Monitor navigate={navigate} />;
       if (currentPage === 'admin-turing-console') return <TuringHumanConsole navigate={navigate} />;

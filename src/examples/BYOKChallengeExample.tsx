@@ -12,7 +12,7 @@ import {
   AIProvider,
   UsageStats 
 } from '../lib/byok-service';
-import { BrainIcon, ZapIcon } from '../components/icons';
+import { ZapIcon, SparklesIcon } from '../components/icons';
 
 interface Challenge {
   id: string;
@@ -145,13 +145,13 @@ export default function BYOKChallengeExample({
               This challenge requires your own AI API key
             </p>
           </div>
-          <BrainIcon className="w-8 h-8 text-orange-500" />
+          <SparklesIcon className="w-8 h-8 text-orange-500" />
         </div>
 
         {connectedProvider ? (
           <BYOKConnected provider={connectedProvider} onDisconnect={handleDisconnect} />
         ) : (
-          <Button onClick={() => setShowConnect(true)} fullWidth>
+          <Button onClick={() => setShowConnect(true)} className="w-full">
             Connect AI Provider
           </Button>
         )}
@@ -204,9 +204,8 @@ export default function BYOKChallengeExample({
 
           <Button 
             onClick={handleSendPrompt}
-            loading={loading}
             disabled={!prompt.trim() || loading || (usage?.remainingRequests || 0) <= 0}
-            fullWidth
+            className="w-full"
           >
             {loading ? 'Processing...' : 'Send to AI'}
           </Button>

@@ -214,7 +214,7 @@ State the exact final solution clearly in English at the end.`;
                 <div key={idx} className="flex items-center gap-2">
                   <TextInput
                     value={item.word}
-                    onChange={e => updateDictionaryWord(idx, 'word', e.target.value)}
+                    onChange={val => updateDictionaryWord(idx, 'word', val)}
                     placeholder="Word (e.g. tar)"
                     className="w-1/3 bg-gray-50 border-gray-200 focus:bg-white text-xs text-gray-900 font-mono"
                     disabled={disabled || isEvaluating}
@@ -222,7 +222,7 @@ State the exact final solution clearly in English at the end.`;
                   <span className="text-gray-400 font-mono text-xs">=</span>
                   <TextInput
                     value={item.meaning}
-                    onChange={e => updateDictionaryWord(idx, 'meaning', e.target.value)}
+                    onChange={val => updateDictionaryWord(idx, 'meaning', val)}
                     placeholder="Meaning (e.g. person)"
                     className="flex-1 bg-gray-50 border-gray-200 focus:bg-white text-xs text-gray-900"
                     disabled={disabled || isEvaluating}
@@ -269,7 +269,7 @@ State the exact final solution clearly in English at the end.`;
                   <span className="text-xs font-mono text-gray-400 w-4">{idx + 1}.</span>
                   <TextInput
                     value={rule}
-                    onChange={e => updateGrammarRule(idx, e.target.value)}
+                    onChange={val => updateGrammarRule(idx, val)}
                     placeholder="Describe grammar rule (e.g. Subject + Object + Verb order)"
                     className="flex-1 bg-gray-50 border-gray-200 focus:bg-white text-xs text-gray-900"
                     disabled={disabled || isEvaluating}
@@ -312,7 +312,7 @@ State the exact final solution clearly in English at the end.`;
             <TextArea
               rows={4}
               value={encodedRiddle}
-              onChange={e => setEncodedRiddle(e.target.value)}
+              onChange={setEncodedRiddle}
               placeholder="e.g. an-Arun Bela nav kro. Cyra nav kro..."
               className="w-full bg-gray-50 border-gray-200 focus:bg-white focus:border-blue-500 rounded-xl p-3 text-xs text-gray-900 font-mono resize-none"
               disabled={disabled || isEvaluating}
@@ -324,7 +324,7 @@ State the exact final solution clearly in English at the end.`;
               </label>
               <TextInput
                 value={aiInstruction}
-                onChange={e => setAiInstruction(e.target.value)}
+                onChange={setAiInstruction}
                 placeholder="e.g. Decode the riddle and specify who crosses the river first."
                 className="bg-gray-50 border-gray-200 focus:bg-white text-xs text-gray-900"
                 disabled={disabled || isEvaluating}

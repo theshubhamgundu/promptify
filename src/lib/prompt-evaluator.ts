@@ -17,7 +17,7 @@ const WORD_RE = /[A-Za-z0-9]+(?:'[A-Za-z0-9]+)?/g;
 
 const normalizeText = (value: unknown) => String(value ?? '').toLowerCase();
 
-const tokenize = (value: unknown) => normalizeText(value).match(WORD_RE) ?? [];
+const tokenize = (value: unknown): string[] => normalizeText(value).match(WORD_RE) ?? [];
 
 const wordCount = (value: unknown) => tokenize(value).length;
 
