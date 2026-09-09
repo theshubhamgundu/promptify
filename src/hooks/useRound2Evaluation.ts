@@ -2,6 +2,15 @@ import { useState } from 'react';
 import { supabase } from '../lib/supabase';
 import type { Round2Question } from '../lib/round2-questions';
 import { evaluateRound2Submission, type EvaluationResult, type HiddenTestResult } from '../lib/round2-evaluator';
+import { analyzeTypingBehavior, type KeystrokeEvent, type TypingBehaviorScore } from '../lib/round2-typing-analysis';
+import { getQuestionIdFromIndex } from '../lib/round2-scoring-params';
+
+/**
+ * Extended evaluation result including typing behavior
+ */
+export interface ExtendedEvaluationResult extends EvaluationResult {
+  typingBehavior?: TypingBehaviorScore;
+}
 
 /**
  * Hook for evaluating Round 2 submissions
@@ -14,8 +23,10 @@ export function useRound2Evaluation() {
   const evaluateSubmission = async (
     question: Round2Question,
     teamPrompt: string,
-    timeTakenSeconds: number
-  ): Promise<EvaluationResult | null> => {
+    timeTakenSeconds: number,
+    keystrokeLog?: KeystrokeEvent[],
+    questionIndex?: number
+  ): Promise<ExtendedEvaluationResult | null> => {
     setEvaluating(true);
     setError(null);
 
@@ -27,16 +38,39 @@ export function useRound2Evaluation() {
       // Step 2: Get model output (use first test output or aggregate)
       const modelOutput = hiddenTestResults[0]?.output || '';
 
-      // Step 3: Run full evaluation
+      // Step 3: Get question display ID for scoring params (P1-P4, C1-C4, etc.)
+      const questionDisplayId = questionIndex !== undefined 
+        ? getQuestionIdFromIndex(questionIndex) 
+        : undefined;
+
+      // Step 4: Run full evaluation with scoring params
       const result = evaluateRound2Submission(
         question,
         teamPrompt,
         modelOutput,
         hiddenTestResults,
-        timeTakenSeconds
+        timeTakenSeconds,
+        questionDisplayId
       );
 
-      return result;
+      // Step 5: Analyze typing behavior if log provided
+      let typingBehavior: TypingBehaviorScore | undefined;
+      if (keystrokeLog && keystrokeLog.length > 0) {
+        typingBehavior = analyzeTypingBehavior(keystrokeLog, teamPrompt);
+        
+        // Adjust total score based on typing behavior (deduct points for suspicious patterns)
+        // Typing behavior max penalty: 10 points (if score is 0)
+        const typingScore = typingBehavior.score; // 0-10
+        const typingPenalty = 10 - typingScore;
+        const adjustedTotal = result.totalScore - typingPenalty;
+        
+        result.totalScore = Math.max(0, Math.min(50, adjustedTotal));
+      }
+
+      return {
+        ...result,
+        typingBehavior
+      };
 
     } catch (err: any) {
       console.error('Evaluation error:', err);

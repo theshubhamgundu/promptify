@@ -4,6 +4,7 @@ import { useTeamStore } from '../stores/teamStore';
 import { ClockIcon, CheckCircleIcon, CircleIcon, AlertTriangleIcon, ExclamationCircleIcon, LockIcon } from '../components/icons';
 import { getAllQuestions, getSubRoundQuestions, type Round2Question } from '../lib/round2-questions';
 import { useRound2Evaluation } from '../hooks/useRound2Evaluation';
+import { useTypingTracker } from '../hooks/useTypingTracker';
 import { sounds } from '../lib/sound';
 
 interface Round2HeistProps {
@@ -14,6 +15,7 @@ interface Round2HeistProps {
 export default function Round2Heist({ roundId, navigate }: Round2HeistProps) {
   const { currentTeam } = useTeamStore();
   const { evaluateSubmission, evaluating } = useRound2Evaluation();
+  const { keystrokeLog, trackKeyDown, trackInput, resetLog } = useTypingTracker();
   
   const [session, setSession] = useState<any>(null);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
@@ -35,6 +37,16 @@ export default function Round2Heist({ roundId, navigate }: Round2HeistProps) {
 
   // Security: Prevent copy, paste, screenshot, right-click, and detect AI features
   useEffect(() => {
+    // Check if running in kiosk mode (recommended for events)
+    const isKioskMode = window.matchMedia('(display-mode: fullscreen)').matches || 
+                       document.fullscreenElement !== null ||
+                       // @ts-ignore
+                       navigator.standalone === true;
+    
+    if (!isKioskMode) {
+      console.warn('⚠️ Not running in kiosk mode. For maximum security, launch with: chrome.exe --kiosk --disable-extensions YOUR_URL');
+    }
+    
     // AGGRESSIVE Browser AI Detection - Multiple checks
     const detectBrowserAI = () => {
       // @ts-ignore - Check for Chrome AI APIs
@@ -249,7 +261,9 @@ export default function Round2Heist({ roundId, navigate }: Round2HeistProps) {
     // CSS to prevent text selection everywhere
     document.body.style.userSelect = 'none';
     document.body.style.webkitUserSelect = 'none';
+    // @ts-ignore - Legacy browser support
     document.body.style.mozUserSelect = 'none';
+    // @ts-ignore - Legacy browser support
     document.body.style.msUserSelect = 'none';
     
     // Add meta tag to prevent AI scraping
@@ -273,7 +287,9 @@ export default function Round2Heist({ roundId, navigate }: Round2HeistProps) {
       // Restore text selection
       document.body.style.userSelect = '';
       document.body.style.webkitUserSelect = '';
+      // @ts-ignore - Legacy browser support
       document.body.style.mozUserSelect = '';
+      // @ts-ignore - Legacy browser support
       document.body.style.msUserSelect = '';
       
       // Remove meta tag
@@ -341,6 +357,7 @@ export default function Round2Heist({ roundId, navigate }: Round2HeistProps) {
 
       if (sessionError && sessionError.code !== 'PGRST116') throw sessionError;
 
+      let sessionId = null;
       if (!sessionData) {
         const { data: newSession, error: createError } = await supabase
           .from('round2_sessions')
@@ -361,8 +378,10 @@ export default function Round2Heist({ roundId, navigate }: Round2HeistProps) {
 
         if (createError) throw createError;
         setSession(newSession);
+        sessionId = newSession.id;
       } else {
         setSession(sessionData);
+        sessionId = sessionData.id;
         setCurrentSubRound(sessionData.current_sub_round || 1);
       }
 
@@ -491,11 +510,18 @@ export default function Round2Heist({ roundId, navigate }: Round2HeistProps) {
     try {
       const timeTaken = Math.floor((Date.now() - questionStartTime.current) / 1000);
 
-      const evaluationResult = await evaluateSubmission(currentQ, promptText.trim(), timeTaken);
+      // Pass keystroke log and question index to evaluation
+      const evaluationResult = await evaluateSubmission(
+        currentQ, 
+        promptText.trim(), 
+        timeTaken,
+        keystrokeLog,
+        currentQuestionIndex
+      );
       
       if (!evaluationResult) throw new Error('Evaluation failed');
 
-      // Use upsert to handle re-submissions (update if exists, insert if new)
+      // Store complete evaluation data including typing behavior
       const { data: insertData, error: insertError } = await supabase
         .from('round2_submissions')
         .upsert({
@@ -514,7 +540,8 @@ export default function Round2Heist({ roundId, navigate }: Round2HeistProps) {
             hiddenTestResults: evaluationResult.hiddenTestResults,
             constraintResults: evaluationResult.constraintResults,
             grammarIssues: evaluationResult.grammarIssues,
-            feedback: evaluationResult.feedback
+            feedback: evaluationResult.feedback,
+            typingBehavior: evaluationResult.typingBehavior // Store typing behavior
           }
         }, {
           onConflict: 'team_id,question_id',
@@ -532,6 +559,9 @@ export default function Round2Heist({ roundId, navigate }: Round2HeistProps) {
       newScores.set(currentQ.id, evaluationResult.totalScore);
       setAnswers(newAnswers);
       setScores(newScores);
+      
+      // Reset keystroke log for next question
+      resetLog();
 
       // Check if this completes the current sub-round
       const currentSubRoundIndex = Math.floor(currentQuestionIndex / 4) + 1;
@@ -581,7 +611,8 @@ export default function Round2Heist({ roundId, navigate }: Round2HeistProps) {
         setToast({ message: `🎉 All Sub-Rounds Complete!`, type: 'success' });
         sounds.success();
       } else {
-        setToast({ message: `Submitted! Score: ${evaluationResult.totalScore.toFixed(1)}/50`, type: 'success' });
+        // Silent scoring: don't show score, just confirmation
+        setToast({ message: `✓ Submitted!`, type: 'success' });
         sounds.success();
       }
 
@@ -682,6 +713,10 @@ export default function Round2Heist({ roundId, navigate }: Round2HeistProps) {
     setCurrentQuestionIndex(index);
     const selectedQ = allQuestions[index];
     setPromptText(answers.get(selectedQ.id) || '');
+    
+    // Reset keystroke log when switching questions
+    resetLog();
+    
     questionStartTime.current = Date.now();
     startTimer();
   };
@@ -859,9 +894,6 @@ export default function Round2Heist({ roundId, navigate }: Round2HeistProps) {
                               <CheckCircleIcon className="w-3 h-3 text-green-600" />
                             )}
                           </div>
-                          {score !== undefined && (
-                            <div className="text-xs mt-0.5 font-bold">{score.toFixed(1)}/50</div>
-                          )}
                         </button>
                       );
                     })}
@@ -929,11 +961,15 @@ export default function Round2Heist({ roundId, navigate }: Round2HeistProps) {
               </label>
               <textarea
                 value={promptText}
-                onChange={(e) => setPromptText(e.target.value)}
+                onChange={(e) => {
+                  setPromptText(e.target.value);
+                  trackInput(e.target.value);
+                }}
+                onKeyDown={(e) => trackKeyDown(e, promptText)}
                 onCopy={(e) => e.preventDefault()}
                 onPaste={(e) => e.preventDefault()}
                 onCut={(e) => e.preventDefault()}
-                placeholder="Write your prompt here... (Copy/Paste disabled)"
+                placeholder="Write your prompt here..."
                 className="w-full h-40 bg-gray-50 border border-gray-300 rounded-lg p-3 text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono text-sm resize-none select-none"
                 disabled={submitting || isAnswered}
                 spellCheck={false}
@@ -957,14 +993,6 @@ export default function Round2Heist({ roundId, navigate }: Round2HeistProps) {
                   {submitting || evaluating ? 'Evaluating...' : isAnswered ? 'Already Submitted' : 'Submit Answer'}
                 </button>
               </div>
-
-              {isAnswered && scores.has(currentQ.id) && (
-                <div className="mt-3 p-3 bg-green-50 border border-green-200 rounded-lg">
-                  <p className="text-green-800 font-semibold text-sm">
-                    ✓ Score: {scores.get(currentQ.id)?.toFixed(1)}/50 points
-                  </p>
-                </div>
-              )}
             </div>
 
             {/* Navigation Buttons - More Compact */}
