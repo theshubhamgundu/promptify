@@ -21,6 +21,12 @@ export interface DisplayAnnouncement {
   bg_url?: string;
   background_url?: string;
   hide_text?: boolean;
+  title_size?: 'small' | 'medium' | 'large' | 'huge';
+  title_align?: 'left' | 'center' | 'right';
+  message_size?: 'small' | 'medium' | 'large' | 'xlarge';
+  message_align?: 'left' | 'center' | 'right';
+  vertical_position?: number;
+  text_position?: 'top' | 'center' | 'bottom';
 }
 
 export interface LiveEventInfo {
@@ -112,6 +118,12 @@ export function useLiveDisplay(screenId: number = 1) {
             scope: a.scope,
             bg_url: a.bg_url || a.background_url,
             hide_text: Boolean(a.hide_text),
+            title_size: a.title_size,
+            title_align: a.title_align,
+            message_size: a.message_size,
+            message_align: a.message_align,
+            vertical_position: a.vertical_position,
+            text_position: a.text_position,
           };
         });
 
@@ -139,6 +151,12 @@ export function useLiveDisplay(screenId: number = 1) {
             created_at: new Date().toISOString(),
             bg_url: screenAnn.bg_url,
             hide_text: Boolean(screenAnn.hide_text),
+            title_size: screenAnn.title_size,
+            title_align: screenAnn.title_align,
+            message_size: screenAnn.message_size,
+            message_align: screenAnn.message_align,
+            vertical_position: screenAnn.vertical_position,
+            text_position: screenAnn.text_position,
           };
           const merged = [primaryScreenAnn, ...activeOnly.filter(a => a.title !== screenAnn.title)];
           setAnnouncements(merged);
@@ -159,6 +177,12 @@ export function useLiveDisplay(screenId: number = 1) {
           created_at: new Date().toISOString(),
           bg_url: screenAnn.bg_url,
           hide_text: Boolean(screenAnn.hide_text),
+          title_size: screenAnn.title_size,
+          title_align: screenAnn.title_align,
+          message_size: screenAnn.message_size,
+          message_align: screenAnn.message_align,
+          vertical_position: screenAnn.vertical_position,
+          text_position: screenAnn.text_position,
         }
       ]);
     } catch (err) {

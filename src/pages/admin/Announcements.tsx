@@ -70,6 +70,12 @@ interface AnnouncementItem {
   created_by?: string;
   bg_url?: string;
   hide_text?: boolean;
+  title_size?: 'small' | 'medium' | 'large' | 'huge';
+  title_align?: 'left' | 'center' | 'right';
+  message_size?: 'small' | 'medium' | 'large' | 'xlarge';
+  message_align?: 'left' | 'center' | 'right';
+  vertical_position?: number;
+  text_position?: 'top' | 'center' | 'bottom';
 }
 
 export default function Announcements({ navigate }: { navigate: (p: Page) => void }) {
@@ -177,6 +183,12 @@ export default function Announcements({ navigate }: { navigate: (p: Page) => voi
     is_active: true,
     bg_url: '/assets/announcement_template.png',
     hide_text: false,
+    title_size: 'large' as 'small' | 'medium' | 'large' | 'huge',
+    title_align: 'center' as 'left' | 'center' | 'right',
+    message_size: 'medium' as 'small' | 'medium' | 'large' | 'xlarge',
+    message_align: 'center' as 'left' | 'center' | 'right',
+    vertical_position: 50,
+    text_position: 'center' as 'top' | 'center' | 'bottom',
   });
 
   const showToast = (msg: string) => {
@@ -221,6 +233,12 @@ export default function Announcements({ navigate }: { navigate: (p: Page) => voi
             created_by: a.created_by,
             bg_url: a.bg_url || a.background_url,
             hide_text: Boolean(a.hide_text),
+            title_size: a.title_size || 'large',
+            title_align: a.title_align || 'center',
+            message_size: a.message_size || 'medium',
+            message_align: a.message_align || 'center',
+            vertical_position: a.vertical_position !== undefined ? a.vertical_position : (a.text_position === 'top' ? 15 : a.text_position === 'bottom' ? 85 : 50),
+            text_position: a.text_position || 'center',
           };
         });
         setAnnouncements(normalized);
@@ -323,6 +341,12 @@ export default function Announcements({ navigate }: { navigate: (p: Page) => voi
         is_active: true,
         bg_url: ann.bg_url || scrBg || '/assets/announcement_template.png',
         hide_text: Boolean(ann.hide_text),
+        title_size: ann.title_size || 'large',
+        title_align: ann.title_align || 'center',
+        message_size: ann.message_size || 'medium',
+        message_align: ann.message_align || 'center',
+        vertical_position: ann.vertical_position !== undefined ? ann.vertical_position : (ann.text_position === 'top' ? 15 : ann.text_position === 'bottom' ? 85 : 50),
+        text_position: ann.text_position || 'center',
       });
       setEditingId(null);
     }
@@ -419,6 +443,12 @@ export default function Announcements({ navigate }: { navigate: (p: Page) => voi
       pinned: preset.pinned ?? true,
       bg_url: preset.bg_url || prev.bg_url,
       hide_text: Boolean(preset.hide_text),
+      title_size: preset.title_size || prev.title_size || 'large',
+      title_align: preset.title_align || prev.title_align || 'center',
+      message_size: preset.message_size || prev.message_size || 'medium',
+      message_align: preset.message_align || prev.message_align || 'center',
+      vertical_position: preset.vertical_position !== undefined ? preset.vertical_position : (preset.text_position === 'top' ? 15 : preset.text_position === 'bottom' ? 85 : (prev.vertical_position ?? 50)),
+      text_position: preset.text_position || prev.text_position || 'center',
     }));
   };
 
@@ -430,6 +460,12 @@ export default function Announcements({ navigate }: { navigate: (p: Page) => voi
       ...preset,
       bg_url: bgUrlToUse,
       hide_text: isClean,
+      title_size: preset.title_size || form.title_size || 'large',
+      title_align: preset.title_align || form.title_align || 'center',
+      message_size: preset.message_size || form.message_size || 'medium',
+      message_align: preset.message_align || form.message_align || 'center',
+      vertical_position: preset.vertical_position !== undefined ? preset.vertical_position : (preset.text_position === 'top' ? 15 : preset.text_position === 'bottom' ? 85 : (form.vertical_position ?? 50)),
+      text_position: preset.text_position || form.text_position || 'center',
     };
 
     // Update local form state
@@ -442,6 +478,12 @@ export default function Announcements({ navigate }: { navigate: (p: Page) => voi
       bg_url: bgUrlToUse,
       scope: targetScreenId === 0 ? 'GLOBAL' : `SCREEN_${targetScreenId}`,
       hide_text: isClean,
+      title_size: payloadWithBg.title_size,
+      title_align: payloadWithBg.title_align,
+      message_size: payloadWithBg.message_size,
+      message_align: payloadWithBg.message_align,
+      vertical_position: payloadWithBg.vertical_position,
+      text_position: payloadWithBg.text_position,
     }));
 
     if (targetScreenId > 0) {
@@ -636,6 +678,12 @@ export default function Announcements({ navigate }: { navigate: (p: Page) => voi
       pinned: announcementPayload.pinned,
       bg_url: announcementPayload.bg_url || form.bg_url,
       hide_text: isClean,
+      title_size: announcementPayload.title_size || form.title_size || 'large',
+      title_align: announcementPayload.title_align || form.title_align || 'center',
+      message_size: announcementPayload.message_size || form.message_size || 'medium',
+      message_align: announcementPayload.message_align || form.message_align || 'center',
+      vertical_position: announcementPayload.vertical_position !== undefined ? announcementPayload.vertical_position : (announcementPayload.text_position === 'top' ? 15 : announcementPayload.text_position === 'bottom' ? 85 : (form.vertical_position ?? 50)),
+      text_position: announcementPayload.text_position || form.text_position || 'center',
     };
 
     if (targetScreenId > 0) {
@@ -656,14 +704,14 @@ export default function Announcements({ navigate }: { navigate: (p: Page) => voi
       const bc = new BroadcastChannel('promptify_realtime_sync');
       bc.postMessage({
         type: 'ANNOUNCEMENT_UPDATE',
-        announcement: { ...announcementPayload, bg_url: annData.bg_url, hide_text: isClean },
+        announcement: { ...announcementPayload, bg_url: annData.bg_url, hide_text: isClean, ...annData },
         timestamp: Date.now(),
       });
       setTimeout(() => bc.close(), 100);
     } catch (e) {}
 
     try {
-      localStorage.setItem('promptify_active_announcement', JSON.stringify({ ...announcementPayload, bg_url: annData.bg_url, hide_text: isClean }));
+      localStorage.setItem('promptify_active_announcement', JSON.stringify({ ...announcementPayload, bg_url: annData.bg_url, hide_text: isClean, ...annData }));
       localStorage.setItem('promptify_realtime_trigger', Date.now().toString());
     } catch (e) {}
 
@@ -675,7 +723,7 @@ export default function Announcements({ navigate }: { navigate: (p: Page) => voi
           channel.send({
             type: 'broadcast',
             event: 'announcement_push',
-            payload: { announcement: { ...announcementPayload, bg_url: annData.bg_url, hide_text: isClean }, timestamp: Date.now() }
+            payload: { announcement: { ...announcementPayload, bg_url: annData.bg_url, hide_text: isClean, ...annData }, timestamp: Date.now() }
           });
         }
       });
@@ -708,6 +756,12 @@ export default function Announcements({ navigate }: { navigate: (p: Page) => voi
       is_active: shouldBeActive,
       bg_url: form.bg_url || '/assets/announcement_template.png',
       hide_text: isClean,
+      title_size: form.title_size || 'large',
+      title_align: form.title_align || 'center',
+      message_size: form.message_size || 'medium',
+      message_align: form.message_align || 'center',
+      vertical_position: form.vertical_position ?? 50,
+      text_position: form.text_position || 'center',
     };
 
     try {
@@ -1075,67 +1129,87 @@ export default function Announcements({ navigate }: { navigate: (p: Page) => voi
                 ) : (
                   /* ── Normal Announcement Preview in Canvas ── */
                   <>
-                    {/* Top Status Badges inside Canvas (only when text overlay is active) */}
-                    {!form.hide_text && (form.title?.trim() || form.message?.trim()) ? (
-                      <div className="w-full flex items-center justify-between z-10">
-                        <div className="flex items-center gap-2">
-                          <span
-                            className={`text-[10px] font-black uppercase px-2.5 py-1 rounded-full text-white font-heading shadow-sm ${
-                              form.priority === 'URGENT'
-                                ? 'bg-red-600'
-                                : form.priority === 'IMPORTANT'
-                                ? 'bg-amber-600'
-                                : 'bg-blue-600'
-                            }`}
-                          >
-                            {form.priority}
-                          </span>
-                          {form.pinned && (
-                            <span className="text-[10px] font-black uppercase px-2.5 py-1 rounded-full bg-purple-600 text-white font-heading shadow-sm">
-                              📌 PINNED
-                            </span>
-                          )}
-                        </div>
-                        <span className="text-[10px] font-bold bg-white/90 backdrop-blur-md px-2.5 py-1 rounded-full border border-black/20 text-slate-800">
-                          Just now
-                        </span>
-                      </div>
-                    ) : (
-                      <div className="w-full h-4 z-10" />
-                    )}
+                    {/* Top Canvas Spacer */}
+                    <div className="w-full h-4 z-10" />
 
                     {/* Center Headline & Message */}
-                    <div className="flex-1 flex flex-col items-center justify-center text-center px-4 py-2 z-10">
-                      {!form.hide_text && (form.title?.trim() || form.message?.trim()) ? (
-                        <div className="space-y-2 max-w-full">
-                          {form.title?.trim() && (
-                            <h2 className={`text-2xl sm:text-4xl lg:text-5xl font-black font-display tracking-tight uppercase leading-none ${
-                              isDarkBg
-                                ? 'text-white drop-shadow-[0_4px_16px_rgba(0,0,0,0.8)]'
-                                : 'text-slate-950 drop-shadow-[0_2px_4px_rgba(0,0,0,0.12)]'
-                            }`}>
-                              {form.title}
-                            </h2>
-                          )}
-                          {form.message?.trim() && (
-                            <p className={`text-xs sm:text-base lg:text-lg font-extrabold font-heading leading-tight whitespace-pre-wrap max-w-xl mx-auto ${
-                              isDarkBg
-                                ? 'text-slate-100 drop-shadow-[0_2px_8px_rgba(0,0,0,0.9)]'
-                                : 'text-slate-900 drop-shadow-[0_1px_2px_rgba(255,255,255,0.8)]'
-                            }`}>
-                              {form.message}
-                            </p>
+                    {(() => {
+                      const previewTitleSize = {
+                        small: 'text-lg sm:text-2xl lg:text-3xl',
+                        medium: 'text-xl sm:text-3xl lg:text-4xl',
+                        large: 'text-2xl sm:text-4xl lg:text-5xl',
+                        huge: 'text-3xl sm:text-5xl lg:text-6xl',
+                      }[form.title_size || 'large'];
+
+                      const previewTitleAlign = {
+                        left: 'text-left mr-auto',
+                        center: 'text-center mx-auto',
+                        right: 'text-right ml-auto',
+                      }[form.title_align || 'center'];
+
+                      const previewMessageSize = {
+                        small: 'text-[11px] sm:text-xs lg:text-sm',
+                        medium: 'text-xs sm:text-base lg:text-lg',
+                        large: 'text-sm sm:text-lg lg:text-xl',
+                        xlarge: 'text-base sm:text-xl lg:text-2xl',
+                      }[form.message_size || 'medium'];
+
+                      const previewMessageAlign = {
+                        left: 'text-left mr-auto',
+                        center: 'text-center mx-auto',
+                        right: 'text-right ml-auto',
+                      }[form.message_align || 'center'];
+
+                      const previewVerticalPercent = form.vertical_position !== undefined
+                        ? form.vertical_position
+                        : form.text_position === 'top'
+                        ? 15
+                        : form.text_position === 'bottom'
+                        ? 85
+                        : 50;
+
+                      return (
+                        <div className="flex-1 relative w-full h-full min-h-[140px] z-10 overflow-hidden">
+                          {!form.hide_text && (form.title?.trim() || form.message?.trim()) ? (
+                            <div
+                              className="absolute left-1/2 w-full max-w-full px-4 space-y-2 transition-all duration-75 ease-out"
+                              style={{
+                                top: `${previewVerticalPercent}%`,
+                                transform: `translate(-50%, -${previewVerticalPercent}%)`,
+                              }}
+                            >
+                              {form.title?.trim() && (
+                                <h2 className={`${previewTitleSize} ${previewTitleAlign} font-black font-display tracking-tight uppercase leading-none ${
+                                  isDarkBg
+                                    ? 'text-white drop-shadow-[0_4px_16px_rgba(0,0,0,0.8)]'
+                                    : 'text-slate-950 drop-shadow-[0_2px_4px_rgba(0,0,0,0.12)]'
+                                }`}>
+                                  {form.title}
+                                </h2>
+                              )}
+                              {form.message?.trim() && (
+                                <p className={`${previewMessageSize} ${previewMessageAlign} font-extrabold font-heading leading-tight whitespace-pre-wrap max-w-xl ${
+                                  isDarkBg
+                                    ? 'text-slate-100 drop-shadow-[0_2px_8px_rgba(0,0,0,0.9)]'
+                                    : 'text-slate-900 drop-shadow-[0_1px_2px_rgba(255,255,255,0.8)]'
+                                }`}>
+                                  {form.message}
+                                </p>
+                              )}
+                            </div>
+                          ) : (
+                            <div className="flex items-center justify-center h-full">
+                              <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-black/60 backdrop-blur-md text-white border border-white/20 shadow-md">
+                                <span className="text-xs">🖼️</span>
+                                <span className="text-[11px] font-bold uppercase tracking-wider font-heading">
+                                  Clean Background (No Text Overlay)
+                                </span>
+                              </div>
+                            </div>
                           )}
                         </div>
-                      ) : (
-                        <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-black/60 backdrop-blur-md text-white border border-white/20 shadow-md">
-                          <span className="text-xs">🖼️</span>
-                          <span className="text-[11px] font-bold uppercase tracking-wider font-heading">
-                            Clean Background (No Text Overlay)
-                          </span>
-                        </div>
-                      )}
-                    </div>
+                      );
+                    })()}
 
                     {/* Footer Canvas Pill */}
                     <div className="w-full flex items-center justify-between text-[10px] font-bold z-10">
@@ -1545,22 +1619,159 @@ export default function Announcements({ navigate }: { navigate: (p: Page) => voi
                   </button>
                 </div>
 
-                <FormField label="Headline on Template (Optional)">
+                {/* Headline on Template with Size and Alignment Controls */}
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <label className="text-xs font-black uppercase text-gray-800 font-heading tracking-wide">
+                      Headline on Template (Optional)
+                    </label>
+                    <div className="flex items-center gap-1.5">
+                      {/* Title Size Selector */}
+                      <div className="flex items-center bg-gray-100 p-0.5 rounded-lg border border-gray-200">
+                        {(['small', 'medium', 'large', 'huge'] as const).map((sz, idx) => {
+                          const labels = ['S', 'M', 'L', 'XL'];
+                          const active = (form.title_size || 'large') === sz;
+                          return (
+                            <button
+                              key={sz}
+                              type="button"
+                              onClick={() => setForm(prev => ({ ...prev, title_size: sz }))}
+                              className={`px-1.5 py-0.5 text-[10px] font-black rounded transition-all cursor-pointer ${
+                                active ? 'bg-orange-500 text-white shadow-sm' : 'text-gray-600 hover:text-gray-900'
+                              }`}
+                              title={`Headline size: ${sz.toUpperCase()}`}
+                            >
+                              {labels[idx]}
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      {/* Title Alignment Selector */}
+                      <div className="flex items-center bg-gray-100 p-0.5 rounded-lg border border-gray-200">
+                        {(['left', 'center', 'right'] as const).map(al => {
+                          const icons = { left: '⫷', center: '≡', right: '⫸' };
+                          const active = (form.title_align || 'center') === al;
+                          return (
+                            <button
+                              key={al}
+                              type="button"
+                              onClick={() => setForm(prev => ({ ...prev, title_align: al }))}
+                              className={`px-1.5 py-0.5 text-[10px] font-black rounded transition-all cursor-pointer ${
+                                active ? 'bg-orange-500 text-white shadow-sm' : 'text-gray-600 hover:text-gray-900'
+                              }`}
+                              title={`Headline align: ${al.toUpperCase()}`}
+                            >
+                              {icons[al]}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
                   <TextInput
                     value={form.title}
                     onChange={val => setForm(prev => ({ ...prev, title: val.toUpperCase(), hide_text: false }))}
                     placeholder="Leave blank for clean background only"
                   />
-                </FormField>
+                </div>
 
-                <FormField label="Message Details (Optional)">
+                {/* Message Details with Size and Alignment Controls */}
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <label className="text-xs font-black uppercase text-gray-800 font-heading tracking-wide">
+                      Message Details (Optional)
+                    </label>
+                    <div className="flex items-center gap-1.5">
+                      {/* Message Size Selector */}
+                      <div className="flex items-center bg-gray-100 p-0.5 rounded-lg border border-gray-200">
+                        {(['small', 'medium', 'large', 'xlarge'] as const).map((sz, idx) => {
+                          const labels = ['S', 'M', 'L', 'XL'];
+                          const active = (form.message_size || 'medium') === sz;
+                          return (
+                            <button
+                              key={sz}
+                              type="button"
+                              onClick={() => setForm(prev => ({ ...prev, message_size: sz }))}
+                              className={`px-1.5 py-0.5 text-[10px] font-black rounded transition-all cursor-pointer ${
+                                active ? 'bg-orange-500 text-white shadow-sm' : 'text-gray-600 hover:text-gray-900'
+                              }`}
+                              title={`Message size: ${sz.toUpperCase()}`}
+                            >
+                              {labels[idx]}
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      {/* Message Alignment Selector */}
+                      <div className="flex items-center bg-gray-100 p-0.5 rounded-lg border border-gray-200">
+                        {(['left', 'center', 'right'] as const).map(al => {
+                          const icons = { left: '⫷', center: '≡', right: '⫸' };
+                          const active = (form.message_align || 'center') === al;
+                          return (
+                            <button
+                              key={al}
+                              type="button"
+                              onClick={() => setForm(prev => ({ ...prev, message_align: al }))}
+                              className={`px-1.5 py-0.5 text-[10px] font-black rounded transition-all cursor-pointer ${
+                                active ? 'bg-orange-500 text-white shadow-sm' : 'text-gray-600 hover:text-gray-900'
+                              }`}
+                              title={`Message align: ${al.toUpperCase()}`}
+                            >
+                              {icons[al]}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
                   <TextArea
                     value={form.message}
                     onChange={val => setForm(prev => ({ ...prev, message: val, hide_text: false }))}
                     rows={3}
                     placeholder="Leave blank for clean background only..."
                   />
-                </FormField>
+                </div>
+
+                {/* Overall Vertical Placement Slider */}
+                <div className="p-3 bg-gray-50/80 rounded-2xl border border-gray-200 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="text-xs font-black text-gray-800 font-heading flex items-center gap-1.5">
+                        <span>📍 Vertical Text Position</span>
+                      </div>
+                      <div className="text-[10px] text-gray-500 font-medium">Position headline & message on screen</div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-black px-2 py-0.5 rounded-lg bg-orange-100 text-orange-700 font-mono">
+                        {form.vertical_position ?? 50}%
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setForm(prev => ({ ...prev, vertical_position: 50 }))}
+                        className="text-[10px] font-bold text-gray-500 hover:text-orange-600 px-1.5 py-0.5 rounded hover:bg-gray-200 transition-colors cursor-pointer"
+                        title="Reset to Center (50%)"
+                      >
+                        Reset
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-3 pt-1">
+                    <span className="text-[11px] font-black text-gray-400 uppercase tracking-wider">Top</span>
+                    <input
+                      type="range"
+                      min={0}
+                      max={100}
+                      step={1}
+                      value={form.vertical_position ?? 50}
+                      onChange={e => setForm(prev => ({ ...prev, vertical_position: Number(e.target.value) }))}
+                      className="flex-1 accent-orange-500 cursor-pointer h-2 bg-gray-200 rounded-lg"
+                    />
+                    <span className="text-[11px] font-black text-gray-400 uppercase tracking-wider">Bottom</span>
+                  </div>
+                </div>
 
                 {/* ── Visual Template Background Selector ── */}
                 <div className="space-y-2 bg-orange-50/50 p-3 rounded-2xl border border-orange-200/80">
@@ -1648,73 +1859,27 @@ export default function Announcements({ navigate }: { navigate: (p: Page) => voi
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
-                  <FormField label="Priority">
-                    <Select
-                      value={form.priority}
-                      onChange={val => setForm(prev => ({ ...prev, priority: val as any }))}
-                      options={[
-                        { value: 'URGENT', label: 'Urgent Alert (Red)' },
-                        { value: 'IMPORTANT', label: 'Important (Amber)' },
-                        { value: 'NORMAL', label: 'Normal Notice' },
-                      ]}
-                    />
-                  </FormField>
-
-                  <FormField label="Target Screen Scope">
-                    <Select
-                      value={form.scope || (selectedScreen === 0 ? 'GLOBAL' : `SCREEN_${selectedScreen}`)}
-                      onChange={val => {
-                        setForm(prev => ({ ...prev, scope: val }));
-                        if (val.startsWith('SCREEN_')) {
-                          setSelectedScreen(parseInt(val.replace('SCREEN_', ''), 10));
-                        } else {
-                          setSelectedScreen(0);
-                        }
-                      }}
-                      options={[
-                        { value: 'GLOBAL', label: '🌐 All Screens (Global)' },
-                        { value: 'SCREEN_1', label: '🖥️ Screen 1 (Projector 1)' },
-                        { value: 'SCREEN_2', label: '🖥️ Screen 2 (Projector 2)' },
-                        { value: 'SCREEN_3', label: '🖥️ Screen 3 (Projector 3)' },
-                        { value: 'SCREEN_4', label: '🖥️ Screen 4 (Projector 4)' },
-                        { value: 'SCREEN_5', label: '🖥️ Screen 5 (Projector 5)' },
-                      ]}
-                    />
-                  </FormField>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <label className="flex items-center gap-2 h-10 px-3 bg-gray-50 border border-gray-200 rounded-xl cursor-pointer select-none">
-                    <input
-                      type="checkbox"
-                      checked={form.pinned}
-                      onChange={e => setForm({ ...form, pinned: e.target.checked })}
-                      className="w-4 h-4 text-orange-500 rounded border-gray-300 focus:ring-orange-400"
-                    />
-                    <span className="text-xs font-bold text-gray-800">📌 Always Pinned</span>
-                  </label>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <FormField label="Start Time (Optional)">
-                    <input
-                      type="datetime-local"
-                      value={form.scheduled_at}
-                      onChange={e => setForm({ ...form, scheduled_at: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-200 rounded-xl text-xs font-mono"
-                    />
-                  </FormField>
-
-                  <FormField label="Expiry Time (Optional)">
-                    <input
-                      type="datetime-local"
-                      value={form.expires_at}
-                      onChange={e => setForm({ ...form, expires_at: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-200 rounded-xl text-xs font-mono"
-                    />
-                  </FormField>
-                </div>
+                <FormField label="Target Screen Scope">
+                  <Select
+                    value={form.scope || (selectedScreen === 0 ? 'GLOBAL' : `SCREEN_${selectedScreen}`)}
+                    onChange={val => {
+                      setForm(prev => ({ ...prev, scope: val }));
+                      if (val.startsWith('SCREEN_')) {
+                        setSelectedScreen(parseInt(val.replace('SCREEN_', ''), 10));
+                      } else {
+                        setSelectedScreen(0);
+                      }
+                    }}
+                    options={[
+                      { value: 'GLOBAL', label: '🌐 All Screens (Global)' },
+                      { value: 'SCREEN_1', label: '🖥️ Screen 1 (Projector 1)' },
+                      { value: 'SCREEN_2', label: '🖥️ Screen 2 (Projector 2)' },
+                      { value: 'SCREEN_3', label: '🖥️ Screen 3 (Projector 3)' },
+                      { value: 'SCREEN_4', label: '🖥️ Screen 4 (Projector 4)' },
+                      { value: 'SCREEN_5', label: '🖥️ Screen 5 (Projector 5)' },
+                    ]}
+                  />
+                </FormField>
               </div>
 
               {/* Action Buttons: Save Template & Publish Live */}
