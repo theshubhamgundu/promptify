@@ -33,6 +33,23 @@ export default function CoordinatorDashboard() {
     if (error) setMessage(error.message); else setQueue((data || []) as QueueItem[]);
     setLoading(false);
   };
+  const prepareScannedTeam = async (rawCode: string) => {
+    const teamCode = rawCode.trim().replace(/^PROMPTIFY:TEAM:/i, '').toUpperCase();
+    if (!teamCode || !event) return;
+    setLoading(true);
+    setMessage('Checking in scanned team…');
+    const { error } = await supabase.rpc('prepare_scanned_team_verification', {
+      p_event_id: event.id, p_team_code: teamCode
+    });
+    if (error) {
+      setMessage(error.message);
+      setLoading(false);
+      return;
+    }
+    await load();
+    setQuery(teamCode);
+    setMessage('Team checked in. Verify IDs and choose Approve or Reject.');
+  };
   useEffect(() => { void load(); }, []);
   useEffect(() => {
     const channel = supabase.channel('coordinator-queue').on('postgres_changes', { event: '*', schema: 'public', table: 'verification_requests' }, load).subscribe();
@@ -64,8 +81,9 @@ export default function CoordinatorDashboard() {
       scannerControlsRef.current = await reader.decodeFromConstraints(constraints, videoRef.current || undefined, (result) => {
         if (!result || scanHandledRef.current) return;
         scanHandledRef.current = true;
-        setQuery(result.getText().trim().replace(/^PROMPTIFY:TEAM:/i, '').toUpperCase());
-        setMessage('QR code scanned. Review the matching team below.');
+        const scannedCode = result.getText().trim().replace(/^PROMPTIFY:TEAM:/i, '').toUpperCase();
+        setQuery(scannedCode);
+        void prepareScannedTeam(scannedCode);
         stopScanner();
       });
       const foundCameras = await BrowserQRCodeReader.listVideoInputDevices();
