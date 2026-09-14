@@ -8,7 +8,7 @@ import { EventService } from '../lib/services/eventService';
 import { LockIcon } from '../components/icons';
 import { Toast } from '../components/ui';
 
-export default function Login({ onLogin, onBackToHome }: { onLogin: (role: 'admin' | 'coordinator' | 'participant') => void; onBackToHome?: () => void }) {
+export default function Login({ onLogin, onBackToHome }: { onLogin: (role: 'admin' | 'coordinator' | 'participant', verified?: boolean) => void; onBackToHome?: () => void }) {
   const [teamCode, setTeamCode] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -45,8 +45,10 @@ export default function Login({ onLogin, onBackToHome }: { onLogin: (role: 'admi
           
         const isAdmin = userData?.role === 'ADMIN' || userData?.role === 'COORDINATOR';
         
+        let participantContext: Awaited<ReturnType<typeof TeamService.getContextForUser>> = null;
         if (!isAdmin) {
-          const context = await TeamService.getContextForUser(data.session.user.id);
+          participantContext = await TeamService.getContextForUser(data.session.user.id);
+          const context = participantContext;
           if (context && context.team) {
             setCurrentTeam(context.team as any);
             setMembers(context.members as any);
@@ -61,7 +63,8 @@ export default function Login({ onLogin, onBackToHome }: { onLogin: (role: 'admi
           }
         }
 
-        onLogin(userData?.role === 'ADMIN' ? 'admin' : userData?.role === 'COORDINATOR' ? 'coordinator' : 'participant');
+        const verified = !isAdmin && (participantContext?.session?.state === 'VERIFIED' || participantContext?.session?.state === 'ACTIVE');
+        onLogin(userData?.role === 'ADMIN' ? 'admin' : userData?.role === 'COORDINATOR' ? 'coordinator' : 'participant', verified);
       }
     } catch (err: any) {
       setError(err.message || 'Authentication failed');
@@ -234,31 +237,6 @@ export default function Login({ onLogin, onBackToHome }: { onLogin: (role: 'admi
             )}
           </button>
 
-          {import.meta.env.DEV && <button
-            type="button"
-            onClick={(e) => {
-              e.preventDefault();
-              setTeamCode('coordinator01@example.test');
-              setPassword('Coord!2026-01');
-              setTimeout(() => {
-                const form = (e.target as HTMLElement).closest('form');
-                if (form) form.requestSubmit();
-              }, 50);
-            }}
-            className="w-full flex items-center justify-center transition-all mt-3 active:translate-x-[2px] active:translate-y-[2px] active:shadow-[0px_0px_0_#111111]"
-            style={{
-              background: "#FFD027",
-              border: "2.5px solid #111111",
-              borderRadius: 12,
-              boxShadow: "2px 2px 0 #111111",
-              padding: "10px",
-              cursor: "pointer",
-            }}
-          >
-            <span style={{ fontFamily: "'Nunito', sans-serif", fontWeight: 800, color: "#111111", fontSize: 13, textTransform: "uppercase" }}>
-              Quick Coordinator Login
-            </span>
-          </button>}
         </form>
 
 

@@ -500,12 +500,6 @@ export default function Layout({ page, navigate, children, offline, onSessionAle
                   </div>
                   <div className="border-t-[2px] border-[#111111]/10 p-2 space-y-1">
                     <button 
-                      onClick={() => navigate('admin')}
-                      className="w-full text-left px-3 py-2 rounded-xl text-xs font-bold text-[#111111] hover:bg-[#FFD027] transition-colors flex items-center gap-2 border border-transparent hover:border-[#111111]"
-                    >
-                      <span>🛡️</span> Switch to Admin
-                    </button>
-                    <button 
                       onClick={async () => { 
                         await supabase.auth.signOut();
                         localStorage.removeItem('authState'); 

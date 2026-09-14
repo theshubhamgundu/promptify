@@ -316,7 +316,7 @@ export default function App() {
 
     return (
       <Login 
-        onLogin={(role) => {
+        onLogin={(role, verified) => {
           if (role === 'admin') {
             setAuthState('app');
             setPage('admin');
@@ -326,7 +326,8 @@ export default function App() {
             setPage('coordinator');
             showToast('Coordinator login successful.', 'success');
           } else {
-            setAuthState('verification');
+            setAuthState(verified ? 'app' : 'verification');
+            if (verified) setPage('dashboard');
           }
         }}
         onBackToHome={() => {
