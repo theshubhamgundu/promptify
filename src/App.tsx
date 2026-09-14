@@ -74,7 +74,7 @@ export default function App() {
 
   // Landing and Registration state — Landing Page is the root page, Login and Register are dedicated pages
   const [showLanding, setShowLanding] = useState(() => {
-    return !['#login', '#register', '#staff-login'].includes(window.location.hash);
+    return !['#login', '#register'].includes(window.location.hash);
   });
   const [showRegistration, setShowRegistration] = useState(() => {
     return window.location.hash === '#register';
@@ -84,6 +84,7 @@ export default function App() {
     const handleHash = () => {
       const hash = window.location.hash;
       if (hash === '#login' || hash === '#staff-login') {
+        if (hash === '#staff-login') window.location.hash = 'login';
         setShowLanding(false);
         setShowRegistration(false);
       } else if (hash === '#register') {
@@ -315,7 +316,6 @@ export default function App() {
 
     return (
       <Login 
-        portal={window.location.hash === '#staff-login' ? 'staff' : 'participant'}
         onLogin={(role) => {
           if (role === 'admin') {
             setAuthState('app');

@@ -8,7 +8,7 @@ import { EventService } from '../lib/services/eventService';
 import { LockIcon } from '../components/icons';
 import { Toast } from '../components/ui';
 
-export default function Login({ onLogin, onBackToHome, portal = 'participant' }: { onLogin: (role: 'admin' | 'coordinator' | 'participant') => void; onBackToHome?: () => void; portal?: 'participant' | 'staff' }) {
+export default function Login({ onLogin, onBackToHome }: { onLogin: (role: 'admin' | 'coordinator' | 'participant') => void; onBackToHome?: () => void }) {
   const [teamCode, setTeamCode] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -25,10 +25,9 @@ export default function Login({ onLogin, onBackToHome, portal = 'participant' }:
     setError(null);
     try {
       const teamLoginDomain = import.meta.env.VITE_TEAM_LOGIN_DOMAIN || 'example.com';
-      const loginEmail = portal === 'staff'
+      const loginEmail = teamCode.includes('@')
         ? teamCode.trim().toLowerCase()
-        : (teamCode.includes('@') ? teamCode : `${teamCode.toLowerCase()}@${teamLoginDomain}`);
-      if (portal === 'staff' && !loginEmail.includes('@')) throw new Error('Enter your coordinator email address');
+        : `${teamCode.toLowerCase()}@${teamLoginDomain}`;
       const { data, error: authError } = await supabase.auth.signInWithPassword({
         email: loginEmail,
         password,
@@ -45,14 +44,6 @@ export default function Login({ onLogin, onBackToHome, portal = 'participant' }:
           .single();
           
         const isAdmin = userData?.role === 'ADMIN' || userData?.role === 'COORDINATOR';
-        if (portal === 'staff' && !isAdmin) {
-          await supabase.auth.signOut();
-          throw new Error('This portal is only for administrators and coordinators. Use the team login portal.');
-        }
-        if (portal === 'participant' && isAdmin) {
-          await supabase.auth.signOut();
-          throw new Error('Use the staff portal to sign in with administrator or coordinator credentials.');
-        }
         
         if (!isAdmin) {
           const context = await TeamService.getContextForUser(data.session.user.id);
@@ -147,7 +138,7 @@ export default function Login({ onLogin, onBackToHome, portal = 'participant' }:
               style={{ fontFamily: "'Nunito', sans-serif", fontWeight: 900, color: "#111111" }}
               className="text-2xl leading-tight uppercase tracking-tight"
             >
-              {portal === 'staff' ? <>Staff<br/>Login</> : <>Participant<br/>Login</>}
+              Sign in
             </h1>
           </div>
         </div>
@@ -156,7 +147,7 @@ export default function Login({ onLogin, onBackToHome, portal = 'participant' }:
           style={{ fontFamily: "'Nunito', sans-serif", fontWeight: 700, color: "#111111" }}
           className="text-sm opacity-80 mb-8"
         >
-          {portal === 'staff' ? 'Use your coordinator or administrator credentials to manage verification.' : 'Enter your team credentials to access the competition portal.'}
+          Teams can enter their team code; coordinators and administrators can enter their email. You will be routed automatically.
         </p>
 
         <form onSubmit={handleSubmit} className="space-y-5">
@@ -165,14 +156,14 @@ export default function Login({ onLogin, onBackToHome, portal = 'participant' }:
               style={{ fontFamily: "'Nunito', sans-serif", fontWeight: 900, color: "#111111" }}
               className="block text-sm uppercase tracking-wide mb-2"
             >
-              {portal === 'staff' ? 'Staff email' : 'Team Code'}
+              Team code or staff email
             </label>
             <input
               type="text"
               value={teamCode}
-              onChange={(e) => setTeamCode(portal === 'staff' ? e.target.value : e.target.value.toUpperCase())}
-              placeholder={portal === 'staff' ? 'name@organisation.com' : 'e.g. AIDX1000'}
-              className={`w-full px-4 py-3 outline-none transition-all placeholder:text-[#111111]/30 focus:bg-white ${portal === 'participant' ? 'uppercase' : ''}`}
+              onChange={(e) => setTeamCode(e.target.value.includes('@') ? e.target.value : e.target.value.toUpperCase())}
+              placeholder="AIDX1000 or name@organisation.com"
+              className="w-full px-4 py-3 outline-none transition-all placeholder:text-[#111111]/30 focus:bg-white"
               style={{
                 background: "#FAF7F2",
                 border: "2.5px solid #111111",
@@ -247,8 +238,8 @@ export default function Login({ onLogin, onBackToHome, portal = 'participant' }:
             type="button"
             onClick={(e) => {
               e.preventDefault();
-              setTeamCode(portal === 'staff' ? 'coordinator01@example.test' : 'test1234');
-              setPassword(portal === 'staff' ? 'Coord!2026-01' : 'TeamPassword123!');
+              setTeamCode('coordinator01@example.test');
+              setPassword('Coord!2026-01');
               setTimeout(() => {
                 const form = (e.target as HTMLElement).closest('form');
                 if (form) form.requestSubmit();
@@ -265,18 +256,11 @@ export default function Login({ onLogin, onBackToHome, portal = 'participant' }:
             }}
           >
             <span style={{ fontFamily: "'Nunito', sans-serif", fontWeight: 800, color: "#111111", fontSize: 13, textTransform: "uppercase" }}>
-              {portal === 'staff' ? 'Quick Coordinator Login' : 'Quick Team Login (TEST1234)'}
+              Quick Coordinator Login
             </span>
           </button>}
         </form>
 
-        <button
-          type="button"
-          onClick={() => { window.location.hash = portal === 'staff' ? 'login' : 'staff-login'; }}
-          className="mt-5 w-full text-center text-xs font-bold text-gray-600 underline underline-offset-4 hover:text-orange-600"
-        >
-          {portal === 'staff' ? 'Team member? Use the participant portal' : 'Coordinator or admin? Use the staff portal'}
-        </button>
 
         <div className="mt-8 pt-6 border-t-[3px] border-[#111111] grid grid-cols-3 gap-3 text-center">
           <div className="flex flex-col items-center gap-1">

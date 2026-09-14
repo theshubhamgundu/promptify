@@ -1,7 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import QRCode from 'qrcode';
 import { BrainIcon, CheckCircleIcon, ShieldIcon } from '../components/icons';
-import { Button } from '../components/ui';
 import { supabase } from '../lib/supabase';
 import { useTeamStore } from '../stores/teamStore';
 
@@ -10,6 +9,7 @@ type VerifState = 'pending' | 'approved';
 export default function Verification({ onApprove }: { onApprove: () => void }) {
   const [state, setState] = useState<VerifState>('pending');
   const [dots, setDots] = useState('');
+  const accessGrantedRef = useRef(false);
   
   const currentTeam = useTeamStore(s => s.currentTeam);
   const members = useTeamStore(s => s.members);
@@ -18,6 +18,14 @@ export default function Verification({ onApprove }: { onApprove: () => void }) {
   const teamName = currentTeam?.name || 'Your Team';
   const teamCode = currentTeam?.access_code || '------';
   const [qrMarkup, setQrMarkup] = useState('');
+
+  const grantAccess = () => {
+    if (accessGrantedRef.current) return;
+    accessGrantedRef.current = true;
+    setState('approved');
+    setSessionState('VERIFIED');
+    window.setTimeout(onApprove, 900);
+  };
 
   useEffect(() => {
     const id = setInterval(() => setDots((d) => (d.length >= 3 ? '' : d + '.')), 600);
@@ -47,10 +55,7 @@ export default function Verification({ onApprove }: { onApprove: () => void }) {
         .eq('team_id', currentTeam.id)
         .maybeSingle();
         
-      if (data && data.state === 'VERIFIED' && mounted) {
-        setState('approved');
-        setSessionState('VERIFIED');
-      }
+      if (data && (data.state === 'VERIFIED' || data.state === 'ACTIVE') && mounted) grantAccess();
     };
     
     checkState();
@@ -64,16 +69,16 @@ export default function Verification({ onApprove }: { onApprove: () => void }) {
         'postgres_changes',
         { event: 'UPDATE', schema: 'public', table: 'team_sessions', filter: `team_id=eq.${currentTeam.id}` },
         (payload) => {
-          if (payload.new.state === 'VERIFIED') {
-            setState('approved');
-            setSessionState('VERIFIED');
-          }
+          if (payload.new.state === 'VERIFIED' || payload.new.state === 'ACTIVE') grantAccess();
         }
       )
       .subscribe();
 
+    const poll = window.setInterval(checkState, 2000);
+
     return () => {
       mounted = false;
+      window.clearInterval(poll);
       supabase.removeChannel(channel);
     };
   }, [currentTeam, setSessionState]);
@@ -91,9 +96,7 @@ export default function Verification({ onApprove }: { onApprove: () => void }) {
           <div className="bg-green-50 border border-green-100 rounded-xl px-4 py-3 mb-6 text-sm text-green-700">
             Your team has been approved by the coordinator. You may now access all competition features.
           </div>
-          <Button onClick={onApprove} className="w-full py-3">
-            Enter Competition →
-          </Button>
+          <p className="text-sm font-medium text-gray-600">Opening your team dashboard…</p>
         </div>
       </div>
     );
