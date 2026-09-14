@@ -269,7 +269,7 @@ export default function BossRound({ roundId, navigate }: BossRoundProps) {
         </div>
 
         {/* Dynamic Engine Container */}
-        <div className="flex-1 bg-[url('https://www.transparenttextures.com/patterns/dark-matter.png')] bg-gray-900 relative">
+        <div className="flex-1 bg-[url('https://www.transparenttextures.com/patterns/dark-matter.png')] bg-gray-900 relative overflow-y-auto">
           {renderChallengeComponent()}
         </div>
       </div>

@@ -14,6 +14,12 @@ export interface ScreenAnnouncement {
   pinned?: boolean;
   bg_url?: string;
   hide_text?: boolean;
+  title_size?: 'small' | 'medium' | 'large' | 'huge';
+  title_align?: 'left' | 'center' | 'right';
+  message_size?: 'small' | 'medium' | 'large' | 'xlarge';
+  message_align?: 'left' | 'center' | 'right';
+  vertical_position?: number; // 0 (Top) to 100 (Bottom), default 50 (Center)
+  text_position?: 'top' | 'center' | 'bottom';
 }
 
 export const ALL_SCREENS: ScreenInfo[] = [

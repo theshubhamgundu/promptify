@@ -217,13 +217,59 @@ function DisplayAnnouncementsView({
 }) {
   const isCleanBgOnly = activeAnnouncement.hide_text || (!activeAnnouncement.title?.trim() && !activeAnnouncement.message?.trim());
 
+  // Size mapping for Title
+  const titleSizeClass = {
+    small: 'text-3xl sm:text-4xl md:text-5xl lg:text-6xl',
+    medium: 'text-4xl sm:text-5xl md:text-6xl lg:text-7xl',
+    large: 'text-4xl sm:text-6xl md:text-7xl lg:text-8xl',
+    huge: 'text-5xl sm:text-7xl md:text-8xl lg:text-9xl',
+  }[activeAnnouncement.title_size || 'large'];
+
+  // Align mapping for Title
+  const titleAlignClass = {
+    left: 'text-left mr-auto',
+    center: 'text-center mx-auto',
+    right: 'text-right ml-auto',
+  }[activeAnnouncement.title_align || 'center'];
+
+  // Size mapping for Message
+  const messageSizeClass = {
+    small: 'text-base sm:text-lg md:text-xl lg:text-2xl',
+    medium: 'text-xl sm:text-2xl md:text-3xl lg:text-4xl',
+    large: 'text-2xl sm:text-3xl md:text-4xl lg:text-5xl',
+    xlarge: 'text-3xl sm:text-4xl md:text-5xl lg:text-6xl',
+  }[activeAnnouncement.message_size || 'medium'];
+
+  // Align mapping for Message
+  const messageAlignClass = {
+    left: 'text-left mr-auto',
+    center: 'text-center mx-auto',
+    right: 'text-right ml-auto',
+  }[activeAnnouncement.message_align || 'center'];
+
+  // Vertical position percentage (0 = Top, 50 = Center, 100 = Bottom)
+  const verticalPercent = activeAnnouncement.vertical_position !== undefined
+    ? activeAnnouncement.vertical_position
+    : activeAnnouncement.text_position === 'top'
+    ? 15
+    : activeAnnouncement.text_position === 'bottom'
+    ? 85
+    : 50;
+
   return (
-    <div className="flex-1 flex flex-col justify-between w-full h-full max-w-7xl mx-auto px-6 sm:px-12 py-8">
-      <div className="flex-1 flex flex-col items-center justify-center text-center px-4">
+    <div className="flex-1 relative flex flex-col justify-between w-full h-full max-w-7xl mx-auto px-6 sm:px-12 py-8 overflow-hidden">
+      <div className="flex-1 relative w-full h-full">
         {!isCleanBgOnly && (
-          <div className="space-y-4 lg:space-y-6 animate-fade-in w-full max-w-5xl" key={activeAnnouncement.id}>
+          <div
+            className="absolute left-1/2 w-full max-w-5xl px-4 space-y-4 lg:space-y-6 animate-fade-in transition-all duration-75 ease-out"
+            style={{
+              top: `${verticalPercent}%`,
+              transform: `translate(-50%, -${verticalPercent}%)`,
+            }}
+            key={activeAnnouncement.id}
+          >
             {activeAnnouncement.title && activeAnnouncement.title.trim() !== '' && (
-              <h1 className={`text-4xl sm:text-6xl md:text-7xl lg:text-8xl font-black font-display tracking-tight uppercase leading-none mx-auto ${
+              <h1 className={`${titleSizeClass} ${titleAlignClass} font-black font-display tracking-tight uppercase leading-none ${
                 isLightText
                   ? 'text-white drop-shadow-[0_4px_16px_rgba(0,0,0,0.8)]'
                   : 'text-slate-950 drop-shadow-[0_4px_8px_rgba(0,0,0,0.12)]'
@@ -233,7 +279,7 @@ function DisplayAnnouncementsView({
             )}
 
             {activeAnnouncement.message && activeAnnouncement.message.trim() !== '' && (
-              <div className={`text-xl sm:text-2xl md:text-3xl lg:text-4xl font-extrabold font-heading leading-tight whitespace-pre-wrap max-w-4xl mx-auto px-4 ${
+              <div className={`${messageSizeClass} ${messageAlignClass} font-extrabold font-heading leading-tight whitespace-pre-wrap max-w-4xl px-4 ${
                 isLightText
                   ? 'text-slate-100 drop-shadow-[0_2px_8px_rgba(0,0,0,0.9)]'
                   : 'text-slate-900 drop-shadow-[0_1px_2px_rgba(255,255,255,0.8)]'
@@ -247,7 +293,7 @@ function DisplayAnnouncementsView({
 
       {/* Subtle bottom auto-rotation progress bar if multiple slides */}
       {announcementsCount > 1 && (
-        <div className="w-full pb-2 flex justify-center">
+        <div className="w-full pb-2 flex justify-center z-10">
           <div className="w-64 max-w-xs bg-slate-400/30 rounded-full h-1.5 overflow-hidden">
             <div
               className="bg-orange-500 h-full rounded-full transition-all duration-100 ease-linear"
