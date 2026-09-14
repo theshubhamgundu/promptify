@@ -64,7 +64,28 @@ export default function AdminLeaderboard({ navigate }: { navigate: (p: Page) => 
     teamIds.forEach(id => scoreAccum.set(id, { total: 0, byRound: {} }));
 
     // 3. Query EACH round-specific submission table and aggregate scores
-    // Round 2: round2_submissions (total_score)
+
+    // ── Round 1 (Quiz / Genesis): quiz_sessions.total_score ──────────────
+    try {
+      const { data: qs } = await supabase
+        .from('quiz_sessions')
+        .select('team_id, round_id, total_score')
+        .eq('status', 'GRADED')
+        .in('team_id', teamIds);
+      if (qs) {
+        qs.forEach(s => {
+          const entry = scoreAccum.get(s.team_id);
+          if (entry) {
+            const score = s.total_score || 0;
+            const rId = s.round_id || roundsData?.find(r => r.type === 'QUIZ')?.id || 'quiz';
+            entry.total += score;
+            entry.byRound[rId] = (entry.byRound[rId] || 0) + score;
+          }
+        });
+      }
+    } catch (e) { /* ignore */ }
+
+    // ── Round 2 (Prompt Heist): round2_submissions.total_score ───────────
     try {
       const { data: r2 } = await supabase
         .from('round2_submissions')
@@ -81,9 +102,9 @@ export default function AdminLeaderboard({ navigate }: { navigate: (p: Page) => 
           }
         });
       }
-    } catch (e) { /* table might not exist */ }
+    } catch (e) { /* ignore */ }
 
-    // Round 3: vision_submissions (total_score)
+    // ── Round 3 (Vision / Vertex): vision_submissions.total_score ────────
     try {
       const { data: vs } = await supabase
         .from('vision_submissions')
@@ -100,30 +121,38 @@ export default function AdminLeaderboard({ navigate }: { navigate: (p: Page) => 
           }
         });
       }
-    } catch (e) { /* table might not exist */ }
+    } catch (e) { /* ignore */ }
 
-    // Generic submissions table (if any exist there)
+    // ── Rounds 4 & 5 (Nexus / Apex): round_sessions.score ────────────────
+    // complete_round4_session and submit_apex_answer RPCs both write back
+    // their final score into round_sessions.score — this is the ground truth.
+    // We skip R1 (QUIZ) here to avoid double-counting with quiz_sessions.
     try {
-      const { data: subs } = await supabase
-        .from('submissions')
-        .select('team_id, score, round_id, status')
-        .eq('status', 'EVALUATED')
-        .in('team_id', teamIds);
-      if (subs) {
-        subs.forEach(s => {
-          const entry = scoreAccum.get(s.team_id);
-          if (entry) {
-            const score = s.score || 0;
-            entry.total += score;
-            if (s.round_id) {
+      const r4Id = roundsData?.find(r => r.type === 'AI_ADVERSARIAL')?.id;
+      const r5Id = roundsData?.find(r => r.type === 'AI_GRANDMASTER')?.id;
+      const roundFilter = [r4Id, r5Id].filter(Boolean) as string[];
+
+      if (roundFilter.length > 0) {
+        const { data: rs } = await supabase
+          .from('round_sessions')
+          .select('team_id, round_id, score')
+          .in('team_id', teamIds)
+          .in('round_id', roundFilter)
+          .not('score', 'is', null);
+        if (rs) {
+          rs.forEach(s => {
+            const entry = scoreAccum.get(s.team_id);
+            if (entry) {
+              const score = s.score || 0;
+              entry.total += score;
               entry.byRound[s.round_id] = (entry.byRound[s.round_id] || 0) + score;
             }
-          }
-        });
+          });
+        }
       }
-    } catch (e) { /* table might not exist */ }
+    } catch (e) { /* ignore */ }
 
-    // Score events (manual adjustments / penalties)
+    // ── Manual score adjustments: score_events.points ────────────────────
     try {
       const { data: scoreEvents } = await supabase
         .from('score_events')
@@ -138,7 +167,7 @@ export default function AdminLeaderboard({ navigate }: { navigate: (p: Page) => 
           }
         });
       }
-    } catch (e) { /* table might not exist */ }
+    } catch (e) { /* ignore */ }
 
     // 4. Build ranked list
     const ranked = Array.from(scoreAccum.entries())
@@ -161,8 +190,10 @@ export default function AdminLeaderboard({ navigate }: { navigate: (p: Page) => 
 
     // Real-time subscriptions
     const channels = [
+      supabase.channel('lb-qs').on('postgres_changes', { event: '*', schema: 'public', table: 'quiz_sessions' }, () => loadScores()).subscribe(),
       supabase.channel('lb-r2').on('postgres_changes', { event: '*', schema: 'public', table: 'round2_submissions' }, () => loadScores()).subscribe(),
       supabase.channel('lb-vs').on('postgres_changes', { event: '*', schema: 'public', table: 'vision_submissions' }, () => loadScores()).subscribe(),
+      supabase.channel('lb-rs').on('postgres_changes', { event: '*', schema: 'public', table: 'round_sessions' }, () => loadScores()).subscribe(),
       supabase.channel('lb-se').on('postgres_changes', { event: '*', schema: 'public', table: 'score_events' }, () => loadScores()).subscribe(),
     ];
 
