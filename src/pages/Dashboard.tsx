@@ -358,7 +358,7 @@ export default function Dashboard({ navigate }: { navigate: (p: Page) => void })
                       navigate(`vision-${round.id}` as any);
                     } else if (round.type === 'AI_ADVERSARIAL' || round.type === 'ADVERSARIAL_CHALLENGE') {
                       navigate(`round4-${round.id}` as any);
-                    } else if (round.type === 'AI_SYSTEMS' || round.type === 'SYSTEMS_CHALLENGE') {
+                    } else if (round.type === 'AI_SYSTEMS' || round.type === 'SYSTEMS_CHALLENGE' || round.type === 'AI_GRANDMASTER') {
                       navigate(`round5-${round.id}` as any);
                     } else {
                       navigate(`round-${round.id}` as any);

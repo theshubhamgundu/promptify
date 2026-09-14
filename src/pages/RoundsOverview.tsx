@@ -258,7 +258,7 @@ export default function RoundsOverview({ navigate }: { navigate: (p: Page) => vo
                   navigate(`vision-${round.id}` as Page);
                 } else if (round.type === 'AI_ADVERSARIAL' || round.type === 'ADVERSARIAL_CHALLENGE') {
                   navigate(`round4-${round.id}` as Page);
-                } else if (round.type === 'AI_SYSTEMS' || round.type === 'SYSTEMS_CHALLENGE') {
+                } else if (round.type === 'AI_SYSTEMS' || round.type === 'SYSTEMS_CHALLENGE' || round.type === 'AI_GRANDMASTER') {
                   navigate(`round5-${round.id}` as Page);
                 } else {
                   navigate(`round-${round.id}` as Page);

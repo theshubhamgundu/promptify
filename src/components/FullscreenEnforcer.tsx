@@ -35,35 +35,38 @@ export default function FullscreenEnforcer({ children }: FullscreenEnforcerProps
     }
   };
 
-  if (isFullscreen) {
-    return <>{children}</>;
-  }
-
+  // Keep the assessment tree mounted when fullscreen is exited. Unmounting it
+  // discarded unsaved textarea content and in-progress dialogue state.
   return (
-    <div className="fixed inset-0 z-[9999] bg-slate-900 flex items-center justify-center p-6 text-center">
-      <Card className="max-w-md w-full p-8 bg-white border-red-100 shadow-2xl">
-        <div className="w-16 h-16 bg-red-100 text-red-600 rounded-full flex items-center justify-center mx-auto mb-6">
-          <AlertTriangleIcon className="w-8 h-8" />
-        </div>
-        
-        <h1 className="text-2xl font-bold font-heading text-gray-900 mb-3">
-          Fullscreen Required
-        </h1>
-        
-        <p className="text-sm text-gray-600 mb-6 leading-relaxed">
-          To ensure a fair competition environment, this platform must be run in <strong>fullscreen mode</strong>. 
-          <br /><br />
-          If you are using any browser extensions (like AI assistants or ad blockers), please disable them now. Suspicious DOM modifications will be logged and flagged for review.
-        </p>
+    <>
+      {children}
+      {!isFullscreen && (
+        <div className="fixed inset-0 z-[9999] bg-slate-900 flex items-center justify-center p-6 text-center">
+          <Card className="max-w-md w-full p-8 bg-white border-red-100 shadow-2xl">
+            <div className="w-16 h-16 bg-red-100 text-red-600 rounded-full flex items-center justify-center mx-auto mb-6">
+              <AlertTriangleIcon className="w-8 h-8" />
+            </div>
+            
+            <h1 className="text-2xl font-bold font-heading text-gray-900 mb-3">
+              Fullscreen Required
+            </h1>
+            
+            <p className="text-sm text-gray-600 mb-6 leading-relaxed">
+              Return to fullscreen to continue. Your in-progress work is preserved while this gate is shown.
+              <br /><br />
+              If you are using browser extensions, please disable them now. Suspicious DOM modifications are logged for review.
+            </p>
 
-        <Button 
-          onClick={requestFullscreen} 
-          className="w-full flex items-center justify-center gap-2 py-3 text-lg"
-        >
-          <MaximizeIcon className="w-5 h-5" />
-          Enter Fullscreen to Start
-        </Button>
-      </Card>
-    </div>
+            <Button 
+              onClick={requestFullscreen} 
+              className="w-full flex items-center justify-center gap-2 py-3 text-lg"
+            >
+              <MaximizeIcon className="w-5 h-5" />
+              Resume in Fullscreen
+            </Button>
+          </Card>
+        </div>
+      )}
+    </>
   );
 }

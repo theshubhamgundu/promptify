@@ -47,6 +47,7 @@ export interface Database {
           event_id: string | null
           name: string
           access_code: string
+          domain?: 'Healthcare' | 'Fintech' | 'Agriculture' | 'Education' | 'E-commerce' | 'Logistics' | null
           is_frozen: boolean
           created_at: string
         }
@@ -55,6 +56,7 @@ export interface Database {
           event_id?: string | null
           name: string
           access_code: string
+          domain?: 'Healthcare' | 'Fintech' | 'Agriculture' | 'Education' | 'E-commerce' | 'Logistics' | null
           is_frozen?: boolean
           created_at?: string
         }
@@ -63,6 +65,7 @@ export interface Database {
           event_id?: string | null
           name?: string
           access_code?: string
+          domain?: 'Healthcare' | 'Fintech' | 'Agriculture' | 'Education' | 'E-commerce' | 'Logistics' | null
           is_frozen?: boolean
           created_at?: string
         }

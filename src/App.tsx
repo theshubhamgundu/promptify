@@ -204,6 +204,14 @@ export default function App() {
   }, [currentTeam?.id]);
 
   const navigate = (p: Page) => {
+    const isActiveRound4 = typeof page === 'string' && page.startsWith('round4-');
+    const isLeavingRound4 = isActiveRound4 && !p.startsWith('round4-');
+    if (isLeavingRound4 && sessionStorage.getItem('round4-exit-allowed') !== 'true') {
+      setToast({ msg: 'Finish the active Round 4 stage before leaving the competition workspace.', type: 'warning' });
+      return;
+    }
+    if (isLeavingRound4) sessionStorage.removeItem('round4-exit-allowed');
+    if (typeof p === 'string' && p.startsWith('round4-')) sessionStorage.removeItem('round4-exit-allowed');
     prevPage.current = page;
     setPage(p);
     if (p === 'display' || p === 'live-board') {
@@ -397,7 +405,7 @@ export default function App() {
           {renderPage()}
         </AdminLayout>
       ) : isRoundPage ? (
-        isQuizPage ? (
+        (isQuizPage || (typeof page === 'string' && page.startsWith('round4-'))) ? (
           <FullscreenEnforcer>
             {renderPage()}
           </FullscreenEnforcer>

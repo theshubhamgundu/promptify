@@ -15,10 +15,7 @@ import {
 } from '../components/icons';
 import type { Page } from '../components/Layout';
 import { useTeamStore } from '../stores/teamStore';
-import PromptBreachChallenge from '../components/round4/PromptBreachChallenge';
-import CipherChallenge from '../components/round4/CipherChallenge';
-import TuringTestChallenge from '../components/round4/TuringTestChallenge';
-import PromptZipperChallenge from '../components/round4/PromptZipperChallenge';
+import NexusStageChallenge from '../components/round4/NexusStageChallenge';
 
 interface Round4EngineProps {
   roundId: string;
@@ -40,6 +37,10 @@ export default function Round4Engine({ roundId, navigate }: Round4EngineProps) {
   const [isMuted, setIsMuted] = useState<boolean>(sounds.isMuted());
   const [isRoundFinished, setIsRoundFinished] = useState<boolean>(false);
   const [finalScore, setFinalScore] = useState<number>(0);
+  const [completedChallengeIds, setCompletedChallengeIds] = useState<Set<string>>(new Set());
+  const [securityWarning, setSecurityWarning] = useState<string | null>(null);
+  const [securityViolations, setSecurityViolations] = useState(0);
+  const [securityLocked, setSecurityLocked] = useState(false);
 
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -109,6 +110,17 @@ export default function Round4Engine({ roundId, navigate }: Round4EngineProps) {
         }
 
         setRoundSession(rsData);
+        const locallyLocked = !!rsData?.id && localStorage.getItem(`round4-integrity-lock:${rsData.id}`) === 'true';
+        setSecurityLocked(locallyLocked || !!rsData?.security_locked);
+
+        if (rsData?.id) {
+          const { data: completedSessions } = await supabase
+            .from('challenge_sessions')
+            .select('challenge_id, status')
+            .eq('round_session_id', rsData.id)
+            .eq('status', 'COMPLETED');
+          setCompletedChallengeIds(new Set((completedSessions || []).map((session: any) => session.challenge_id)));
+        }
 
         if (rsData?.status === 'COMPLETED') {
           setIsRoundFinished(true);
@@ -139,7 +151,7 @@ export default function Round4Engine({ roundId, navigate }: Round4EngineProps) {
           p_team_id: currentTeam!.id,
           p_round_session_id: roundSession.id,
           p_challenge_id: activeChallenge.id,
-          p_duration_minutes: 10
+          p_duration_minutes: activeChallenge.configuration?.durationMinutes || 5
         });
 
         if (error) throw error;
@@ -209,8 +221,56 @@ export default function Round4Engine({ roundId, navigate }: Round4EngineProps) {
     };
   }, [challengeSession, isTimedOut, isRoundFinished]);
 
+  // Match the quiz-round integrity blockers for this competitive round.
+  useEffect(() => {
+    if (!currentTeam || isRoundFinished) return;
+    const report = (action: string, message: string) => {
+      setSecurityViolations(previous => {
+        const next = previous + 1;
+        setSecurityWarning(`${message} (${next}/5).`);
+        if (next >= 5) {
+          setSecurityLocked(true);
+          setSecurityWarning('Round locked after repeated integrity violations. Contact an administrator.');
+          if (roundSession?.id) localStorage.setItem(`round4-integrity-lock:${roundSession.id}`, 'true');
+          if (roundSession?.id) {
+            void (supabase.rpc as any)('lock_round4_session', {
+              p_team_id: currentTeam.id,
+              p_round_session_id: roundSession.id,
+              p_reason: 'Five integrity violations detected in Round 4'
+            });
+          }
+        }
+        void supabase.from('activity_logs').insert({ team_id: currentTeam.id, action, details: { round: 4, count: next, message } });
+        return next;
+      });
+    };
+    const onVisibility = () => { if (document.hidden) report('TAB_SWITCH', 'Tab switch detected'); };
+    const onKeyDown = (event: KeyboardEvent) => {
+      const inspect = event.key === 'F12' || (event.ctrlKey && event.shiftKey && ['I', 'J', 'C'].includes(event.key.toUpperCase())) || (event.ctrlKey && event.key.toUpperCase() === 'U');
+      const blocked = inspect || event.key === 'PrintScreen' || (event.ctrlKey && ['C', 'V', 'X'].includes(event.key.toUpperCase()));
+      if (blocked) { event.preventDefault(); report(inspect ? 'INSPECT_BLOCKED' : 'COPY_PASTE_DETECTED', inspect ? 'Developer-tools shortcut blocked' : 'Copy, paste, or screenshot shortcut blocked'); }
+    };
+    const onCopy = (event: Event) => { event.preventDefault(); report('COPY_PASTE_DETECTED', 'Copy blocked'); };
+    const onPaste = (event: Event) => { event.preventDefault(); report('COPY_PASTE_DETECTED', 'Paste blocked'); };
+    const onContext = (event: Event) => { event.preventDefault(); report('INSPECT_BLOCKED', 'Right-click blocked'); };
+    document.addEventListener('visibilitychange', onVisibility);
+    document.addEventListener('keydown', onKeyDown);
+    document.addEventListener('copy', onCopy);
+    document.addEventListener('paste', onPaste);
+    document.addEventListener('contextmenu', onContext);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibility);
+      document.removeEventListener('keydown', onKeyDown);
+      document.removeEventListener('copy', onCopy);
+      document.removeEventListener('paste', onPaste);
+      document.removeEventListener('contextmenu', onContext);
+    };
+  }, [currentTeam, isRoundFinished, roundSession?.id]);
+
   // Handle Challenge Progression
   const handleNextChallenge = async () => {
+    const currentCompleted = !!currentChallenge && completedChallengeIds.has(currentChallenge.id);
+    if (!currentCompleted && !isTimedOut) return;
     sounds.click();
     if (currentIdx < challenges.length - 1) {
       console.log('[Round4] Moving to next challenge, resetting timeout state');
@@ -237,6 +297,13 @@ export default function Round4Engine({ roundId, navigate }: Round4EngineProps) {
     }
   };
 
+  const exitRound4 = () => {
+    // App-level navigation is locked while this round is active. Only an
+    // explicit completion or integrity-lock exit may set this one-time permit.
+    sessionStorage.setItem('round4-exit-allowed', 'true');
+    navigate('dashboard');
+  };
+
   const formatTime = (secs: number) => {
     const m = Math.floor(secs / 60);
     const s = secs % 60;
@@ -248,6 +315,32 @@ export default function Round4Engine({ roundId, navigate }: Round4EngineProps) {
       <div className="flex flex-col items-center justify-center min-h-[500px] space-y-4">
         <div className="w-10 h-10 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" />
         <div className="text-sm font-medium text-gray-500">Loading Assessment Session...</div>
+      </div>
+    );
+  }
+
+  if (securityLocked) {
+    return (
+      <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-slate-950 p-6 text-center">
+        <div className="w-full max-w-xl rounded-3xl border border-red-500/50 bg-slate-900 p-8 shadow-2xl">
+          <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full bg-red-500/15 text-3xl text-red-400">!</div>
+          <p className="text-xs font-bold uppercase tracking-[0.2em] text-red-400">Competition integrity lock</p>
+          <h1 className="mt-3 text-2xl font-bold text-white">Round 4 has been locked</h1>
+          <p className="mt-3 text-sm leading-relaxed text-slate-300">This workspace is unavailable after repeated integrity violations. Please ask a volunteer or administrator for assistance.</p>
+          <div className="mt-6 rounded-2xl border border-slate-700 bg-slate-800 p-4 text-left text-sm">
+            <p className="text-slate-400">Team</p>
+            <p className="mt-1 font-semibold text-white">{currentTeam.name}</p>
+            <p className="mt-3 text-slate-400">Team ID / access code</p>
+            <p className="mt-1 break-all font-mono text-xs text-amber-300">{currentTeam.access_code || currentTeam.id}</p>
+          </div>
+          <button
+            type="button"
+            onClick={exitRound4}
+            className="mt-6 w-full rounded-xl bg-white py-3 font-semibold text-slate-900 shadow-sm transition-colors hover:bg-slate-200 focus:outline-none focus:ring-2 focus:ring-white focus:ring-offset-2 focus:ring-offset-slate-900"
+          >
+            Exit to Dashboard
+          </button>
+        </div>
       </div>
     );
   }
@@ -282,7 +375,7 @@ export default function Round4Engine({ roundId, navigate }: Round4EngineProps) {
         </div>
 
         <div className="flex justify-center gap-4">
-          <Button onClick={() => navigate('dashboard')} className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-xl shadow-sm">
+          <Button onClick={exitRound4} className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-xl shadow-sm">
             Return to Dashboard
           </Button>
           <Button onClick={() => navigate('leaderboard')} variant="outline" className="px-6 py-2.5 rounded-xl border-gray-300 text-gray-700 hover:bg-gray-50">
@@ -294,6 +387,7 @@ export default function Round4Engine({ roundId, navigate }: Round4EngineProps) {
   }
 
   const currentChallenge = challenges[currentIdx];
+  const currentChallengeCompleted = !!currentChallenge && completedChallengeIds.has(currentChallenge.id);
 
   const timerColor = timeLeft <= 60 ? 'text-red-700 bg-red-50 border-red-200' : 'text-gray-900 bg-gray-50 border-gray-200';
 
@@ -305,7 +399,7 @@ export default function Round4Engine({ roundId, navigate }: Round4EngineProps) {
           <div className="flex items-center gap-2 text-xs font-bold text-blue-600 uppercase tracking-wider">
             <span>Round 4</span>
             <span className="text-gray-300">•</span>
-            <span>AI Adversarial & Safety Assessment</span>
+            <span>Nexus Protocol</span>
           </div>
           <h1 className="text-xl font-bold font-heading text-gray-900 mt-1">
             {currentChallenge?.title || 'Loading Challenge...'}
@@ -331,6 +425,8 @@ export default function Round4Engine({ roundId, navigate }: Round4EngineProps) {
           {/* Next Challenge Action */}
           <Button
             onClick={handleNextChallenge}
+            disabled={!currentChallengeCompleted && !isTimedOut}
+            title={!currentChallengeCompleted && !isTimedOut ? 'Complete this stage before proceeding.' : undefined}
             className="bg-blue-600 hover:bg-blue-700 text-white font-medium text-xs py-2 px-4 rounded-xl shadow-sm flex items-center gap-1.5"
           >
             {currentIdx < challenges.length - 1 ? (
@@ -346,25 +442,28 @@ export default function Round4Engine({ roundId, navigate }: Round4EngineProps) {
         </div>
       </div>
 
-      {/* 4-Stage Step Progression Bar */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      {/* 8-Stage Step Progression Bar */}
+      <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-8 gap-3">
         {challenges.map((c, i) => {
           const isActive = currentIdx === i;
           const isDone = currentIdx > i;
+          const isUnlocked = i === 0 || challenges.slice(0, i).every(previous => completedChallengeIds.has(previous.id));
 
           return (
             <button
               key={c.id}
               onClick={() => {
+                if (!isUnlocked) return;
                 sounds.click();
                 setCurrentIdx(i);
               }}
+              disabled={!isUnlocked}
               className={`p-3.5 rounded-xl border text-left transition-all ${
                 isActive
                   ? 'border-blue-500 bg-blue-50/50 shadow-sm ring-1 ring-blue-400/30'
                   : isDone
                   ? 'border-gray-200 bg-gray-50/70 text-gray-700 hover:bg-gray-100/60'
-                  : 'border-gray-200 bg-white text-gray-400 hover:bg-gray-50'
+                  : isUnlocked ? 'border-gray-200 bg-white text-gray-400 hover:bg-gray-50' : 'border-gray-100 bg-gray-50 text-gray-300 cursor-not-allowed'
               }`}
             >
               <div className="flex items-center justify-between text-xs font-semibold mb-1">
@@ -398,63 +497,28 @@ export default function Round4Engine({ roundId, navigate }: Round4EngineProps) {
         </div>
       )}
 
+      {securityWarning && (
+        <div className={`p-4 rounded-xl text-sm font-medium ${securityLocked ? 'bg-red-50 border border-red-200 text-red-800' : 'bg-amber-50 border border-amber-200 text-amber-800'}`}>
+          {securityWarning}
+        </div>
+      )}
+
       {/* Render Active Challenge Engine */}
       <div className="min-h-[500px]">
-        {currentChallenge?.type === 'PROMPT_BREACH' && (
-          <PromptBreachChallenge
-            challenge={currentChallenge}
-            teamId={currentTeam!.id}
-            roundSessionId={roundSession?.id || ''}
-            onAttemptCompleted={result => {
-              if (result.isCompleted) {
-                // Done
-              }
-            }}
-            disabled={isTimedOut}
-          />
-        )}
-
-        {currentChallenge?.type === 'CIPHER' && (
-          <CipherChallenge
-            challenge={currentChallenge}
-            teamId={currentTeam!.id}
-            roundSessionId={roundSession?.id || ''}
-            onAttemptCompleted={result => {
-              if (result.isCompleted) {
-                // Done
-              }
-            }}
-            disabled={isTimedOut}
-          />
-        )}
-
-        {currentChallenge?.type === 'TURING_TEST' && (
-          <TuringTestChallenge
-            challenge={currentChallenge}
-            teamId={currentTeam!.id}
-            roundSessionId={roundSession?.id || ''}
-            onAttemptCompleted={result => {
-              // Done
-            }}
-            disabled={isTimedOut}
-          />
-        )}
-
-        {currentChallenge?.type === 'PROMPT_ZIPPER' && (
-          <PromptZipperChallenge
-            challenge={currentChallenge}
-            teamId={currentTeam!.id}
-            roundSessionId={roundSession?.id || ''}
-            onAttemptCompleted={result => {
-              if (result.isCompleted) {
-                // Done
-              }
-            }}
-            disabled={isTimedOut}
-          />
-        )}
+        {currentChallenge && <NexusStageChallenge
+          key={currentChallenge.id}
+          challenge={currentChallenge}
+          teamId={currentTeam!.id}
+          roundSessionId={roundSession?.id || ''}
+          onAttemptCompleted={result => {
+            if (result?.isCompleted) {
+              setCompletedChallengeIds(previous => new Set([...previous, currentChallenge.id]));
+              setChallengeSession((previous: any) => previous ? { ...previous, status: 'COMPLETED' } : previous);
+            }
+          }}
+          disabled={isTimedOut || securityLocked}
+        />}
       </div>
     </div>
   );
 }
-

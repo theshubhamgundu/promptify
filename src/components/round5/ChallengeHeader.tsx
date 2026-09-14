@@ -59,12 +59,12 @@ export function ChallengeHeader({
             </span>
           </div>
           
-          <button 
-            onClick={onTimeEnd}
-            className="ml-4 px-4 py-1.5 bg-cyan-600 hover:bg-cyan-700 text-white font-medium rounded shadow-sm transition-colors"
-          >
-            Submit Challenge
-          </button>
+          {onTimeEnd && <button
+              onClick={onTimeEnd}
+              className="ml-4 px-4 py-1.5 bg-cyan-600 hover:bg-cyan-700 text-white font-medium rounded shadow-sm transition-colors"
+            >
+              Submit Challenge
+            </button>}
         </div>
       </div>
 
