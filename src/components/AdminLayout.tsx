@@ -25,49 +25,21 @@ const navSections: NavSection[] = [
   {
     title: '',
     items: [
-      { id: 'admin', label: 'Overview', Icon: HomeIcon },
+      { id: 'admin', label: 'Dashboard Overview', Icon: HomeIcon },
     ],
   },
   {
-    title: 'Event',
+    title: 'User Management',
     items: [
-      { id: 'admin-events', label: 'Event Management', Icon: ZapIcon },
+      { id: 'admin-teams', label: 'Teams & Participants', Icon: UsersIcon },
     ],
   },
   {
-    title: 'People',
+    title: 'Live Operations',
     items: [
-      { id: 'admin-teams', label: 'Teams', Icon: UsersIcon },
-      { id: 'admin-participants', label: 'Participants', Icon: UsersIcon },
-      { id: 'admin-verification', label: 'Verification Queue', Icon: CheckCircleIcon },
+      { id: 'admin-leaderboard', label: 'Master Leaderboard', Icon: TrophyIcon },
     ],
-  },
-  {
-    title: 'Competition',
-    items: [
-      { id: 'admin-rounds', label: 'Rounds & Challenges', Icon: TargetIcon },
-      { id: 'admin-submissions', label: 'Submissions Review', Icon: TargetIcon },
-    ],
-  },
-  {
-    title: 'Live',
-    items: [
-      { id: 'admin-leaderboard', label: 'Leaderboard', Icon: TrophyIcon },
-      { id: 'admin-round4-monitor', label: 'Round 4 Monitor', Icon: TargetIcon },
-      { id: 'admin-round5-monitor', label: 'Round 5 Monitor', Icon: TargetIcon },
-      { id: 'admin-turing-console', label: 'Turing Console', Icon: UsersIcon },
-      { id: 'admin-announcements', label: 'Screens & Announcements', Icon: ZapIcon },
-    ],
-  },
-  {
-    title: 'Security',
-    items: [
-      { id: 'admin-monitor', label: 'Live Monitor', Icon: ShieldIcon },
-      { id: 'admin-sessions', label: 'Active Sessions', Icon: ClockIcon },
-      { id: 'admin-logs', label: 'Audit Logs', Icon: ShieldIcon },
-      { id: 'admin-snapshots', label: 'Snapshots', Icon: ShieldIcon },
-    ],
-  },
+  }
 ];
 
 export default function AdminLayout({ page, navigate, children }: AdminLayoutProps) {
@@ -79,7 +51,9 @@ export default function AdminLayout({ page, navigate, children }: AdminLayoutPro
       const { data } = await supabase.from('events').select('id, name, status').order('created_at', { ascending: false });
       if (data && data.length > 0) {
         setEvents(data);
-        if (!activeEvent) {
+        // Auto-correct if stored event was deleted or doesn't exist
+        const storedStillExists = activeEvent && data.some(e => e.id === activeEvent.id);
+        if (!activeEvent || !storedStillExists) {
           setActiveEvent({ id: data[0].id, name: data[0].name, status: data[0].status });
         }
       }
@@ -178,17 +152,10 @@ export default function AdminLayout({ page, navigate, children }: AdminLayoutPro
         {/* Footer */}
         <div className="p-4 border-t border-gray-200 relative z-10 space-y-2">
           <button 
-            onClick={() => navigate('dashboard')} 
-            className="w-full flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl text-xs font-medium text-gray-500 hover:text-orange-600 hover:bg-orange-50 transition-all border border-transparent hover:border-orange-100"
-          >
-            <span className="text-sm">←</span>
-            <span>Exit to Participant View</span>
-          </button>
-          
-          <button 
-            onClick={() => {
+            onClick={async () => {
               localStorage.removeItem('authState');
-              window.location.reload();
+              await supabase.auth.signOut();
+              window.location.href = '/';
             }}
             className="w-full flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl text-xs font-medium text-red-500 hover:text-red-700 hover:bg-red-50 transition-all border border-red-200"
           >

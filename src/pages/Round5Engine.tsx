@@ -28,7 +28,7 @@ export default function Round5Engine({ roundId, navigate }: Round5EngineProps) {
     setDomain((teamWithDomain?.domain as ApexDomain) || DOMAINS[0]);
     const { data: existingSessions } = await supabase.from('round_sessions').select('*').eq('team_id', team.id).eq('round_id', roundId).limit(1);
     let roundSession = existingSessions?.[0] || null;
-    if (!roundSession) { const { data } = await supabase.from('round_sessions').insert({ team_id: team.id, round_id: roundId, started_at: new Date().toISOString(), status: 'IN_PROGRESS' }).select().single(); roundSession = data; }
+    if (!roundSession) { const { data } = await supabase.from('round_sessions').upsert({ team_id: team.id, round_id: roundId, started_at: new Date().toISOString(), status: 'IN_PROGRESS' }, { onConflict: 'team_id,round_id', ignoreDuplicates: false }).select().single(); roundSession = data; }
     setSession(roundSession); setLoading(false);
   } load(); }, [team, roundId]);
 
@@ -67,6 +67,6 @@ export default function Round5Engine({ roundId, navigate }: Round5EngineProps) {
   return <div className="flex h-screen flex-col overflow-hidden bg-slate-50">
     <ChallengeHeader challengeName={challenge.title} challengeIndex={index} totalChallenges={challenges.length} deadlineAt={challengeSession?.deadline_at || null} totalSeconds={minutes * 60} score={session.score || 0} />
     <ApexChallenge question={(index + 1) as 1 | 2 | 3} domain={domain} configuration={challenge.configuration} submitted={submitted} onSubmit={submit} />
-    <footer className="flex items-center justify-between border-t border-slate-200 bg-white px-6 py-3"><span className="text-sm text-slate-500">Question {index + 1} of {challenges.length}</span><button disabled={!submitted} onClick={next} className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40">{index === challenges.length - 1 ? 'Finish round' : 'Continue'}</button></footer>
+    <footer className="flex items-center justify-between border-t border-slate-200 bg-white px-6 py-3"><span className="text-sm text-slate-500">Question {index + 1} of {challenges.length}</span><div className="flex items-center gap-3"><button onClick={() => navigate('dashboard')} className="rounded-lg bg-white border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">Exit</button><button disabled={!submitted} onClick={next} className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40">{index === challenges.length - 1 ? 'Finish round' : 'Continue'}</button></div></footer>
   </div>;
 }

@@ -249,6 +249,11 @@ export default function BossRound({ roundId, navigate }: BossRoundProps) {
           <button onClick={handleSubmitRound} className="px-4 py-2 bg-pink-600 hover:bg-pink-700 text-white font-bold rounded-lg transition-colors shadow-lg shadow-pink-900/50">
             Extract Data
           </button>
+          {navigate && (
+            <button onClick={() => navigate('dashboard')} className="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 font-medium rounded-lg transition-colors border border-gray-600">
+              Exit
+            </button>
+          )}
         </div>
       </div>
 

@@ -166,9 +166,12 @@ export default function GenericRound({ roundId, navigate }: { roundId: string, n
                 </button>
               ))}
             </div>
-            <div className="p-4 border-t border-gray-200">
+            <div className="p-4 border-t border-gray-200 space-y-2">
               <button onClick={handleEndRound} className="w-full px-4 py-3 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700">
                 Submit Final
+              </button>
+              <button onClick={() => navigate('dashboard')} className="w-full px-4 py-3 bg-white border border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-50">
+                Exit
               </button>
             </div>
           </div>

@@ -308,24 +308,7 @@ export default function Dashboard({ navigate }: { navigate: (p: Page) => void })
               </div>
             </div>
 
-            <button
-              onClick={() => navigate('rounds')}
-              style={{
-                background: "#FFFFFF",
-                border: "2px solid #111111",
-                borderRadius: 999,
-                boxShadow: "2px 2px 0 #111111",
-                padding: "4px 12px",
-                fontFamily: "'Nunito', sans-serif",
-                fontWeight: 800,
-                fontSize: 11,
-                color: "#111111",
-                cursor: "pointer",
-              }}
-              className="hover:translate-x-[-1px] hover:translate-y-[-1px] transition-transform hidden sm:block"
-            >
-              View All →
-            </button>
+
           </div>
 
           <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden" style={{ scrollbarWidth: 'none' }}>

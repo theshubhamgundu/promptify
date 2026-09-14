@@ -1,205 +1,269 @@
 import { useState, useEffect } from 'react';
-import { Button, Modal, FormField, TextInput, TextArea, ConfirmDialog, AnimatedNumber } from '../../components/ui';
 import { supabase } from '../../lib/supabase';
 import type { Page } from '../../components/Layout';
 import { useAdminStore } from '../../stores/adminStore';
-import { useAuthStore } from '../../stores/authStore';
-import { applyPenalty, toggleTeamStatus } from '../../lib/services/adminService';
 
 interface TeamScore {
   team_id: string;
   team_name: string;
   total_score: number;
-  base_score: number;
-  adjustments: number;
-  rounds_completed: number;
+  round_scores: Record<string, number>;
   status?: string;
+}
+
+interface RoundInfo {
+  id: string;
+  name: string;
+  order_index: number;
+  type: string;
 }
 
 export default function AdminLeaderboard({ navigate }: { navigate: (p: Page) => void }) {
   const { activeEvent } = useAdminStore();
-  const { user } = useAuthStore();
   const [scores, setScores] = useState<TeamScore[]>([]);
+  const [rounds, setRounds] = useState<RoundInfo[]>([]);
   const [loading, setLoading] = useState(true);
-
-  // Override Modal
-  const [showOverride, setShowOverride] = useState<{ teamId: string, teamName: string, currentScore: number } | null>(null);
-  const [pointsDelta, setPointsDelta] = useState('');
-  const [overrideReason, setOverrideReason] = useState('');
-  const [saving, setSaving] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
   const loadScores = async () => {
     if (!activeEvent) return;
-    
+
     // 1. Get teams for active event
-    const { data: teams } = await supabase.from('teams').select('id, name, status').eq('event_id', activeEvent.id);
+    const { data: teams, error: teamsError } = await supabase
+      .from('teams')
+      .select('id, name')
+      .eq('event_id', activeEvent.id);
+
+    if (teamsError) {
+      setScores([]);
+      setLoading(false);
+      alert("Error fetching teams: " + teamsError.message);
+      return;
+    }
+
     if (!teams || teams.length === 0) {
       setScores([]);
       setLoading(false);
       return;
     }
-    
+
+    // 2. Get rounds for this event
+    const { data: roundsData } = await supabase
+      .from('rounds')
+      .select('id, name, order_index, type')
+      .eq('event_id', activeEvent.id)
+      .order('order_index');
+
+    if (roundsData) setRounds(roundsData);
+
     const teamIds = teams.map(t => t.id);
-    const teamInfo = new Map(teams.map(t => [t.id, { name: t.name, status: t.status }]));
+    const teamMap = new Map(teams.map(t => [t.id, { name: t.name, status: t.status }]));
 
-    // 2. Get evaluated submissions (Base score)
-    const { data: submissions } = await supabase
-      .from('vw_all_submissions')
-      .select('team_id, score, status, round_id')
-      .eq('status', 'EVALUATED')
-      .in('team_id', teamIds);
+    // Initialize score accumulator for each team
+    const scoreAccum = new Map<string, { total: number; byRound: Record<string, number> }>();
+    teamIds.forEach(id => scoreAccum.set(id, { total: 0, byRound: {} }));
 
-    // 3. Get score events (Adjustments)
-    const { data: scoreEvents } = await supabase
-      .from('score_events')
-      .select('team_id, points, event_type')
-      .in('team_id', teamIds);
+    // 3. Query EACH round-specific submission table and aggregate scores
+    // Round 2: round2_submissions (total_score)
+    try {
+      const { data: r2 } = await supabase
+        .from('round2_submissions')
+        .select('team_id, total_score')
+        .in('team_id', teamIds);
+      if (r2) {
+        const r2RoundId = roundsData?.find(r => r.type === 'ROUND2_HEIST')?.id || 'round2';
+        r2.forEach(s => {
+          const entry = scoreAccum.get(s.team_id);
+          if (entry) {
+            const score = s.total_score || 0;
+            entry.total += score;
+            entry.byRound[r2RoundId] = (entry.byRound[r2RoundId] || 0) + score;
+          }
+        });
+      }
+    } catch (e) { /* table might not exist */ }
 
-    const scoreMap = new Map<string, { base: number; adj: number; rounds: Set<string> }>();
-    
-    teamIds.forEach(id => scoreMap.set(id, { base: 0, adj: 0, rounds: new Set() }));
+    // Round 3: vision_submissions (total_score)
+    try {
+      const { data: vs } = await supabase
+        .from('vision_submissions')
+        .select('team_id, total_score')
+        .in('team_id', teamIds);
+      if (vs) {
+        const vsRoundId = roundsData?.find(r => r.type === 'VISION_CHALLENGE')?.id || 'round3';
+        vs.forEach(s => {
+          const entry = scoreAccum.get(s.team_id);
+          if (entry) {
+            const score = s.total_score || 0;
+            entry.total += score;
+            entry.byRound[vsRoundId] = (entry.byRound[vsRoundId] || 0) + score;
+          }
+        });
+      }
+    } catch (e) { /* table might not exist */ }
 
-    if (submissions) {
-      submissions.forEach(s => {
-        const entry = scoreMap.get(s.team_id)!;
-        entry.base += (s.score || 0);
-        if (s.round_id) entry.rounds.add(s.round_id);
-      });
-    }
+    // Generic submissions table (if any exist there)
+    try {
+      const { data: subs } = await supabase
+        .from('submissions')
+        .select('team_id, score, round_id, status')
+        .eq('status', 'EVALUATED')
+        .in('team_id', teamIds);
+      if (subs) {
+        subs.forEach(s => {
+          const entry = scoreAccum.get(s.team_id);
+          if (entry) {
+            const score = s.score || 0;
+            entry.total += score;
+            if (s.round_id) {
+              entry.byRound[s.round_id] = (entry.byRound[s.round_id] || 0) + score;
+            }
+          }
+        });
+      }
+    } catch (e) { /* table might not exist */ }
 
-    if (scoreEvents) {
-      scoreEvents.forEach(se => {
-        const entry = scoreMap.get(se.team_id)!;
-        entry.adj += (se.points || 0);
-      });
-    }
+    // Score events (manual adjustments / penalties)
+    try {
+      const { data: scoreEvents } = await supabase
+        .from('score_events')
+        .select('team_id, points')
+        .in('team_id', teamIds);
+      if (scoreEvents) {
+        scoreEvents.forEach(se => {
+          const entry = scoreAccum.get(se.team_id);
+          if (entry) {
+            entry.total += (se.points || 0);
+            entry.byRound['adjustments'] = (entry.byRound['adjustments'] || 0) + (se.points || 0);
+          }
+        });
+      }
+    } catch (e) { /* table might not exist */ }
 
-    const ranked = Array.from(scoreMap.entries())
-  .map(([teamId, data]) => ({
-    team_id: teamId,
-    team_name: teamInfo.get(teamId)?.name || 'Unknown',
-    status: teamInfo.get(teamId)?.status,
-    base_score: data.base,
-    adjustments: data.adj,
-    total_score: data.base + data.adj,
-    rounds_completed: data.rounds.size,
-  }))
-  .sort((a, b) => b.total_score - a.total_score);
+    // 4. Build ranked list
+    const ranked = Array.from(scoreAccum.entries())
+      .map(([teamId, data]) => ({
+        team_id: teamId,
+        team_name: teamMap.get(teamId)?.name || 'Unknown',
+        status: teamMap.get(teamId)?.status,
+        total_score: Math.round(data.total * 100) / 100,
+        round_scores: data.byRound,
+      }))
+      .sort((a, b) => b.total_score - a.total_score);
 
     setScores(ranked);
+    setLastUpdated(new Date());
     setLoading(false);
   };
 
   useEffect(() => {
     loadScores();
 
-    // Subscribe to both submissions and score_events
-    const subChannel = supabase.channel('admin-leaderboard-subs')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'submissions' }, () => { loadScores(); })
-      .subscribe();
-      
-    const scoreChannel = supabase.channel('admin-leaderboard-events')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'score_events' }, () => { loadScores(); })
-      .subscribe();
+    // Real-time subscriptions
+    const channels = [
+      supabase.channel('lb-r2').on('postgres_changes', { event: '*', schema: 'public', table: 'round2_submissions' }, () => loadScores()).subscribe(),
+      supabase.channel('lb-vs').on('postgres_changes', { event: '*', schema: 'public', table: 'vision_submissions' }, () => loadScores()).subscribe(),
+      supabase.channel('lb-se').on('postgres_changes', { event: '*', schema: 'public', table: 'score_events' }, () => loadScores()).subscribe(),
+    ];
 
-    return () => { 
-      supabase.removeChannel(subChannel); 
-      supabase.removeChannel(scoreChannel); 
-    };
+    return () => { channels.forEach(c => supabase.removeChannel(c)); };
   }, [activeEvent]);
 
-  const handleOverride = async () => {
-    if (!showOverride || !pointsDelta || !overrideReason || !user) return;
-    setSaving(true);
-    
-    const points = parseInt(pointsDelta);
-    
-    // Insert into score_events ledger
-    const { error } = await supabase.from('score_events').insert({
-      team_id: showOverride.teamId,
-      event_type: 'ADMIN_ADJUSTMENT',
-      points: points,
-      reason: overrideReason,
-      admin_id: user?.id
-    });
-    
-    if (!error) {
-      await supabase.from('activity_logs').insert({
-        action: 'SCORE_OVERRIDE',
-        details: { team_id: showOverride.teamId, points_delta: points, reason: overrideReason }
-      });
-      setShowOverride(null);
-      setPointsDelta('');
-      setOverrideReason('');
-      await loadScores(); // Force reload
-    }
-    
-    setSaving(false);
-  };
-
-  const toggleFreeze = async (teamId: string) => {
-    // get current status
-    const { data } = await supabase.from('teams').select('status').eq('id', teamId).single();
-    if (data) {
-      const newStatus = data.status === 'ACTIVE' ? 'SUSPENDED' : 'ACTIVE';
-      await supabase.from('teams').update({ status: newStatus }).eq('id', teamId);
-      
-      await supabase.from('activity_logs').insert({
-        action: newStatus === 'SUSPENDED' ? 'TEAM_FROZEN' : 'TEAM_UNFROZEN',
-        team_id: teamId,
-        details: { admin_id: user?.id }
-      });
-      
-      // Optionally we might want to also push an announcement or revoke session.
-    }
-  };
-
-  const medalColors = ['from-amber-300 to-yellow-500', 'from-gray-300 to-gray-400', 'from-orange-500 to-orange-700'];
   const medalEmojis = ['🥇', '🥈', '🥉'];
 
   if (!activeEvent) {
     return <div className="p-8 text-center text-gray-500">Please select an active event from the sidebar.</div>;
   }
 
+  // Get a short round label from the round name
+  const getRoundLabel = (roundId: string) => {
+    if (roundId === 'adjustments') return '±';
+    const round = rounds.find(r => r.id === roundId);
+    if (!round) return roundId.slice(0, 4);
+    // Extract "Stage X" or "Round X" pattern, or use order_index
+    return `R${round.order_index}`;
+  };
+
   return (
     <div className="p-8 space-y-6 animate-slide-up">
+      {/* Header */}
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-2xl font-black text-gray-900 font-heading">Master Leaderboard</h1>
-          <p className="text-gray-500 text-sm mt-1">Real-time scores with ledger-based adjustments for {activeEvent.name}</p>
+          <p className="text-gray-500 text-sm mt-1">
+            Live aggregated scores for {activeEvent.name}
+            {lastUpdated && (
+              <span className="text-gray-400 ml-2">
+                · Updated {lastUpdated.toLocaleTimeString()}
+              </span>
+            )}
+          </p>
         </div>
-        <div className="flex items-center gap-2 bg-green-50 px-3 py-1.5 rounded-lg border border-green-100">
-          <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-          <span className="text-xs text-green-700 font-bold uppercase tracking-wide">Live Updates</span>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => { setLoading(true); loadScores(); }}
+            className="px-4 py-2 text-xs font-bold text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-xl transition-colors"
+          >
+            ↻ Refresh
+          </button>
+          <div className="flex items-center gap-2 bg-green-50 px-3 py-1.5 rounded-lg border border-green-100">
+            <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+            <span className="text-xs text-green-700 font-bold uppercase tracking-wide">Live</span>
+          </div>
         </div>
       </div>
 
+      {/* Stats Summary */}
+      <div className="grid grid-cols-3 gap-4">
+        <div className="bg-gradient-to-br from-blue-50 to-white rounded-2xl border border-blue-100 p-5">
+          <div className="text-3xl font-black text-blue-700 font-heading">{scores.length}</div>
+          <div className="text-xs text-blue-500 font-bold uppercase tracking-wide mt-1">Teams</div>
+        </div>
+        <div className="bg-gradient-to-br from-amber-50 to-white rounded-2xl border border-amber-100 p-5">
+          <div className="text-3xl font-black text-amber-700 font-heading">
+            {scores.length > 0 ? scores[0].total_score.toFixed(1) : '0'}
+          </div>
+          <div className="text-xs text-amber-500 font-bold uppercase tracking-wide mt-1">Top Score</div>
+        </div>
+        <div className="bg-gradient-to-br from-green-50 to-white rounded-2xl border border-green-100 p-5">
+          <div className="text-3xl font-black text-green-700 font-heading">
+            {scores.filter(s => s.total_score > 0).length}
+          </div>
+          <div className="text-xs text-green-500 font-bold uppercase tracking-wide mt-1">Active Scorers</div>
+        </div>
+      </div>
+
+      {/* Leaderboard Table */}
       {loading ? (
         <div className="text-center py-16 text-gray-500">Loading scores...</div>
       ) : scores.length === 0 ? (
         <div className="text-center py-16 rounded-2xl border border-gray-100 bg-white shadow-sm">
           <div className="text-4xl mb-3">🏆</div>
-          <div className="text-sm text-gray-500 font-semibold">No teams or scores yet</div>
+          <div className="text-sm text-gray-500 font-semibold">No teams found for this event</div>
         </div>
       ) : (
         <div className="rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
-          {/* Header */}
-          <div className="grid grid-cols-[60px_1fr_120px_120px_120px] px-6 py-4 border-b border-gray-100 text-[10px] text-gray-400 font-black uppercase tracking-[0.15em] font-heading bg-gray-50">
+          {/* Table Header */}
+          <div className="grid grid-cols-[60px_1fr_repeat(auto-fill,100px)_120px] px-6 py-4 border-b border-gray-100 text-[10px] text-gray-400 font-black uppercase tracking-[0.15em] font-heading bg-gray-50"
+            style={{ gridTemplateColumns: `60px 1fr ${rounds.map(() => '80px').join(' ')} 120px` }}
+          >
             <span>Rank</span>
             <span>Team</span>
-            <span className="text-right">Base</span>
-            <span className="text-right">Adjustments</span>
-            <span className="text-right">Total Score</span>
+            {rounds.sort((a, b) => a.order_index - b.order_index).map(r => (
+              <span key={r.id} className="text-center" title={r.name}>R{r.order_index}</span>
+            ))}
+            <span className="text-right">Total</span>
           </div>
 
           {/* Rows */}
           <div className="divide-y divide-gray-50">
             {scores.map((team, i) => (
-              <div 
+              <div
                 key={team.team_id}
-                className={`grid grid-cols-[60px_1fr_120px_120px_120px] px-6 py-4 items-center transition-all hover:bg-gray-50 group ${
-                  i < 3 ? 'bg-orange-50/10' : ''
+                className={`grid px-6 py-4 items-center transition-all hover:bg-gray-50 ${
+                  i < 3 ? 'bg-orange-50/30' : ''
                 }`}
+                style={{ gridTemplateColumns: `60px 1fr ${rounds.map(() => '80px').join(' ')} 120px` }}
               >
                 {/* Rank */}
                 <div>
@@ -210,109 +274,51 @@ export default function AdminLeaderboard({ navigate }: { navigate: (p: Page) => 
                   )}
                 </div>
 
-                {/* Team info */}
+                {/* Team Name */}
                 <div className="flex items-center gap-3">
                   <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 ${
-                    i < 3 ? `bg-gradient-to-br ${medalColors[i]} shadow-sm text-white` : 'bg-gray-100 text-gray-500'
+                    i < 3
+                      ? 'bg-gradient-to-br from-orange-400 to-red-500 text-white shadow-sm'
+                      : 'bg-gray-100 text-gray-500'
                   }`}>
                     <span className="text-sm font-black font-heading">
-                      {team.team_name.charAt(0)}
+                      {team.team_name.charAt(0).toUpperCase()}
                     </span>
                   </div>
                   <div>
                     <div className="text-sm font-bold text-gray-900">{team.team_name}</div>
-                    <div className="flex items-center gap-2 mt-0.5">
-                      <span className="text-[10px] text-gray-400 font-mono">{team.team_id.slice(0, 8)}</span>
-                      {team.rounds_completed > 0 && (
-                        <span className="text-[10px] px-1.5 py-0.5 bg-gray-100 text-gray-500 rounded font-bold">{team.rounds_completed} ROUNDS</span>
+                    <div className="flex items-center gap-1.5 mt-0.5">
+                      {team.status === 'SUSPENDED' && (
+                        <span className="text-[10px] px-1.5 py-0.5 bg-red-100 text-red-600 rounded font-bold">FROZEN</span>
                       )}
                     </div>
                   </div>
                 </div>
 
-                {/* Base Score */}
-                <div className="text-right">
-                  <span className="text-sm font-bold text-gray-500">{team.base_score}</span>
-                </div>
+                {/* Per-round scores */}
+                {rounds.sort((a, b) => a.order_index - b.order_index).map(r => {
+                  const roundScore = team.round_scores[r.id] || 0;
+                  return (
+                    <div key={r.id} className="text-center">
+                      <span className={`text-sm font-bold ${roundScore > 0 ? 'text-gray-700' : 'text-gray-300'}`}>
+                        {roundScore > 0 ? roundScore.toFixed(1) : '—'}
+                      </span>
+                    </div>
+                  );
+                })}
 
-                {/* Adjustments */}
+                {/* Total Score */}
                 <div className="text-right">
-                  <span className={`text-sm font-bold ${team.adjustments > 0 ? 'text-green-500' : team.adjustments < 0 ? 'text-red-500' : 'text-gray-300'}`}>
-                    {team.adjustments > 0 ? '+' : ''}{team.adjustments}
-                  </span>
-                </div>
-
-                {/* Total Score & Actions */}
-                <div className="text-right flex items-center justify-end gap-3">
-                  <div className="opacity-0 group-hover:opacity-100 flex items-center gap-2">
-                    <button 
-                      onClick={() => navigate(`admin-team-${team.team_id}` as Page)}
-                      className="px-2 py-1.5 rounded-lg bg-gray-100 text-[10px] font-bold text-gray-500 hover:text-blue-600 hover:bg-blue-50 transition-all"
-                    >
-                      View
-                    </button>
-                      <button 
-                        onClick={() => {
-                          const points = prompt('Enter penalty points (positive number):');
-                          const reason = prompt('Reason for penalty (audit):');
-                          if (points && reason) {
-                            applyPenalty(team.team_id, parseInt(points), reason).then(() => loadScores());
-                          }
-                        }}
-                        className="px-2 py-1.5 rounded-lg bg-gray-100 text-[10px] font-bold text-gray-500 hover:text-red-600 hover:bg-red-50 transition-all"
-                        title="Apply penalty to team"
-                      >
-                        Penalty
-                      </button>
-                    <button 
-                      onClick={() => toggleTeamStatus(team.team_id, team.status)}
-                      className="px-2 py-1.5 rounded-lg bg-gray-100 text-[10px] font-bold text-gray-500 hover:text-red-600 hover:bg-red-50 transition-all"
-                      title={team.status === 'SUSPENDED' ? 'Unfreeze team' : 'Freeze team'}
-                    >
-                      {team.status === 'SUSPENDED' ? 'Unfreeze' : 'Freeze'}
-                    </button>
-                    <button 
-                      onClick={() => setShowOverride({ teamId: team.team_id, teamName: team.team_name, currentScore: team.total_score })}
-                      className="px-3 py-1.5 rounded-lg bg-gray-100 border border-transparent text-[10px] font-bold text-gray-500 hover:text-orange-600 hover:border-orange-200 hover:bg-orange-50 transition-all"
-                    >
-                      Adjust
-                    </button>
-                  </div>
-                  <span className={`text-xl font-black font-heading w-16 ${
-                    i === 0 ? 'text-amber-500' : i === 1 ? 'text-gray-500' : i === 2 ? 'text-orange-600' : 'text-gray-900'
+                  <span className={`text-lg font-black font-heading ${
+                    i === 0 ? 'text-orange-600' : i < 3 ? 'text-gray-800' : 'text-gray-600'
                   }`}>
-                    <AnimatedNumber to={team.total_score} />
+                    {team.total_score.toFixed(1)}
                   </span>
                 </div>
               </div>
             ))}
           </div>
         </div>
-      )}
-
-      {/* Override Modal */}
-      {showOverride && (
-        <Modal title="Score Adjustment" onClose={() => setShowOverride(null)} size="sm" footer={
-          <>
-            <Button variant="outline" onClick={() => setShowOverride(null)}>Cancel</Button>
-            <Button onClick={handleOverride} disabled={saving || !pointsDelta || !overrideReason}>Apply Adjustment</Button>
-          </>
-        }>
-          <div className="space-y-4">
-            <div className="bg-gray-50 p-3 rounded-xl border border-gray-100">
-              <div className="text-xs text-gray-500 font-bold uppercase tracking-wider mb-1">Team</div>
-              <div className="text-sm font-bold text-gray-900">{showOverride.teamName}</div>
-              <div className="text-xs text-gray-500 mt-1">Current Score: <span className="font-bold text-gray-900">{showOverride.currentScore} pts</span></div>
-            </div>
-            
-            <FormField label="Points (+/-)" required>
-              <TextInput type="number" value={pointsDelta} onChange={setPointsDelta} placeholder="e.g. -50 or 100" />
-            </FormField>
-            <FormField label="Reason (Audit Ledger)" required>
-              <TextArea value={overrideReason} onChange={setOverrideReason} rows={2} placeholder="Explain why this adjustment is being made..." />
-            </FormField>
-          </div>
-        </Modal>
       )}
     </div>
   );

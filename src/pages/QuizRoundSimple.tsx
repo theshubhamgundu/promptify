@@ -670,6 +670,14 @@ export default function QuizRoundSimple({ roundId, navigate }: QuizRoundSimplePr
             >
               End Quiz
             </button>
+            {navigate && (
+              <button
+                onClick={() => navigate('dashboard')}
+                className="px-4 py-1.5 bg-white border border-gray-300 text-gray-700 rounded-lg text-xs font-bold hover:bg-gray-50 transition-colors"
+              >
+                Exit
+              </button>
+            )}
           </div>
         </div>
         

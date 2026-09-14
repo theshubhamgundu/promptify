@@ -18,12 +18,8 @@ interface QuickAction {
 }
 
 const quickActions: QuickAction[] = [
-  { label: 'Manage Events',     desc: 'Control the championship lifecycle',    page: 'admin-events',       Icon: ZapIcon,    gradient: 'from-violet-50 to-white', iconBg: 'bg-violet-100 text-violet-600' },
   { label: 'Manage Teams',      desc: 'View teams, codes, participants',       page: 'admin-teams',        Icon: UsersIcon,  gradient: 'from-blue-50 to-white',   iconBg: 'bg-blue-100 text-blue-600' },
-  { label: 'Manage Rounds',     desc: 'Configure challenges and timing',       page: 'admin-rounds',       Icon: TargetIcon, gradient: 'from-orange-50 to-white', iconBg: 'bg-orange-100 text-orange-600' },
-  { label: 'Vision Monitor',    desc: 'Live Round 3 tracking',                 page: 'admin-vision-monitor', Icon: EyeIcon,  gradient: 'from-fuchsia-50 to-white', iconBg: 'bg-fuchsia-100 text-fuchsia-600' },
-  { label: 'Master Leaderboard', desc: 'Scores, overrides, rankings',          page: 'admin-leaderboard',  Icon: TrophyIcon, gradient: 'from-amber-50 to-white', iconBg: 'bg-amber-100 text-amber-600' },
-  { label: 'Activity Logs',     desc: 'Real-time integrity monitoring',        page: 'admin-logs',         Icon: ShieldIcon, gradient: 'from-red-50 to-white',    iconBg: 'bg-red-100 text-red-600' },
+  { label: 'Master Leaderboard', desc: 'Scores, overrides, rankings',          page: 'admin-leaderboard',  Icon: TrophyIcon, gradient: 'from-amber-50 to-white', iconBg: 'bg-amber-100 text-amber-600' }
 ];
 
 export default function AdminDashboard({ navigate }: { navigate: (p: Page) => void }) {
@@ -55,11 +51,23 @@ export default function AdminDashboard({ navigate }: { navigate: (p: Page) => vo
         .select('id', { count: 'exact', head: true })
         .eq('event_id', activeEvent.id);
 
-      // Submissions (across all teams in this event)
-      const { count: subsCount } = await supabase
+      // For submissions, fallback to 'submissions' table if vw_all_submissions fails
+      let subsCount = 0;
+      const { count: vwCount, error: vwError } = await supabase
         .from('vw_all_submissions')
         .select('id', { count: 'exact', head: true })
         .in('team_id', teamIds.length ? teamIds : ['00000000-0000-0000-0000-000000000000']);
+      
+      if (vwError && vwError.code === 'PGRST205') {
+        // Fallback if view doesn't exist yet
+        const { count: rawCount } = await supabase
+          .from('submissions')
+          .select('id', { count: 'exact', head: true })
+          .in('team_id', teamIds.length ? teamIds : ['00000000-0000-0000-0000-000000000000']);
+        subsCount = rawCount || 0;
+      } else {
+        subsCount = vwCount || 0;
+      }
 
       setStats({
         teams: teamsCount || 0,

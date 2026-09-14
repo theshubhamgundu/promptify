@@ -12,31 +12,31 @@ import Submissions from './pages/Submissions';
 import Team from './pages/Team';
 import HelpRules from './pages/HelpRules';
 import AdminDashboard from './pages/admin/AdminDashboard';
-import EventManager from './pages/admin/EventManager';
+
 import TeamManager from './pages/admin/TeamManager';
-import RoundManager from './pages/admin/RoundManager';
+
 import AdminLeaderboard from './pages/admin/AdminLeaderboard';
-import ActivityLogViewer from './pages/admin/ActivityLogViewer';
-import ParticipantManager from './pages/admin/ParticipantManager';
-import VerificationManager from './pages/admin/VerificationManager';
+
+
+
 import CoordinatorDashboard from './pages/CoordinatorDashboard';
-import SessionManager from './pages/admin/SessionManager';
+
 import TeamDetail from './pages/admin/TeamDetail';
-import SubmissionsReview from './pages/admin/SubmissionsReview';
-import Announcements from './pages/admin/Announcements';
-import LiveMonitor from './pages/admin/LiveMonitor';
-import SnapshotManager from './pages/admin/SnapshotManager';
-import QuizManager from './pages/admin/QuizManager';
+
+
+
+
+
 import QuizRoundSimple from './pages/QuizRoundSimple';
 import QuizResults from './pages/QuizResults';
 import QuizRound from './pages/QuizRound';
 import PromptHeist from './pages/PromptHeist';
 import Round3Vision from './pages/Round3Vision';
 import Round4Engine from './pages/Round4Engine';
-import Round4Monitor from './pages/admin/Round4Monitor';
+
 import Round5Engine from './pages/Round5Engine';
-import Round5Monitor from './pages/admin/Round5Monitor';
-import TuringHumanConsole from './pages/admin/TuringHumanConsole';
+
+
 import PublicDisplay from './pages/PublicDisplay';
 import AdminLayout from './components/AdminLayout';
 import FullscreenEnforcer from './components/FullscreenEnforcer';
@@ -394,27 +394,27 @@ export default function App() {
       if (currentPage === 'team')            return <Team />;
       if (currentPage === 'help')            return <HelpRules />;
       if (currentPage === 'admin')           return <AdminDashboard navigate={navigate} />;
-      if (currentPage === 'admin-events')    return <EventManager navigate={navigate} />;
+      
       if (currentPage === 'admin-teams')     return <TeamManager navigate={navigate} />;
       if (currentPage.startsWith('admin-team-')) {
         const teamId = currentPage.replace('admin-team-', '');
         return <TeamDetail teamId={teamId} navigate={navigate} />;
       }
-      if (currentPage === 'admin-rounds')    return <RoundManager navigate={navigate} />;
+      
       if (currentPage === 'admin-leaderboard') return <AdminLeaderboard navigate={navigate} />;
-      if (currentPage === 'admin-logs')      return <ActivityLogViewer navigate={navigate} />;
-      if (currentPage === 'admin-participants') return <ParticipantManager navigate={navigate} />;
-      if (currentPage === 'admin-verification') return <VerificationManager navigate={navigate} />;
-      if (currentPage === 'admin-sessions')     return <SessionManager navigate={navigate} />;
-      if (currentPage === 'admin-vision-monitor') return <LiveMonitor navigate={navigate} />;
-      if (currentPage === 'admin-round4-monitor') return <Round4Monitor navigate={navigate} />;
-      if (currentPage === 'admin-round5-monitor') return <Round5Monitor navigate={navigate} />;
-      if (currentPage === 'admin-turing-console') return <TuringHumanConsole navigate={navigate} />;
-      if (currentPage === 'admin-monitor')       return <LiveMonitor navigate={navigate} />;
-      if (currentPage === 'admin-snapshots')     return <SnapshotManager navigate={navigate} />;
-      if (currentPage === 'admin-submissions')  return <SubmissionsReview navigate={navigate} />;
-      if (currentPage === 'admin-announcements' || currentPage === 'admin-screens') return <Announcements navigate={navigate} />;
-      if (currentPage === 'admin-quiz')         return <QuizManager />;
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
       
       return (
         <div className="flex items-center justify-center h-full text-gray-400 text-sm">

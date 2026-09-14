@@ -333,11 +333,11 @@ export default function Round2Heist({ roundId, navigate }: Round2HeistProps) {
       if (!roundSessionData) {
         const { data: newRoundSession, error: createRoundSessionError } = await supabase
           .from('round_sessions')
-          .insert({
+          .upsert({
             team_id: currentTeam!.id,
             round_id: roundId,
             started_at: new Date().toISOString()
-          })
+          }, { onConflict: 'team_id,round_id', ignoreDuplicates: false })
           .select()
           .single();
 
@@ -903,6 +903,14 @@ export default function Round2Heist({ roundId, navigate }: Round2HeistProps) {
             );
           })}
         </div>
+        <div className="p-2 border-t border-gray-200 flex-shrink-0">
+          <button
+            onClick={() => navigate && navigate('dashboard')}
+            className="w-full px-3 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-50 text-sm"
+          >
+            Exit
+          </button>
+        </div>
       </div>
 
       {/* Main Content */}
@@ -924,6 +932,14 @@ export default function Round2Heist({ roundId, navigate }: Round2HeistProps) {
                   {formatTime(timeLeft)}
                 </span>
               </div>
+              {navigate && (
+                <button
+                  onClick={() => navigate('dashboard')}
+                  className="px-4 py-2 bg-white border border-gray-300 text-gray-700 font-medium rounded-lg hover:bg-gray-50 text-sm"
+                >
+                  Exit
+                </button>
+              )}
             </div>
           </div>
         </div>
