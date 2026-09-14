@@ -58,7 +58,7 @@ RETURNS TABLE (
 )
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 BEGIN
-  IF NOT EXISTS (SELECT 1 FROM users WHERE id = auth.uid() AND role IN ('ADMIN', 'COORDINATOR')) THEN
+  IF NOT EXISTS (SELECT 1 FROM users u WHERE u.id = auth.uid() AND u.role IN ('ADMIN', 'COORDINATOR')) THEN
     RAISE EXCEPTION 'Only coordinators may access the verification queue';
   END IF;
   RETURN QUERY

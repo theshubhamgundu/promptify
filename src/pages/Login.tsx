@@ -243,12 +243,12 @@ export default function Login({ onLogin, onBackToHome, portal = 'participant' }:
             )}
           </button>
 
-          {portal === 'participant' && <button
+          {import.meta.env.DEV && <button
             type="button"
             onClick={(e) => {
               e.preventDefault();
-              setTeamCode('test1234');
-              setPassword('TeamPassword123!');
+              setTeamCode(portal === 'staff' ? 'coordinator01@example.test' : 'test1234');
+              setPassword(portal === 'staff' ? 'Coord!2026-01' : 'TeamPassword123!');
               setTimeout(() => {
                 const form = (e.target as HTMLElement).closest('form');
                 if (form) form.requestSubmit();
@@ -265,7 +265,7 @@ export default function Login({ onLogin, onBackToHome, portal = 'participant' }:
             }}
           >
             <span style={{ fontFamily: "'Nunito', sans-serif", fontWeight: 800, color: "#111111", fontSize: 13, textTransform: "uppercase" }}>
-              Quick Login (TEST1234)
+              {portal === 'staff' ? 'Quick Coordinator Login' : 'Quick Team Login (TEST1234)'}
             </span>
           </button>}
         </form>

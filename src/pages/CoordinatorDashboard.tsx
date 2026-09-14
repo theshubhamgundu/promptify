@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { BrowserQRCodeReader, type IScannerControls } from '@zxing/browser';
 import { supabase } from '../lib/supabase';
 import { Button } from '../components/ui';
 import { CheckCircleIcon, ClockIcon, ShieldIcon } from '../components/icons';
@@ -16,6 +17,12 @@ export default function CoordinatorDashboard() {
   const [loading, setLoading] = useState(true);
   const [acting, setActing] = useState<string | null>(null);
   const [message, setMessage] = useState('');
+  const [scannerOpen, setScannerOpen] = useState(false);
+  const [cameras, setCameras] = useState<MediaDeviceInfo[]>([]);
+  const [selectedCamera, setSelectedCamera] = useState('');
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const scannerControlsRef = useRef<IScannerControls | null>(null);
+  const scanHandledRef = useRef(false);
 
   const load = async () => {
     setLoading(true);
@@ -31,6 +38,49 @@ export default function CoordinatorDashboard() {
     const channel = supabase.channel('coordinator-queue').on('postgres_changes', { event: '*', schema: 'public', table: 'verification_requests' }, load).subscribe();
     return () => { supabase.removeChannel(channel); };
   }, []);
+
+  const stopScanner = () => {
+    scannerControlsRef.current?.stop();
+    scannerControlsRef.current = null;
+    scanHandledRef.current = false;
+    setScannerOpen(false);
+  };
+  const startScanner = async (deviceId?: string) => {
+    if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) {
+      setMessage('Camera requires HTTPS (or localhost) and browser camera permission. Enter the team code manually.');
+      return;
+    }
+    try {
+      stopScanner();
+      scanHandledRef.current = false;
+      setScannerOpen(true);
+      setMessage('Starting camera…');
+      await new Promise(resolve => window.setTimeout(resolve, 0));
+      const reader = new BrowserQRCodeReader();
+      const constraints: MediaStreamConstraints = {
+        audio: false,
+        video: deviceId ? { deviceId: { exact: deviceId } } : { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } },
+      };
+      scannerControlsRef.current = await reader.decodeFromConstraints(constraints, videoRef.current || undefined, (result) => {
+        if (!result || scanHandledRef.current) return;
+        scanHandledRef.current = true;
+        setQuery(result.getText().trim().replace(/^PROMPTIFY:TEAM:/i, '').toUpperCase());
+        setMessage('QR code scanned. Review the matching team below.');
+        stopScanner();
+      });
+      const foundCameras = await BrowserQRCodeReader.listVideoInputDevices();
+      setCameras(foundCameras);
+      const activeId = scannerControlsRef.current.streamVideoSettingsGet?.(track => [track])?.deviceId;
+      if (typeof activeId === 'string') setSelectedCamera(activeId);
+      else if (deviceId) setSelectedCamera(deviceId);
+      setMessage('Point the camera at the team QR code. Scanning is active.');
+    } catch (error: any) {
+      stopScanner();
+      const message = error?.name === 'NotAllowedError' ? 'Camera permission was denied. Allow camera access in the browser address bar and retry.' : 'Could not start a camera. Check that another app is not using it, or enter the team code manually.';
+      setMessage(message);
+    }
+  };
+  useEffect(() => () => { scannerControlsRef.current?.stop(); }, []);
 
   const visible = useMemo(() => queue.filter(item => !query || `${item.team_name} ${item.team_code}`.toLowerCase().includes(query.toLowerCase())), [queue, query]);
   const decide = async (item: QueueItem, approved: boolean) => {
@@ -50,7 +100,8 @@ export default function CoordinatorDashboard() {
         <div><p className="text-xs font-bold uppercase tracking-[0.22em] text-amber-300">Coordinator console</p><h1 className="mt-2 text-2xl font-bold">Entry verification</h1><p className="mt-1 text-sm text-slate-300">{event?.name || 'Loading event…'} · {pending} team{pending === 1 ? '' : 's'} waiting</p></div>
         <div className="flex gap-3"><Button onClick={load} variant="outline" className="border-slate-600 text-slate-900">Refresh</Button><Button onClick={signOut} className="bg-rose-500 hover:bg-rose-600">Sign out</Button></div>
       </header>
-      <section className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900"><ShieldIcon className="mr-2 inline h-4 w-4" />Use a QR scanner in keyboard mode to enter the team code below, then approve only after checking the members’ IDs.</section>
+      <section className="flex flex-col gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 sm:flex-row sm:items-center sm:justify-between"><span><ShieldIcon className="mr-2 inline h-4 w-4" />Scan a team QR code or enter its code manually, then approve only after checking IDs.</span><Button onClick={scannerOpen ? stopScanner : () => void startScanner()} className="bg-slate-900 hover:bg-slate-800">{scannerOpen ? 'Close camera' : 'Open camera scanner'}</Button></section>
+      {scannerOpen && <div className="overflow-hidden rounded-2xl border border-gray-200 bg-black p-3"><video ref={videoRef} autoPlay playsInline muted className="mx-auto max-h-96 w-full max-w-2xl rounded-xl object-contain" />{cameras.length > 1 && <div className="mx-auto mt-3 flex max-w-2xl items-center gap-3"><label className="text-xs font-bold text-white">Camera</label><select value={selectedCamera} onChange={event => void startScanner(event.target.value)} className="min-w-0 flex-1 rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-sm text-white"><option value="">Rear / default camera</option>{cameras.map(camera => <option key={camera.deviceId} value={camera.deviceId}>{camera.label || `Camera ${camera.deviceId.slice(-4)}`}</option>)}</select></div>}</div>}
       <input autoFocus value={query} onChange={e => setQuery(e.target.value.toUpperCase())} placeholder="Scan or enter team code / team name" className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 font-mono text-sm outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-100" />
       {message && <p className="rounded-xl bg-white p-4 text-sm font-medium text-gray-700">{message}</p>}
       {loading ? <p className="py-12 text-center text-gray-500">Loading verification queue…</p> : <div className="grid gap-4 md:grid-cols-2">

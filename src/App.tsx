@@ -50,6 +50,9 @@ import { supabase } from './lib/supabase';
 import { useConnectionStatus } from './hooks/useConnectionStatus';
 import { useSessionHeartbeat } from './hooks/useSessionHeartbeat';
 import { useTeamStore } from './stores/teamStore';
+import { useEventStore } from './stores/eventStore';
+import { TeamService } from './lib/services/teamService';
+import { EventService } from './lib/services/eventService';
 
 // ── Page transition wrapper ───────────────────────────────────────────
 function PageView({ pageKey, children }: { pageKey: string; children: React.ReactNode }) {
@@ -148,6 +151,24 @@ export default function App() {
         const { data: profile } = await supabase.from('users').select('role').eq('id', session.user.id).maybeSingle();
         if (profile?.role === 'ADMIN') setPage('admin');
         if (profile?.role === 'COORDINATOR') setPage('coordinator');
+        if (!profile || profile.role === 'PARTICIPANT') {
+          const context = await TeamService.getContextForUser(session.user.id);
+          if (!context?.team) {
+            await supabase.auth.signOut();
+            localStorage.removeItem('authState');
+            setAuthState('login');
+            return;
+          }
+          useTeamStore.getState().setCurrentTeam(context.team as any);
+          useTeamStore.getState().setMembers(context.members as any);
+          if (context.event) {
+            useEventStore.getState().setCurrentEvent(context.event as any);
+            const rounds = await EventService.getEventRounds(context.event.id);
+            useEventStore.getState().setRounds(rounds as any);
+          }
+          const verified = context.session?.state === 'VERIFIED' || context.session?.state === 'ACTIVE';
+          setAuthState(verified ? 'app' : 'verification');
+        }
       } else {
         // No session - force login
         setAuthState('login');

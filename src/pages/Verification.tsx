@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import QRCode from 'qrcode';
 import { BrainIcon, CheckCircleIcon, ShieldIcon } from '../components/icons';
 import { Button } from '../components/ui';
 import { supabase } from '../lib/supabase';
@@ -16,11 +17,21 @@ export default function Verification({ onApprove }: { onApprove: () => void }) {
 
   const teamName = currentTeam?.name || 'Your Team';
   const teamCode = currentTeam?.access_code || '------';
+  const [qrMarkup, setQrMarkup] = useState('');
 
   useEffect(() => {
     const id = setInterval(() => setDots((d) => (d.length >= 3 ? '' : d + '.')), 600);
     return () => clearInterval(id);
   }, []);
+
+  useEffect(() => {
+    let active = true;
+    QRCode.toString(`PROMPTIFY:TEAM:${teamCode}`, {
+      type: 'svg', errorCorrectionLevel: 'M', margin: 1,
+      color: { dark: '#111827', light: '#FFFFFF' }
+    }).then(svg => { if (active) setQrMarkup(svg); });
+    return () => { active = false; };
+  }, [teamCode]);
 
   // Poll for real coordinator approval in team_sessions
   useEffect(() => {
@@ -66,26 +77,6 @@ export default function Verification({ onApprove }: { onApprove: () => void }) {
       supabase.removeChannel(channel);
     };
   }, [currentTeam, setSessionState]);
-
-  const QRPlaceholder = () => (
-    <div className="w-36 h-36 bg-white border-2 border-gray-200 rounded-xl p-3 flex items-center justify-center relative group">
-      <svg viewBox="0 0 100 100" className="w-full h-full">
-        {/* Simplified QR code visual */}
-        <rect x="5" y="5" width="35" height="35" fill="none" stroke="#111" strokeWidth="4" />
-        <rect x="13" y="13" width="19" height="19" fill="#111" />
-        <rect x="60" y="5" width="35" height="35" fill="none" stroke="#111" strokeWidth="4" />
-        <rect x="68" y="13" width="19" height="19" fill="#111" />
-        <rect x="5" y="60" width="35" height="35" fill="none" stroke="#111" strokeWidth="4" />
-        <rect x="13" y="68" width="19" height="19" fill="#111" />
-        {/* Pattern */}
-        {[0,1,2,3,4,5,6].map(i => [0,1,2,3,4,5,6].map(j => (
-          Math.random() > 0.5 && !(i < 4 && j < 4) && !(i > 3 && j < 4 && i < 7 && j < 4 && j > 0) ? (
-            <rect key={`${i}-${j}`} x={55 + j * 7} y={50 + i * 7} width="5" height="5" fill="#111" />
-          ) : null
-        )))}
-      </svg>
-    </div>
-  );
 
   if (state === 'approved') {
     return (
@@ -162,7 +153,7 @@ export default function Verification({ onApprove }: { onApprove: () => void }) {
 
         {/* QR Code */}
         <div className="flex flex-col items-center gap-3 bg-gray-50 rounded-xl p-5">
-          <QRPlaceholder />
+          <div className="w-36 h-36 bg-white border-2 border-gray-200 rounded-xl p-2 flex items-center justify-center" aria-label={`QR code for ${teamCode}`} dangerouslySetInnerHTML={{ __html: qrMarkup }} />
           <p className="text-sm text-gray-500 text-center font-medium">Scan this code with the coordinator device</p>
           <div className="flex items-center gap-2 text-xs text-gray-400">
             <ShieldIcon className="w-3.5 h-3.5" />
