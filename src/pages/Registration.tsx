@@ -124,7 +124,7 @@ export default function Registration({ onBack }: RegistrationProps) {
     }
 
     try {
-      const { data, error: registerError } = await supabase.rpc("register_team", {
+      const { data, error: registerError } = await supabase.functions.invoke("register-team", { body: {
         p_team_name: `${member1.name} & ${member2.name}`,
         p_member1_name: member1.name,
         p_member1_email: member1.email,
@@ -142,12 +142,12 @@ export default function Registration({ onBack }: RegistrationProps) {
         p_member2_branch: college === "VITS" ? member2.branch : null,
         p_member2_section: college === "VITS" ? member2.section : null,
         p_member2_college: college,
-      });
+      }});
 
       if (registerError) throw registerError;
 
-      if (!data.success) {
-        setError(data.error || "Registration failed");
+      if (!data?.success) {
+        setError(data?.error || "Registration failed");
         setLoading(false);
         return;
       }

@@ -19,6 +19,7 @@ import AdminLeaderboard from './pages/admin/AdminLeaderboard';
 import ActivityLogViewer from './pages/admin/ActivityLogViewer';
 import ParticipantManager from './pages/admin/ParticipantManager';
 import VerificationManager from './pages/admin/VerificationManager';
+import CoordinatorDashboard from './pages/CoordinatorDashboard';
 import SessionManager from './pages/admin/SessionManager';
 import TeamDetail from './pages/admin/TeamDetail';
 import SubmissionsReview from './pages/admin/SubmissionsReview';
@@ -70,7 +71,7 @@ export default function App() {
 
   // Landing and Registration state — Landing Page is the root page, Login and Register are dedicated pages
   const [showLanding, setShowLanding] = useState(() => {
-    return window.location.hash !== '#login' && window.location.hash !== '#register';
+    return !['#login', '#register', '#staff-login'].includes(window.location.hash);
   });
   const [showRegistration, setShowRegistration] = useState(() => {
     return window.location.hash === '#register';
@@ -79,7 +80,7 @@ export default function App() {
   useEffect(() => {
     const handleHash = () => {
       const hash = window.location.hash;
-      if (hash === '#login') {
+      if (hash === '#login' || hash === '#staff-login') {
         setShowLanding(false);
         setShowRegistration(false);
       } else if (hash === '#register') {
@@ -144,6 +145,9 @@ export default function App() {
           setAuthState('app');
           localStorage.setItem('authState', 'app');
         }
+        const { data: profile } = await supabase.from('users').select('role').eq('id', session.user.id).maybeSingle();
+        if (profile?.role === 'ADMIN') setPage('admin');
+        if (profile?.role === 'COORDINATOR') setPage('coordinator');
       } else {
         // No session - force login
         setAuthState('login');
@@ -290,11 +294,16 @@ export default function App() {
 
     return (
       <Login 
-        onLogin={(isAdmin) => {
-          if (isAdmin) {
+        portal={window.location.hash === '#staff-login' ? 'staff' : 'participant'}
+        onLogin={(role) => {
+          if (role === 'admin') {
             setAuthState('app');
             setPage('admin');
             showToast('Admin login successful.', 'success');
+          } else if (role === 'coordinator') {
+            setAuthState('app');
+            setPage('coordinator');
+            showToast('Coordinator login successful.', 'success');
           } else {
             setAuthState('verification');
           }
@@ -318,6 +327,7 @@ export default function App() {
     const key = currentPage; // used as key for transition
 
     const content = (() => {
+      if (currentPage === 'coordinator')     return <CoordinatorDashboard />;
       if (currentPage === 'dashboard')       return <Dashboard navigate={navigate} />;
       if (currentPage === 'rounds')          return <RoundsOverview navigate={navigate} />;
       if (currentPage.startsWith('quiz-'))   {
@@ -395,12 +405,13 @@ export default function App() {
   };
 
   const isAdminPage = typeof page === 'string' && page.startsWith('admin');
+  const isCoordinatorPage = page === 'coordinator';
   const isRoundPage = typeof page === 'string' && (page.startsWith('quiz-') || page.startsWith('quiz-results-') || page.startsWith('prompt-heist-') || page.startsWith('round2-heist-') || page.startsWith('round2-results-') || page.startsWith('round-') || page.startsWith('vision-') || page.startsWith('round4-') || page.startsWith('round5-'));
   const isQuizPage = typeof page === 'string' && (page.startsWith('quiz-') || page.startsWith('quiz-results-'));
 
   return (
     <>
-      {isAdminPage ? (
+      {isCoordinatorPage ? renderPage() : isAdminPage ? (
         <AdminLayout page={page} navigate={navigate}>
           {renderPage()}
         </AdminLayout>

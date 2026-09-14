@@ -41,11 +41,21 @@ export class TeamService {
       event = eventData;
     }
 
-    // 4. Fetch all members of the team
-    const { data: members } = await supabase
-      .from('participants')
-      .select('*')
+    // 4. The competition has one shared team login, but every dashboard must
+    // display both registered people. team_members is the registration source
+    // of truth; participants only links the shared auth account to its team.
+    const { data: registeredMembers } = await supabase
+      .from('team_members')
+      .select('id, full_name, email, member_number')
       .eq('team_id', team.id);
+
+    const members = (registeredMembers || []).map(member => ({
+      id: member.id,
+      team_id: team.id,
+      name: member.full_name,
+      email: member.email,
+      role: member.member_number === 1 ? 'CAPTAIN' : 'MEMBER',
+    }));
 
     // 5. Fetch team session
     const { data: session } = await supabase
@@ -58,7 +68,7 @@ export class TeamService {
       participant,
       team,
       event,
-      members: members || [],
+      members,
       session: session || null,
     };
   }

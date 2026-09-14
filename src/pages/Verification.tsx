@@ -43,6 +43,9 @@ export default function Verification({ onApprove }: { onApprove: () => void }) {
     };
     
     checkState();
+    void supabase.rpc('request_team_verification', {
+      p_device_info: { userAgent: navigator.userAgent, requestedAt: new Date().toISOString() }
+    });
 
     // Subscribe to changes
     const channel = supabase.channel('session_changes')
@@ -64,12 +67,6 @@ export default function Verification({ onApprove }: { onApprove: () => void }) {
     };
   }, [currentTeam, setSessionState]);
 
-  // Dev override
-  const handleDevOverride = async () => {
-    setState('approved');
-    setSessionState('VERIFIED');
-  };
-
   const QRPlaceholder = () => (
     <div className="w-36 h-36 bg-white border-2 border-gray-200 rounded-xl p-3 flex items-center justify-center relative group">
       <svg viewBox="0 0 100 100" className="w-full h-full">
@@ -87,9 +84,6 @@ export default function Verification({ onApprove }: { onApprove: () => void }) {
           ) : null
         )))}
       </svg>
-      <button onClick={handleDevOverride} className="absolute inset-0 bg-black/50 text-white font-bold opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center rounded-lg text-xs">
-        Dev Override
-      </button>
     </div>
   );
 

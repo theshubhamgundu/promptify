@@ -9,8 +9,8 @@ interface VerificationRequest {
   id: string;
   team_id: string;
   status: string;
-  requested_at: string;
-  resolved_at: string | null;
+  created_at: string;
+  reviewed_at: string | null;
   rejection_reason: string | null;
   team: {
     name: string;
@@ -51,16 +51,18 @@ export default function VerificationManager({ navigate }: { navigate: (p: Page) 
       .from('verification_requests')
       .select('*')
       .in('team_id', teamIds)
-      .order('requested_at', { ascending: false });
+      .order('created_at', { ascending: false });
 
     // 3. Get participants
-    const { data: parts } = await supabase.from('participants').select('team_id, name, email, role').in('team_id', teamIds);
+    const { data: parts } = await supabase.from('team_members').select('team_id, full_name, email, member_number').in('team_id', teamIds);
     
     if (reqs && parts) {
       setRequests(reqs.map(r => ({
         ...r,
         team: teamMap.get(r.team_id)!,
-        participants: parts.filter(p => p.team_id === r.team_id)
+        participants: parts.filter(p => p.team_id === r.team_id).map(p => ({
+          name: p.full_name, email: p.email, role: p.member_number === 1 ? 'LEADER' : 'MEMBER'
+        }))
       })));
     }
     setLoading(false);
@@ -78,23 +80,11 @@ export default function VerificationManager({ navigate }: { navigate: (p: Page) 
     return () => { supabase.removeChannel(channel); };
   }, [activeEvent]);
 
-  const handleApprove = async (id: string, team_id: string) => {
-    // 1. Update request
-    await supabase.from('verification_requests').update({ 
-      status: 'APPROVED', 
-      resolved_at: new Date().toISOString() 
-    }).eq('id', id);
-
-    // 2. Update team status if not already verified
-    await supabase.from('teams').update({ status: 'ACTIVE' }).eq('id', team_id);
-    
-    // 3. Log
-    await supabase.from('activity_logs').insert({
-      action: 'VERIFICATION_APPROVED',
-      team_id: team_id,
-      details: { request_id: id }
+  const handleApprove = async (id: string, _teamId: string) => {
+    const { error } = await supabase.rpc('review_verification_request', {
+      p_request_id: id, p_approved: true, p_rejection_reason: null
     });
-    
+    if (error) { alert(error.message); return; }
     await loadRequests();
   };
 
@@ -102,21 +92,10 @@ export default function VerificationManager({ navigate }: { navigate: (p: Page) 
     if (!rejectModal) return;
     setSaving(true);
     
-    const req = requests.find(r => r.id === rejectModal);
-    
-    await supabase.from('verification_requests').update({ 
-      status: 'REJECTED', 
-      rejection_reason: rejectReason,
-      resolved_at: new Date().toISOString() 
-    }).eq('id', rejectModal);
-    
-    if (req) {
-      await supabase.from('activity_logs').insert({
-        action: 'VERIFICATION_REJECTED',
-        team_id: req.team_id,
-        details: { request_id: req.id, reason: rejectReason }
-      });
-    }
+    const { error } = await supabase.rpc('review_verification_request', {
+      p_request_id: rejectModal, p_approved: false, p_rejection_reason: rejectReason
+    });
+    if (error) { alert(error.message); setSaving(false); return; }
 
     setSaving(false);
     setRejectModal(null);
@@ -165,7 +144,7 @@ export default function VerificationManager({ navigate }: { navigate: (p: Page) 
                       <div>
                         <div className="text-xs font-black text-orange-500 font-heading tracking-wider mb-1">TEAM VERIFICATION</div>
                         <h3 className="text-lg font-bold text-gray-900 leading-none mb-1">{req.team.name}</h3>
-                        <div className="text-xs text-gray-400 font-mono">Code: {req.team.access_code} • Request: {new Date(req.requested_at).toLocaleTimeString()}</div>
+                        <div className="text-xs text-gray-400 font-mono">Code: {req.team.access_code} • Request: {new Date(req.created_at).toLocaleTimeString()}</div>
                       </div>
                       <div className="flex gap-2">
                         <button 
@@ -222,7 +201,7 @@ export default function VerificationManager({ navigate }: { navigate: (p: Page) 
                         <div>
                           <div className="text-sm font-bold text-gray-900">{req.team.name}</div>
                           <div className="text-xs text-gray-500">
-                            {req.status === 'APPROVED' ? 'Approved' : 'Rejected'} at {req.resolved_at ? new Date(req.resolved_at).toLocaleString() : ''}
+                            {req.status === 'APPROVED' ? 'Approved' : 'Rejected'} at {req.reviewed_at ? new Date(req.reviewed_at).toLocaleString() : ''}
                           </div>
                           {req.status === 'REJECTED' && req.rejection_reason && (
                             <div className="text-xs text-red-600 mt-1 italic">Reason: {req.rejection_reason}</div>
