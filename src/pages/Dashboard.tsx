@@ -60,6 +60,7 @@ export default function Dashboard({ navigate }: { navigate: (p: Page) => void })
   
   // Track completed rounds for current team
   const [completedRounds, setCompletedRounds] = useState<Set<string>>(new Set());
+  const [lockedRounds, setLockedRounds] = useState<Set<string>>(new Set());
   
   useEffect(() => {
     async function refreshRounds() {
@@ -79,14 +80,15 @@ export default function Dashboard({ navigate }: { navigate: (p: Page) => void })
       if (currentTeam?.id) {
         const { data } = await supabase
           .from('round_sessions')
-          .select('round_id')
-          .eq('team_id', currentTeam.id)
-          .eq('status', 'COMPLETED');
+          .select('round_id, status, is_locked')
+          .eq('team_id', currentTeam.id);
         
         if (data) {
-          setCompletedRounds(new Set(data.map(rs => rs.round_id)));
+          setCompletedRounds(new Set(data.filter(rs => rs.status === 'COMPLETED').map(rs => rs.round_id)));
+          setLockedRounds(new Set(data.filter(rs => rs.status === 'ABANDONED' || rs.is_locked).map(rs => rs.round_id)));
         } else {
           setCompletedRounds(new Set());
+          setLockedRounds(new Set());
         }
       }
     }
@@ -116,6 +118,7 @@ export default function Dashboard({ navigate }: { navigate: (p: Page) => void })
   const mappedRounds: Round[] = useMemo(() => {
     return dbRounds.map((r, idx) => {
       const isCompleted = completedRounds.has(r.id);
+      const isLockedRound = lockedRounds.has(r.id);
       return {
         id: r.id, // Use actual UUID for navigation
         key: `round${r.order_index}`,
@@ -124,13 +127,13 @@ export default function Dashboard({ navigate }: { navigate: (p: Page) => void })
         type: r.type, // Added to use in onClick
         orderIndex: r.order_index,
         desc: r.description || '',
-        status: isCompleted ? 'completed' : (r.is_active ? 'upcoming' : 'locked'),
+        status: isCompleted ? 'completed' : (isLockedRound ? 'abandoned' : (r.is_active ? 'upcoming' : 'locked')),
         maxScore: (r.challenges && r.challenges.length > 0) ? r.challenges.reduce((sum: number, c: any) => sum + (c.base_points || 0), 0) : 200, // Sum of challenge base_points; falls back to 200
         duration: `${r.duration_minutes} min`,
         Icon: getIconForType(r.type),
       };
     });
-  }, [dbRounds, completedRounds]);
+  }, [dbRounds, completedRounds, lockedRounds]);
 
   return (
     <div className="h-full flex flex-col" style={{ overflow: 'hidden' }}>
@@ -363,7 +366,7 @@ function RoundCard({ round, hovered, onClick, onHover, onLeave, animDelay }: {
   round: Round; hovered: boolean; onClick: () => void;
   onHover: () => void; onLeave: () => void; animDelay: number;
 }) {
-  const locked = round.status === 'locked';
+  const locked = round.status === 'locked' || round.status === 'abandoned';
   const completed = round.status === 'completed';
 
   return (
@@ -420,7 +423,7 @@ function RoundCard({ round, hovered, onClick, onHover, onLeave, animDelay }: {
             letterSpacing: "0.05em",
           }}
         >
-          {completed ? "DONE ✓" : locked ? "LOCKED" : round.status === 'live' ? "LIVE" : "READY"}
+          {completed ? "DONE ✓" : round.status === 'abandoned' ? "LOCKED 🔒" : locked ? "LOCKED" : round.status === 'live' ? "LIVE" : "READY"}
         </span>
       </div>
 

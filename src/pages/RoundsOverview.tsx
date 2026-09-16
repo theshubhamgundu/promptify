@@ -117,6 +117,7 @@ export default function RoundsOverview({ navigate }: { navigate: (p: Page) => vo
   const round = rounds[selected];
   const roundSession = roundSessions.get(round?.id);
   const isCompleted = roundSession?.status === 'COMPLETED';
+  const isAbandoned = roundSession?.status === 'ABANDONED' || roundSession?.is_locked;
   const locked = !round.is_active; 
 
   const getIcon = (type: string) => {
@@ -141,6 +142,7 @@ export default function RoundsOverview({ navigate }: { navigate: (p: Page) => vo
             const isLocked = !r.is_active;
             const session = roundSessions.get(r.id);
             const isCompleted = session?.status === 'COMPLETED';
+            const isAbandoned = session?.status === 'ABANDONED' || session?.is_locked;
             const Icon = getIcon(r.type);
             
             return (
@@ -173,6 +175,8 @@ export default function RoundsOverview({ navigate }: { navigate: (p: Page) => vo
                     <span className="font-bold text-gray-900 font-heading">{r.name}</span>
                     {isCompleted ? (
                       <Badge variant="success">COMPLETED ✓</Badge>
+                    ) : isAbandoned ? (
+                      <Badge variant="locked">LOCKED</Badge>
                     ) : isLocked ? (
                       <Badge variant="locked">LOCKED</Badge>
                     ) : (
@@ -246,7 +250,7 @@ export default function RoundsOverview({ navigate }: { navigate: (p: Page) => vo
           </Card>
 
           {/* Enter Round CTA */}
-          {!locked && !isCompleted && (
+          {!locked && !isCompleted && !isAbandoned && (
             <Button
               onClick={() => {
                 // Navigate to quiz or regular round based on type
@@ -268,6 +272,13 @@ export default function RoundsOverview({ navigate }: { navigate: (p: Page) => vo
             >
               Enter {round.name || `Stage ${round.order_index}`} →
             </Button>
+          )}
+
+          {isAbandoned && !isCompleted && (
+            <div className="w-full py-3 px-4 bg-gray-100 border border-gray-300 rounded-xl text-center">
+              <div className="text-gray-800 font-semibold">🔒 Round Abandoned</div>
+              <div className="text-sm text-gray-500 mt-1">Access to this round is locked.</div>
+            </div>
           )}
 
           {isCompleted && (

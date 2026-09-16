@@ -297,10 +297,20 @@ export default function Round4Engine({ roundId, navigate }: Round4EngineProps) {
     }
   };
 
-  const exitRound4 = () => {
+  const exitRound4 = async () => {
     // App-level navigation is locked while this round is active. Only an
     // explicit completion or integrity-lock exit may set this one-time permit.
     sessionStorage.setItem('round4-exit-allowed', 'true');
+    if (currentTeam && roundId) {
+      try {
+        await supabase.rpc('abandon_round_session', {
+          p_team_id: currentTeam.id,
+          p_round_id: roundId
+        });
+      } catch (e) {
+        console.error('Failed to abandon session', e);
+      }
+    }
     navigate('dashboard');
   };
 

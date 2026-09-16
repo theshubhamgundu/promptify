@@ -342,6 +342,19 @@ export default function QuizRoundSimple({ roundId, navigate }: QuizRoundSimplePr
   const handleEndQuiz = () => {
     checkUnansweredAndSubmit();
   };
+
+  const handleExit = async () => {
+    if (!currentTeam || !roundId) return;
+    try {
+      await supabase.rpc('abandon_round_session', {
+        p_team_id: currentTeam.id,
+        p_round_id: roundId
+      });
+    } catch (e) {
+      console.error('Failed to abandon session', e);
+    }
+    if (navigate) navigate('dashboard');
+  };
   
   const toggleMarkQuestion = () => {
     const newMarked = new Set(markedQuestions);
@@ -672,7 +685,7 @@ export default function QuizRoundSimple({ roundId, navigate }: QuizRoundSimplePr
             </button>
             {navigate && (
               <button
-                onClick={() => navigate('dashboard')}
+                onClick={handleExit}
                 className="px-4 py-1.5 bg-white border border-gray-300 text-gray-700 rounded-lg text-xs font-bold hover:bg-gray-50 transition-colors"
               >
                 Exit

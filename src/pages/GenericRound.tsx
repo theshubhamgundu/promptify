@@ -112,6 +112,19 @@ export default function GenericRound({ roundId, navigate }: { roundId: string, n
     navigate('dashboard');
   };
 
+  const handleExit = async () => {
+    if (!currentTeam || !roundId) return;
+    try {
+      await supabase.rpc('abandon_round_session', {
+        p_team_id: currentTeam.id,
+        p_round_id: roundId
+      });
+    } catch (e) {
+      console.error('Failed to abandon session', e);
+    }
+    navigate('dashboard');
+  };
+
   if (loading && !round) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
@@ -170,7 +183,7 @@ export default function GenericRound({ roundId, navigate }: { roundId: string, n
               <button onClick={handleEndRound} className="w-full px-4 py-3 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700">
                 Submit Final
               </button>
-              <button onClick={() => navigate('dashboard')} className="w-full px-4 py-3 bg-white border border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-50">
+              <button onClick={handleExit} className="w-full px-4 py-3 bg-white border border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-50">
                 Exit
               </button>
             </div>

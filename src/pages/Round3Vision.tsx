@@ -92,6 +92,14 @@ export default function Round3Vision({ roundId, navigate }: { roundId: string; n
         }
       }
 
+      // Ensure base round_session exists for locking/tracking in Dashboard
+      await supabase.from('round_sessions').upsert({
+        team_id: currentTeam!.id,
+        round_id: roundId,
+        started_at: new Date().toISOString(),
+        status: 'IN_PROGRESS'
+      }, { onConflict: 'team_id,round_id', ignoreDuplicates: true });
+
       setLoading(false);
     }
 
@@ -164,6 +172,19 @@ export default function Round3Vision({ roundId, navigate }: { roundId: string; n
   // Get tier questions
   const getTierQuestions = (tier: DifficultyTier) => {
     return ALL_ROUND3_QUESTIONS.filter(q => q.tier === tier);
+  };
+
+  const handleExit = async () => {
+    if (!currentTeam || !roundId) return;
+    try {
+      await supabase.rpc('abandon_round_session', {
+        p_team_id: currentTeam.id,
+        p_round_id: roundId
+      });
+    } catch (e) {
+      console.error('Failed to abandon session', e);
+    }
+    navigate('dashboard');
   };
 
   // Calculate tier scores
@@ -330,7 +351,7 @@ export default function Round3Vision({ roundId, navigate }: { roundId: string; n
               <p className="text-sm text-gray-600 font-medium">30 questions • 40 minutes • 450 points</p>
             </div>
             <button
-              onClick={() => navigate('dashboard')}
+              onClick={handleExit}
               className="px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition-colors font-medium text-sm"
             >
               Exit

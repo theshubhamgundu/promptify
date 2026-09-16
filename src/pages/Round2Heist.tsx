@@ -740,6 +740,19 @@ export default function Round2Heist({ roundId, navigate }: Round2HeistProps) {
     }
   }, [toast]);
 
+  const handleExit = async () => {
+    if (!currentTeam || !roundId) return;
+    try {
+      await supabase.rpc('abandon_round_session', {
+        p_team_id: currentTeam.id,
+        p_round_id: roundId
+      });
+    } catch (e) {
+      console.error('Failed to abandon session', e);
+    }
+    if (navigate) navigate('dashboard');
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-gray-50">
@@ -905,7 +918,7 @@ export default function Round2Heist({ roundId, navigate }: Round2HeistProps) {
         </div>
         <div className="p-2 border-t border-gray-200 flex-shrink-0">
           <button
-            onClick={() => navigate && navigate('dashboard')}
+            onClick={handleExit}
             className="w-full px-3 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-50 text-sm"
           >
             Exit
@@ -934,7 +947,7 @@ export default function Round2Heist({ roundId, navigate }: Round2HeistProps) {
               </div>
               {navigate && (
                 <button
-                  onClick={() => navigate('dashboard')}
+                  onClick={handleExit}
                   className="px-4 py-2 bg-white border border-gray-300 text-gray-700 font-medium rounded-lg hover:bg-gray-50 text-sm"
                 >
                   Exit
